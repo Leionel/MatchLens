@@ -161,6 +161,9 @@ type PlayerSpotlight = {
   shots: number;
   goals: number;
   sequences_involved: number;
+  touch_points?: [number, number][];
+  progressive_pass_ids?: string[];
+  recovery_ids?: string[];
   event_ids: string[];
 };
 
@@ -229,6 +232,8 @@ export default function MatchLens() {
   const [receiptId, setReceiptId] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [selectedSeqId, setSelectedSeqId] = useState("");
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [sequenceFilter, setSequenceFilter] = useState<"all" | "final_third" | "shots" | "progression" | "turnover">("all");
   const [explorerTab, setExplorerTab] = useState<"sequences" | "players">("sequences");
   const [showAllEvents, setShowAllEvents] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
@@ -552,10 +557,13 @@ export default function MatchLens() {
                   clockText={clockText}
                   focusTeam={state.focus_team || "H"}
                   tactical={state.tactical}
+                  selectedPlayerId={selectedPlayerId}
+                  playerSpotlight={state.player_spotlight}
                   onSelectEvent={(id) => {
                     setSelectedId(id);
                   }}
                   onClearSequence={() => setSelectedSeqId("")}
+                  onSelectPlayer={(pid) => setSelectedPlayerId(pid)}
                 />
 
                 {mode === "analyst" && (
@@ -596,69 +604,201 @@ export default function MatchLens() {
                   </div>
 
                   {explorerTab === "sequences" ? (
-                    <div className="sequence-list">
-                      {(state.sequences || [])
-                        .filter((sq) => sq.team === (state.focus_team || "H"))
-                        .slice(-6)
-                        .reverse()
-                        .map((sq) => (
-                          <div key={sq.sequence_id} className="sequence-row-container">
-                            <button
-                              type="button"
-                              className={`sequence-row-btn ${selectedSeqId === sq.sequence_id ? "active" : ""}`}
-                              onClick={() => {
-                                setSelectedSeqId(selectedSeqId === sq.sequence_id ? "" : sq.sequence_id);
-                                setSelectedId(sq.event_ids.at(-1) || "");
+                    <div className="sequence-explorer-wrapper">
+                      {(() => {
+                        const allTeamSeqs = (state.sequences || []).filter((sq) => sq.team === (state.focus_team || "H"));
+                        const totalSeq = allTeamSeqs.length;
+                        const entriesCount = allTeamSeqs.filter((sq) => sq.entered_final_third).length;
+                        const entryRate = totalSeq ? Math.round((entriesCount / totalSeq) * 100) : 0;
+                        const avgPasses = totalSeq ? (allTeamSeqs.reduce((a, b) => a + b.pass_count, 0) / totalSeq).toFixed(1) : "0.0";
+                        const avgProg = totalSeq ? (allTeamSeqs.reduce((a, b) => a + (b.territory_gained ?? b.progressive_distance), 0) / totalSeq).toFixed(1) : "0.0";
+
+                        const playerFiltered = selectedPlayerId
+                          ? allTeamSeqs.filter((sq) => sq.players.includes(selectedPlayerId))
+                          : allTeamSeqs;
+
+                        const filtered = playerFiltered.filter((sq) => {
+                          if (sequenceFilter === "final_third") return sq.entered_final_third;
+                          if (sequenceFilter === "shots") return sq.outcome === "shot" || sq.outcome === "goal" || sq.outcome === "saved";
+                          if (sequenceFilter === "progression") return (sq.territory_gained ?? sq.progressive_distance) >= 15;
+                          if (sequenceFilter === "turnover") return sq.outcome === "turnover";
+                          return true;
+                        });
+
+                        return (
+                          <>
+                            {/* Sequence Summary Metrics Banner */}
+                            <div
+                              className="sequence-stats-banner"
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "repeat(4, 1fr)",
+                                gap: 8,
+                                padding: "8px 12px",
+                                background: "var(--surface-muted)",
+                                borderRadius: 6,
+                                margin: "8px 0",
+                                textAlign: "center",
                               }}
                             >
-                              <span className="seq-id-badge">{sq.sequence_id}</span>
-                              <span className="seq-meta">
-                                {clock(sq.start_t)}–{clock(sq.end_t)} ({sq.duration}s) · {sq.pass_count} passes · {sq.territory_gained !== undefined ? `net ${sq.territory_gained > 0 ? `+${sq.territory_gained}` : sq.territory_gained}m` : `+${sq.progressive_distance}m`}
-                              </span>
-                              <span className={`seq-outcome ${sq.outcome}`}>
-                                {sq.outcome.replace("_", " ").toUpperCase()}
-                              </span>
-                            </button>
-                            {selectedSeqId === sq.sequence_id && sq.events_detail && sq.events_detail.length > 0 && (
-                              <div className="seq-steps-preview">
-                                {sq.events_detail.map((st) => (
-                                  <span
-                                    key={st.id}
-                                    className="seq-step-pill"
-                                    onClick={() => setSelectedId(st.id)}
-                                  >
-                                    {st.seq_step}. {st.actor_name?.split(" ")[1] || st.actor} {st.kind}
-                                    {st.gain_m !== 0 ? ` (${st.gain_m > 0 ? `+${st.gain_m}` : st.gain_m}m)` : ""}
-                                  </span>
-                                ))}
+                              <div>
+                                <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase" }}>Sequences</div>
+                                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--foreground)" }}>{totalSeq}</div>
                               </div>
-                            )}
-                          </div>
-                        ))}
-                      {(state.sequences || []).filter((sq) => sq.team === (state.focus_team || "H")).length === 0 && (
-                        <p className="comparison-footer">Play or focus the match to inspect possession sequences.</p>
-                      )}
+                              <div>
+                                <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase" }}>Final 3rd Entry</div>
+                                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--turf-emerald)" }}>{entryRate}%</div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase" }}>Avg Passes</div>
+                                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--foreground)" }}>{avgPasses}</div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase" }}>Avg Net Prog</div>
+                                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--turf-emerald)" }}>+{avgProg}m</div>
+                              </div>
+                            </div>
+
+                            {/* Sequence Filters */}
+                            <div className="sequence-filter-bar" style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "6px 0 10px" }}>
+                              {(
+                                [
+                                  ["all", `All (${playerFiltered.length})`],
+                                  ["final_third", `Final 3rd (${playerFiltered.filter((s) => s.entered_final_third).length})`],
+                                  ["shots", `Shots/Goals (${playerFiltered.filter((s) => s.outcome === "shot" || s.outcome === "goal" || s.outcome === "saved").length})`],
+                                  ["progression", `Prog ≥15m (${playerFiltered.filter((s) => (s.territory_gained ?? s.progressive_distance) >= 15).length})`],
+                                  ["turnover", `Turnover (${playerFiltered.filter((s) => s.outcome === "turnover").length})`],
+                                ] as const
+                              ).map(([key, label]) => (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  className={`feed-filter-btn ${sequenceFilter === key ? "active" : ""}`}
+                                  style={{ fontSize: 12, padding: "3px 8px" }}
+                                  onClick={() => setSequenceFilter(key)}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                              {selectedPlayerId && (
+                                <button
+                                  type="button"
+                                  className="feed-filter-btn"
+                                  style={{ fontSize: 11, padding: "2px 6px", background: "rgba(239, 68, 68, 0.15)", color: "#ef4444" }}
+                                  onClick={() => setSelectedPlayerId(null)}
+                                >
+                                  Filtered to {selectedPlayerId} ✕
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Scrollable Sequence List */}
+                            <div
+                              className="sequence-list"
+                              style={{
+                                maxHeight: "360px",
+                                overflowY: "auto",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 6,
+                              }}
+                            >
+                              {filtered.length === 0 ? (
+                                <p className="comparison-footer">No sequences match the selected filter criteria.</p>
+                              ) : (
+                                filtered
+                                  .slice()
+                                  .reverse()
+                                  .map((sq) => (
+                                    <div key={sq.sequence_id} className="sequence-row-container">
+                                      <button
+                                        type="button"
+                                        className={`sequence-row-btn ${selectedSeqId === sq.sequence_id ? "active" : ""}`}
+                                        onClick={() => {
+                                          setSelectedSeqId(selectedSeqId === sq.sequence_id ? "" : sq.sequence_id);
+                                          setSelectedId(sq.event_ids.at(-1) || "");
+                                        }}
+                                      >
+                                        <span className="seq-id-badge">{sq.sequence_id}</span>
+                                        <span className="seq-meta">
+                                          {clock(sq.start_t)}–{clock(sq.end_t)} ({sq.duration}s) · {sq.pass_count} passes · {sq.territory_gained !== undefined ? `net ${sq.territory_gained > 0 ? `+${sq.territory_gained}` : sq.territory_gained}m` : `+${sq.progressive_distance}m`}
+                                        </span>
+                                        <span className={`seq-outcome ${sq.outcome}`}>
+                                          {sq.outcome.replace("_", " ").toUpperCase()}
+                                        </span>
+                                      </button>
+                                      {selectedSeqId === sq.sequence_id && sq.events_detail && sq.events_detail.length > 0 && (
+                                        <div className="seq-steps-preview">
+                                          {sq.events_detail.map((st) => (
+                                            <span
+                                              key={st.id}
+                                              className="seq-step-pill"
+                                              onClick={() => setSelectedId(st.id)}
+                                            >
+                                              {st.seq_step}. {st.actor_name?.split(" ")[1] || st.actor} {st.kind}
+                                              {st.gain_m !== 0 ? ` (${st.gain_m > 0 ? `+${st.gain_m}` : st.gain_m}m)` : ""}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))
+                              )}
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   ) : (
-                    <div className="player-spotlight-list">
+                    <div
+                      className="player-spotlight-list"
+                      style={{
+                        maxHeight: "380px",
+                        overflowY: "auto",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                      }}
+                    >
                       {(state.player_spotlight || [])
                         .filter((p) => p.team === (state.focus_team || "H"))
-                        .map((p) => (
-                          <button
-                            key={p.player_id}
-                            type="button"
-                            className="sequence-row-btn"
-                            onClick={() => p.event_ids.at(-1) && setSelectedId(p.event_ids.at(-1)!)}
-                          >
-                            <span className="seq-id-badge">{p.player_id} · {p.name}</span>
-                            <span className="seq-meta">
-                              {p.passes} passes ({p.progressive_passes} prog, +{p.progressive_distance}m) · {p.recoveries} rec · {p.shots} shots
-                            </span>
-                            <span className="seq-outcome">
-                              {p.goals > 0 ? `⚽ ${p.goals} GOAL` : `${p.sequences_involved} seqs`}
-                            </span>
-                          </button>
-                        ))}
+                        .map((p) => {
+                          const isSelected = selectedPlayerId === p.player_id;
+                          return (
+                            <button
+                              key={p.player_id}
+                              type="button"
+                              className={`sequence-row-btn ${isSelected ? "active" : ""}`}
+                              style={{
+                                border: isSelected ? "2px solid var(--turf-emerald)" : undefined,
+                                background: isSelected ? "rgba(0, 229, 153, 0.08)" : undefined,
+                              }}
+                              onClick={() => {
+                                setSelectedPlayerId(isSelected ? null : p.player_id);
+                                if (p.event_ids.length > 0) {
+                                  setSelectedId(p.event_ids.at(-1)!);
+                                }
+                              }}
+                            >
+                              <span
+                                className="seq-id-badge"
+                                style={{
+                                  background: isSelected ? "var(--turf-emerald)" : undefined,
+                                  color: isSelected ? "#071019" : undefined,
+                                }}
+                              >
+                                {p.player_id} · {p.name}
+                              </span>
+                              <span className="seq-meta">
+                                {p.passes} passes ({p.progressive_passes} prog, +{p.progressive_distance}m) · {p.recoveries} rec · {p.shots} shots
+                              </span>
+                              <span className="seq-outcome" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                {isSelected && <span style={{ fontSize: 11, color: "var(--turf-emerald)", fontWeight: 700 }}>🎯 ON PITCH</span>}
+                                <span>{p.goals > 0 ? `⚽ ${p.goals} GOAL` : `${p.sequences_involved} seqs`}</span>
+                              </span>
+                            </button>
+                          );
+                        })}
                     </div>
                   )}
                 </section>

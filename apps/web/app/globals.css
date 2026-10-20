@@ -908,6 +908,28 @@ select {
   .gap-grid { grid-template-columns: 1fr; }
 }
 
+/* S3: 9-Zone Spatial Heatmap & Player Spotlight Layer Enhancements */
+.zone-cell-group {
+  transition: all 0.2s ease;
+}
+.zone-cell-group:hover rect {
+  stroke: var(--turf-emerald) !important;
+  stroke-width: 0.8 !important;
+  fill-opacity: 0.78 !important;
+  cursor: pointer;
+}
+
+.player-touch-marker {
+  cursor: pointer;
+}
+.player-touch-marker:hover circle {
+  stroke-width: 0.8;
+}
+
+.player-focus-bar {
+  box-shadow: var(--shadow-sm);
+}
+
 /* Responsive adjustments */
 @media (max-width: 720px) {
   .scoreboard-fixture { grid-template-columns: 1fr 100px 1fr; }

@@ -697,6 +697,48 @@ def build_tactical_explorer(state: dict, team: str = "H") -> dict:
         "high_recovery_threshold_x": 70.0 if team == "H" else 35.0,
     }
 
+    # 9-zone spatial distribution (3 thirds x 3 channels on pitch)
+    zone_cells = []
+    cell_specs = [
+        (0, (0.0, 35.0), 0, (0.0, 22.67)),
+        (0, (0.0, 35.0), 1, (22.67, 45.33)),
+        (0, (0.0, 35.0), 2, (45.33, 68.0)),
+        (1, (35.0, 70.0), 0, (0.0, 22.67)),
+        (1, (35.0, 70.0), 1, (22.67, 45.33)),
+        (1, (35.0, 70.0), 2, (45.33, 68.0)),
+        (2, (70.0, 105.0), 0, (0.0, 22.67)),
+        (2, (70.0, 105.0), 1, (22.67, 45.33)),
+        (2, (70.0, 105.0), 2, (45.33, 68.0)),
+    ]
+    for x_idx, (x_min, x_max), y_idx, (y_min, y_max) in cell_specs:
+        y_mid = (y_min + y_max) / 2
+        ch = channel_name(team, y_mid)
+        if team == "H":
+            th = "defensive" if x_idx == 0 else ("middle" if x_idx == 1 else "attacking")
+        else:
+            th = "attacking" if x_idx == 0 else ("middle" if x_idx == 1 else "defensive")
+
+        c_events = [
+            e for e in events
+            if x_min <= e["start"][0] <= x_max and y_min <= e["start"][1] <= y_max
+        ]
+        count = len(c_events)
+        pct = round(100.0 * count / total_ev, 1)
+        name = f"{th.capitalize()} {ch.capitalize()}"
+        zone_cells.append({
+            "cell_id": f"zone-{x_idx}-{y_idx}",
+            "name": name,
+            "third": th,
+            "channel": ch,
+            "x_min": x_min,
+            "x_max": x_max,
+            "y_min": y_min,
+            "y_max": y_max,
+            "count": count,
+            "percentage": pct,
+            "event_ids": [e["id"] for e in c_events],
+        })
+
     return {
         "team": team,
         "team_name": TEAMS[team],
@@ -709,6 +751,7 @@ def build_tactical_explorer(state: dict, team: str = "H") -> dict:
         "zones": zones,
         "channels": channels,
         "attacking_channels": attacking_channels,
+        "zone_cells": zone_cells,
         "territorial_progression": territorial_progression,
         "disclaimer": "Derived strictly from recorded on-ball events; does not represent off-ball formation or pitch control.",
     }
@@ -757,6 +800,9 @@ def build_player_spotlight(state: dict, team: str | None = None) -> list[dict]:
                 "shots": len(shots),
                 "goals": len(goals),
                 "sequences_involved": len(seq_by_player.get(pid, [])),
+                "touch_points": [e["start"] for e in actor_events],
+                "progressive_pass_ids": [e["id"] for e in prog_passes],
+                "recovery_ids": [e["id"] for e in recs],
                 "event_ids": [e["id"] for e in actor_events],
             })
     return spotlight

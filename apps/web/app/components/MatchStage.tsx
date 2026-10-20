@@ -53,6 +53,20 @@ export type PossessionSequence = {
   events_detail?: PossessionSequenceEventDetail[];
 };
 
+export type ZoneCell = {
+  cell_id: string;
+  name: string;
+  third: "defensive" | "middle" | "attacking";
+  channel: "left" | "center" | "right";
+  x_min: number;
+  x_max: number;
+  y_min: number;
+  y_max: number;
+  count: number;
+  percentage: number;
+  event_ids: string[];
+};
+
 export type TacticalData = {
   team: "H" | "N";
   team_name: string;
@@ -107,6 +121,7 @@ export type TacticalData = {
     center_count?: number;
     right_count?: number;
   };
+  zone_cells?: ZoneCell[];
   territorial_progression?: {
     total_progressive_passes: number;
     final_third_entries_count: number;
@@ -127,8 +142,11 @@ type MatchStageProps = {
   clockText: string;
   focusTeam?: "H" | "N";
   tactical?: TacticalData | null;
+  selectedPlayerId?: string | null;
+  playerSpotlight?: any[];
   onSelectEvent?: (eventId: string) => void;
   onClearSequence?: () => void;
+  onSelectPlayer?: (playerId: string | null) => void;
 };
 
 export function MatchStage({
@@ -140,10 +158,13 @@ export function MatchStage({
   clockText,
   focusTeam = "H",
   tactical,
+  selectedPlayerId,
+  playerSpotlight,
   onSelectEvent,
   onClearSequence,
+  onSelectPlayer,
 }: MatchStageProps) {
-  const [layer, setLayer] = useState<"live" | "network" | "progression" | "recoveries">("live");
+  const [layer, setLayer] = useState<"live" | "network" | "progression" | "recoveries" | "zones">("live");
   const [stepIndex, setStepIndex] = useState<number | null>(null);
   const [channelMode, setChannelMode] = useState<"overall" | "attacking">("overall");
   const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
@@ -152,6 +173,7 @@ export function MatchStage({
   const teamColor = isNorthbridge ? "#60a5fa" : "#f59e0b";
   const entryX = isNorthbridge ? 35 : 70;
   const nodeMap = new Map(tactical?.nodes.map((n) => [n.player_id, n]) || []);
+  const focusedPlayerData = playerSpotlight?.find((p) => p.player_id === selectedPlayerId && p.team === focusTeam);
 
   const sequenceDetail = selectedSequence?.events_detail || [];
   const activeStep = stepIndex !== null && sequenceDetail[stepIndex] ? sequenceDetail[stepIndex] : null;
@@ -171,15 +193,19 @@ export function MatchStage({
           <h2 className="stage-title">
             {selectedSequence
               ? `Inspecting ${selectedSequence.sequence_id} (${sequenceDetail.length} steps · net ${selectedSequence.territory_gained ?? selectedSequence.progressive_distance}m)`
-              : selectedEvent
-                ? `Inspecting Event · ${selectedEvent.id}`
-                : layer === "network"
-                  ? `${isNorthbridge ? "Northbridge" : "Harbor"} Passing Network`
-                  : layer === "progression"
-                    ? "Progressive Passes & Final-Third Entries"
-                    : layer === "recoveries"
-                      ? "Ball Recovery Locations"
-                      : "Live On-Ball Action Map"}
+              : selectedPlayerId && focusedPlayerData
+                ? `Player Spotlight · ${focusedPlayerData.name} (${focusedPlayerData.player_id})`
+                : selectedEvent
+                  ? `Inspecting Event · ${selectedEvent.id}`
+                  : layer === "network"
+                    ? `${isNorthbridge ? "Northbridge" : "Harbor"} Passing Network`
+                    : layer === "progression"
+                      ? "Progressive Passes & Final-Third Entries"
+                      : layer === "recoveries"
+                        ? "Ball Recovery Locations"
+                        : layer === "zones"
+                          ? `${isNorthbridge ? "Northbridge" : "Harbor"} 9-Zone Spatial Density Map`
+                          : "Live On-Ball Action Map"}
           </h2>
         </div>
         <div className="stage-direction">
@@ -216,6 +242,7 @@ export function MatchStage({
             ["network", "Passing Network"],
             ["progression", `Progression (${tactical?.progressive_passes.length ?? 0})`],
             ["recoveries", `Recoveries (${tactical?.recoveries.length ?? 0})`],
+            ["zones", `9-Zone Heatmap (${tactical?.zone_cells?.length ?? 9})`],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -232,6 +259,36 @@ export function MatchStage({
           </button>
         ))}
       </div>
+
+      {/* Player Spotlight Focus Indicator */}
+      {selectedPlayerId && focusedPlayerData && (
+        <div
+          className="player-focus-bar"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "6px 12px",
+            background: "rgba(0, 229, 153, 0.08)",
+            border: "1px solid rgba(0, 229, 153, 0.3)",
+            borderRadius: 6,
+            margin: "6px 0",
+            fontSize: 13,
+          }}
+        >
+          <span>
+            🎯 <b>Player Spotlight:</b> <b style={{ color: teamColor }}>{focusedPlayerData.name} ({focusedPlayerData.player_id})</b> · {focusedPlayerData.passes} passes ({focusedPlayerData.progressive_passes} prog, +{focusedPlayerData.progressive_distance}m) · {focusedPlayerData.recoveries} recoveries · {focusedPlayerData.shots} shots
+          </span>
+          <button
+            type="button"
+            className="feed-filter-btn"
+            style={{ padding: "2px 8px", fontSize: 11 }}
+            onClick={() => onSelectPlayer?.(null)}
+          >
+            Clear Player ✕
+          </button>
+        </div>
+      )}
 
       {/* Sequence Step-by-Step Playback Controller */}
       {selectedSequence && sequenceDetail.length > 0 && layer === "live" && (
@@ -552,6 +609,102 @@ export function MatchStage({
                   <text y="-3.0" textAnchor="middle" fill="#f8fafc" fontSize="1.8">
                     {rec.id}
                   </text>
+                </g>
+              ))}
+            </g>
+          )}
+
+          {/* Layer 5: 9-Zone Spatial Distribution & Density Heatmap */}
+          {layer === "zones" && tactical?.zone_cells && (
+            <g className="zones-grid-layer">
+              {tactical.zone_cells.map((cell) => {
+                const width = cell.x_max - cell.x_min;
+                const height = cell.y_max - cell.y_min;
+                const maxPct = Math.max(...tactical.zone_cells!.map((c) => c.percentage), 1.0);
+                const opacity = Math.max(0.12, Math.min(0.70, (cell.percentage / maxPct) * 0.72));
+                const isCellSelected = cell.event_ids.some((id) => selectedEvent?.id === id);
+
+                return (
+                  <g
+                    key={cell.cell_id}
+                    className="zone-cell-group"
+                    style={{ cursor: "pointer" }}
+                    onClick={() => {
+                      if (cell.event_ids.length > 0) {
+                        onSelectEvent?.(cell.event_ids.at(-1)!);
+                      }
+                    }}
+                  >
+                    <rect
+                      x={cell.x_min}
+                      y={cell.y_min}
+                      width={width}
+                      height={height}
+                      fill={teamColor}
+                      fillOpacity={opacity}
+                      stroke={isCellSelected ? "var(--turf-emerald)" : "rgba(255, 255, 255, 0.28)"}
+                      strokeWidth={isCellSelected ? 1.0 : 0.4}
+                      strokeDasharray={isCellSelected ? undefined : "1.5 1"}
+                    />
+                    <text
+                      x={cell.x_min + width / 2}
+                      y={cell.y_min + height / 2 - 2.5}
+                      textAnchor="middle"
+                      fill="#cbd5e1"
+                      fontSize="1.7"
+                      fontWeight="600"
+                    >
+                      {cell.name.toUpperCase()}
+                    </text>
+                    <text
+                      x={cell.x_min + width / 2}
+                      y={cell.y_min + height / 2 + 2.0}
+                      textAnchor="middle"
+                      fill="#ffffff"
+                      fontSize="3.8"
+                      fontWeight="800"
+                    >
+                      {cell.percentage}%
+                    </text>
+                    <text
+                      x={cell.x_min + width / 2}
+                      y={cell.y_min + height / 2 + 5.5}
+                      textAnchor="middle"
+                      fill="var(--turf-emerald)"
+                      fontSize="1.6"
+                      fontWeight="600"
+                    >
+                      {cell.count} on-ball actions
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
+          )}
+
+          {/* Focused Player Touch Points Radar Overlay */}
+          {focusedPlayerData?.touch_points && focusedPlayerData.touch_points.length > 0 && (
+            <g className="player-touch-points-layer">
+              {focusedPlayerData.touch_points.map((pt: [number, number], idx: number) => (
+                <g key={`touch-${idx}`} className="player-touch-marker">
+                  <circle
+                    cx={pt[0]}
+                    cy={pt[1]}
+                    r="1.8"
+                    fill={teamColor}
+                    fillOpacity={0.9}
+                    stroke="#ffffff"
+                    strokeWidth="0.5"
+                  />
+                  <circle
+                    cx={pt[0]}
+                    cy={pt[1]}
+                    r="3.2"
+                    fill="none"
+                    stroke={teamColor}
+                    strokeWidth="0.4"
+                    strokeDasharray="1 1"
+                  />
                 </g>
               ))}
             </g>

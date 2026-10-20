@@ -1,6 +1,14 @@
 import pytest
 
-from matchlens.football import CHAPTERS, freeze, generate_match, reduce_match
+from matchlens.football import (
+    CHAPTERS,
+    build_player_spotlight,
+    build_sequences,
+    build_tactical_explorer,
+    freeze,
+    generate_match,
+    reduce_match,
+)
 
 
 def test_reproducible_legal_prefix_and_continuity():
@@ -225,3 +233,49 @@ def test_all_six_scenarios_comprehensive_moments_and_tactical_invariants():
         assert cmp_res["window_1"]["duration"] == 360
         assert cmp_res["window_2"]["duration"] == 360
         assert "deltas" in cmp_res
+
+
+def test_s2_possession_sequences_and_s3_nine_zone_tactical_explorer():
+    events = generate_match(seed=17, scenario="default")
+    state = reduce_match(events, 720)
+
+    # S2: Possession sequences integrity
+    seqs = build_sequences(state)
+    assert len(seqs) >= 10
+    for sq in seqs:
+        assert sq["sequence_id"].startswith("SEQ-")
+        assert sq["team"] in ("H", "N")
+        assert sq["duration"] >= 0
+        assert sq["pass_count"] >= 0
+        assert "events_detail" in sq
+        if sq["events_detail"]:
+            assert sq["events_detail"][0]["seq_step"] == 1
+            assert all(d["kind"] in ("pass", "shot", "recovery", "save", "restart") for d in sq["events_detail"])
+
+    # S3: 9-zone spatial tactical cells for both teams
+    for t in ("H", "N"):
+        tac = build_tactical_explorer(state, t)
+        assert "zone_cells" in tac
+        cells = tac["zone_cells"]
+        assert len(cells) == 9
+        total_pct = sum(c["percentage"] for c in cells)
+        assert 98.0 <= total_pct <= 102.0  # Percentage rounding tolerance
+        for c in cells:
+            assert c["third"] in ("defensive", "middle", "attacking")
+            assert c["channel"] in ("left", "center", "right")
+            assert c["x_max"] > c["x_min"]
+            assert c["y_max"] > c["y_min"]
+            assert c["count"] == len(c["event_ids"])
+
+    # S4: Player spotlight touch points and contributions
+    spotlight = build_player_spotlight(state)
+    assert len(spotlight) == 8
+    for p in spotlight:
+        assert "touch_points" in p
+        assert len(p["touch_points"]) >= 0
+        assert p["passes"] >= 0
+        assert p["progressive_passes"] >= 0
+        assert p["recoveries"] >= 0
+        assert p["shots"] >= 0
+        assert p["sequences_involved"] >= 0
+
