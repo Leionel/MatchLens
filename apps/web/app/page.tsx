@@ -192,6 +192,8 @@ type State = {
   analysis: { status: string; as_of: number; run_id: string } | null;
   result: Result | null;
   history: Card[];
+  revisions?: any[];
+  hypotheses_matrix?: any;
   model_configured: boolean;
   ended: boolean;
   session_analyses_remaining: number;
@@ -685,6 +687,12 @@ export default function MatchLens() {
                   receipts={state.receipts}
                   snapshotId={state.snapshot_id}
                   autoStatus={state.auto_status}
+                  hypothesesMatrix={state.hypotheses_matrix || null}
+                  revisions={state.revisions || []}
+                  focusTeam={state.focus_team || "H"}
+                  onChallengeSubmitted={(res) => {
+                    if (res && res.state) commit(res.state);
+                  }}
                 />
 
                 {showOverlay && card && (

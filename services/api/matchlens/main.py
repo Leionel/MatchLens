@@ -22,7 +22,15 @@ from typing import Literal
 
 from .agents import AgentRunner, Run, PROMPT_VERSION
 from .budget import BudgetLedger
-from .contracts import ClaimDraft, VerifierDecision, publication_gate
+from .contracts import (
+    ChallengeRequest,
+    ClaimDraft,
+    VerifierDecision,
+    ask_the_match,
+    evaluate_hypotheses,
+    publication_gate,
+    resolve_challenge,
+)
 from .football import (
     CHAPTERS,
     PLAYERS,
@@ -88,6 +96,7 @@ class Session:
     scenario: str = "default"
     seed: int = 17
     focus_team: Literal["H", "N"] = "H"
+    revisions: list[dict] = field(default_factory=list)
 
     def tick(self):
         if not self.paused:
@@ -247,6 +256,8 @@ class Engine:
                 "snapshot_as_of": snapshot.data["as_of"] if snapshot else None,
                 "analysis_receipts": snapshot.data["receipts"] if snapshot else None,
                 "analysis": s.run_info, "result": result, "history": accepted_history,
+                "revisions": s.revisions,
+                "hypotheses_matrix": evaluate_hypotheses(snapshot, s.focus_team).model_dump() if snapshot else None,
                 "model_configured": bool(self.runner.key), "session_analyses_remaining": max(0, 8-s.analyses),
                 "auto_status": "disabled" if not self.auto_enabled else "model_unavailable" if not self.runner.key else "budget_limited" if not self.can_admit() else "session_limited" if s.auto_started >= self.auto_limit else "enabled",
                 "format_seconds": 720, "ended": state["ended"]}
@@ -511,6 +522,57 @@ async def stream(request: Request):
                 last_send = time.monotonic()
             await asyncio.sleep(.3)
     return StreamingResponse(updates(), media_type="text/event-stream", headers={"X-Accel-Buffering": "no"})
+
+
+@app.post("/api/challenge")
+async def challenge(body: ChallengeRequest, request: Request):
+    s, eng = session(request), engine(request)
+    eng.rates.check("challenge:" + s.id, 60)
+    snap = s.snapshots.get(body.snapshot_id)
+    if not snap:
+        snap = eng.saved_snapshots.get(body.snapshot_id)
+    if not snap:
+        snap = freeze(eng.events_for(s), s.at, seed=s.seed)
+        s.snapshots[snap.id] = snap
+
+    result = resolve_challenge(snap, body)
+    rev_entry = {
+        "revision_id": f"rev-{len(s.revisions) + 1:03d}",
+        "at": snap.data["as_of"],
+        "claim_id": body.claim_id,
+        "challenge_type": body.challenge_type,
+        "outcome": result.outcome,
+        "summary": result.resolution_summary,
+        "counterevidence_checked": result.counterevidence_checked,
+        "timestamp": time.time(),
+    }
+    s.revisions.append(rev_entry)
+    s.revision += 1
+    return {
+        "result": result.model_dump(),
+        "revisions": s.revisions,
+        "state": eng.view(s),
+    }
+
+
+class AskQuery(BaseModel):
+    intent_id: str
+    team: Literal["H", "N"] | None = None
+
+
+@app.post("/api/ask")
+async def ask(body: AskQuery, request: Request):
+    s, eng = session(request), engine(request)
+    eng.rates.check("ask:" + s.id, 60)
+    view = eng.view(s)
+    snap_id = view["snapshot_id"]
+    snap = s.snapshots.get(snap_id) if snap_id else None
+    if not snap:
+        snap = freeze(eng.events_for(s), s.at, seed=s.seed)
+        s.snapshots[snap.id] = snap
+    team = body.team or s.focus_team
+    ans = ask_the_match(snap, body.intent_id, team=team)
+    return ans
 
 
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])

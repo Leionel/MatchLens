@@ -183,3 +183,39 @@ def test_r1_scenario_and_team_context_switching(client):
     assert len(full["sequences"]) > 0
     assert len(full["player_spotlight"]) == 8
     assert client.post("/api/control", json={"action": "set_scenario", "scenario": "invalid"}).status_code == 422
+
+
+def test_r2_interactive_challenge_and_ask_the_match_api(client):
+    client.post("/api/sessions")
+    state = client.post("/api/control", json={"action": "focus", "chapter": "A"}).json()
+    snap_id = state["snapshot_id"]
+    assert snap_id is not None
+    assert "hypotheses_matrix" in state
+    assert state["hypotheses_matrix"]["as_of"] == 360
+    assert len(state["hypotheses_matrix"]["hypotheses"]) >= 2
+    assert state["revisions"] == []
+
+    # 1. Test POST /api/challenge (causal interpretation challenge)
+    ch_payload = {
+        "claim_id": "claim-possession",
+        "snapshot_id": snap_id,
+        "challenge_type": "challenge_causal_interpretation",
+        "team": "H",
+    }
+    ch_res = client.post("/api/challenge", json=ch_payload)
+    assert ch_res.status_code == 200
+    ch_data = ch_res.json()
+    assert ch_data["result"]["outcome"] == "narrowed"
+    assert len(ch_data["revisions"]) == 1
+    assert ch_data["revisions"][0]["challenge_type"] == "challenge_causal_interpretation"
+    assert ch_data["state"]["revisions"][0]["outcome"] == "narrowed"
+
+    # 2. Test POST /api/ask (Ask the Match)
+    ask_res = client.post("/api/ask", json={"intent_id": "possession_vs_penetration", "team": "H"})
+    assert ask_res.status_code == 200
+    ask_data = ask_res.json()
+    assert ask_data["intent_id"] == "possession_vs_penetration"
+    assert "controlled possession" in ask_data["answer"]
+    assert len(ask_data["evidence_chips"]) == 3
+    assert "gap_advisor" in ask_data
+    assert "missing_data" in ask_data["gap_advisor"]
