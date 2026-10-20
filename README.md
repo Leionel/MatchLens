@@ -91,7 +91,7 @@ docker build -t matchlens:r01 .
 docker run --rm -p 8000:8000 --env-file .env -v matchlens-data:/data/matchlens matchlens:r01
 ```
 
-Choose an authorized funded host, preserve `/data/matchlens`, set one worker/replica and host rate protection. Verify actual DeepSeek egress and ten-minute public transport behavior there. Production budget/free judge access through Nov 10, public repository URL and <120s video remain release tasks in [ROADMAP](docs/ROADMAP.md) and [DEMO_PLAN](docs/DEMO_PLAN.md).
+Choose an authorized funded host, preserve `/data/matchlens`, set one worker/replica and host rate protection. Verify actual DeepSeek egress and ten-minute public transport behavior there. Production budget/free judge access through Nov 10, a final release and <120s video remain release tasks in [ROADMAP](docs/ROADMAP.md) and [DEMO_PLAN](docs/DEMO_PLAN.md).
 
 Code assistance: OpenAI Codex. Runtime orchestration: Microsoft Agent Framework. DeepSeek is the model provider. Foundry and GitHub Copilot SDK are not runtime dependencies. This project was developed for the 2026 Inside the Game Hackathon; retain truthful Git/release history and original run evidence.
 
