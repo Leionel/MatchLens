@@ -44,6 +44,11 @@ class BudgetLedger:
             self.db.execute("UPDATE requests SET status=?,usage=? WHERE id=?", (status, json.dumps(usage), request_id))
             self.db.commit()
 
+    def has_runway(self, requests: int = 6) -> bool:
+        with self.lock:
+            count, reserved = self.db.execute("SELECT count(*),coalesce(sum(reserved),0) FROM requests").fetchone()
+            return count + requests <= self.max_requests and reserved + requests * REQUEST_RESERVATION_USD <= self.max_usd + 1e-9
+
     def summary(self) -> dict:
         with self.lock:
             n, reserved = self.db.execute("SELECT count(*),coalesce(sum(reserved),0) FROM requests").fetchone()

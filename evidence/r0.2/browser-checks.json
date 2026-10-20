@@ -1,0 +1,44 @@
+{
+  "checkedAt": "2026-10-20T07:57:56.542Z",
+  "viewportChecks": [
+    {
+      "bodyBackground": "rgb(7, 13, 23)",
+      "height": 900,
+      "insightTop": 545.6354370117188,
+      "logoWidth": 31,
+      "originalTime": "Historical real analysis · As of 12:00·Scope: MATCH",
+      "scrollWidth": 1425,
+      "width": 1440
+    },
+    {
+      "bodyBackground": "rgb(7, 13, 23)",
+      "height": 1080,
+      "insightTop": 553.6354370117188,
+      "logoWidth": 31,
+      "originalTime": "Historical real analysis · As of 12:00·Scope: MATCH",
+      "scrollWidth": 1905,
+      "width": 1920
+    },
+    {
+      "bodyBackground": "rgb(7, 13, 23)",
+      "height": 844,
+      "insightTop": 541.8021240234375,
+      "logoWidth": 31,
+      "originalTime": "Historical real analysis · As of 12:00·Scope: MATCH",
+      "scrollWidth": 375,
+      "width": 390
+    }
+  ],
+  "keyboardCheck": {
+    "focusContained": true
+  },
+  "restored": {
+    "closed": true,
+    "focus": "🔍Challenge with Evidence (1 Receipts)↗"
+  },
+  "detectedGoalFocus": {
+    "clock": "11:30",
+    "futureHistoricalCardVisible": false,
+    "selectedEventCleared": true
+  }
+}

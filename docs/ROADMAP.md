@@ -56,3 +56,9 @@ Hosting probe, complete paired experiment and final media verification remain re
 3. Finish timeout/budget/session/epoch regressions and demonstrate a real healthy analysis after a failure.
 4. Select an accessible authorized host, confirm production/judging budget, and test its actual DeepSeek egress. Foundry is not a dependency.
 5. Deploy the thin slice and rehearse the 115s story. Stop optional work if it consumes Oct26.
+
+## R0.2 status — Oct20 PT
+
+Implemented: connected broadcast styles/components, event-boundary detection and moment focus, opt-in priority/cooldown/deduped automatic MAF workflows, six-request admission runway, finite fact rendering, historical revalidation, native evidence dialog and polling fallback. Current-version C and a Play-driven automatic A workflow have real receipts in [R0.2_RESULTS](R0.2_RESULTS.md). The stalemate scenario has deterministic coverage; it has no separate live model result.
+
+Next P0, in order: (1) secure a funded host and retained budget volume, verify deployed DeepSeek/SSE and a fresh judge-triggered run; (2) independent football prose review and three clean release journeys; (3) funded allowance through Nov10 and a tested history import on that host; (4) record the <120s English demo and final submission. Keep the Oct25 feature freeze and Oct26 delivery day. S0/S1/M quality study remains P1 / NOT RUN.

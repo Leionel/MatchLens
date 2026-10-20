@@ -48,19 +48,19 @@ Tools: `get_evidence(snapshot_id)` returns Harbor receipts and selected original
 
 Flash options: `json_object`, thinking explicitly disabled, `max_tokens=1024`, SDK retries zero. Strict native schema failed in the Spike; use local validation. Product runs led to a flat one-claim wire schema mapped into canonical variants. One bounded format correction per role uses the same session/evidence and cannot change claim/assertion/scope; all calls count toward the six-request cap. Version prompts and retain initial/corrected outputs. No code-based factual repair, agent debate or Pro retry.
 
-Gate: schema/refs/identity → complete review + both tool receipt roundtrips + handoff → true core + valid selected scope/variant → bound prose. `qualify` cannot launder a false core through a disclaimer. UI renders accepted selected text only; raw role output stays in local operator records.
+Gate: schema/refs/identity → complete review + both tool receipt roundtrips + handoff → true core + valid selected scope/variant → bound prose. `qualify` cannot launder a false core through a disclaimer. UI renders evidence-bound summaries for accepted typed assertions; raw selected role prose and rationale stay in local operator records. Facts are rendered by `bound-facts-v1`, not silently rewritten in the model receipt.
 
 ## State and time
 
 Immutable event tuple is generated/validated at startup. Reducer recomputes current prefix; browser does not advance score itself. Session owns clock, pause/speed, epoch/revision, Focus, snapshots and local completed-result cache. Evidence is a canonical string, copies returned to tools. Workflow binds run ID, snapshot and epoch. SQLite budget persists across restarts; session state does not.
 
-Focus seeks one of three cutoffs and pauses. Pending analysis names that fixed as-of time. Exit/restart/chapter change increments epoch, cancels work and checks epoch again before commit. Even a cancellation-resistant late result cannot enter a new view. Reuse retains original run/as-of; historical recap cards resolve their own snapshot and score.
+Focus seeks one of three cutoffs or an already detected moment and pauses. Pending analysis names that fixed as-of time. Exit/restart/chapter change increments epoch, cancels work and checks epoch again before commit. Even a cancellation-resistant late result cannot enter a new view. Reuse retains original run/as-of; historical recap cards resolve their own snapshot and score.
 
 SSE: full state on revision changes, 10s comment heartbeat. Reconnect replaces old stream and resynchronizes; no cursor buffer. Eight active sessions, 30-minute idle expiry. Process restart requires reload; no false durable-resume claim. Arbitrary seek, shared model cache and workflow checkpoints are deferred.
 
 ## Bounds and cost
 
-- One active workflow/session; two executing process-wide. Queue <=5s, workflow <=25s. No automatic inference during replay.
+- One active workflow/session; two executing process-wide. Queue <=5s, workflow <=25s. Opt-in automatic inference during replay; at most two auto runs/session, one active run/session, four detector families and a 30-match-second cooldown. Six-request whole-run runway is checked before scheduling; each HTTP dispatch still reserves independently.
 - At most three requests/agent, **six/run**; normal tool-using pair uses four. No automatic SDK retry. Failed/cancelled dispatches are not refunded.
 - Fixed official HTTPS endpoint/model, <=48,000-byte JSON request body, <=1,024 output tokens, thinking disabled; enforced before send.
 - SQLite `BEGIN IMMEDIATE` reserves **$0.02/request** before dispatch. Default global caps: **32 requests and $1 reserved**, whichever binds first. Ledger distinguishes dispatch, HTTP receipt and known usage.
@@ -87,3 +87,5 @@ HTTP hooks record dispatch IDs/body bounds, status, returned model/usage and act
 ## Deployment gate
 
 Build static UI/container; configure server secret, persistent budget, one worker/replica and explicit quotas. Test **from deployed host**: actual DeepSeek call, ten-minute stream/reconnect, control latency, cookie/origin boundaries and fresh judge path. Local success cannot establish this. Public host/funding/URL remain release work; README provides local reproduction.
+
+R0.2 history loader recomputes the exact frozen prefix and reruns current publication gates. Mismatched hashes, missing audit, invalid prose or unsupported cores are excluded. Only the exact matching snapshot is registered; a new hash can never be stored under an old ID. Candidate snapshots stop at detection time, including the goal at 11:30. The UI uses snapshot receipts for analytical comparisons and the current prefix for the scoreboard. Native HTML dialog owns focus trapping/Escape/return focus. SSE has a two-second polling fallback; session expiry stops retries and offers a fresh replay.

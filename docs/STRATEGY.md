@@ -115,3 +115,7 @@ Use per-request reservations, explicit output limits, bounded concurrency and fi
 4. Fallback statistics, archived model output and fresh inference have different visible provenance.
 5. Measure two-agent value against a budget-matched self-review baseline. If the result is inconclusive, publish that result.
 6. Preserve at least Oct 26 as a full deployment, QA and recording day; no P1 feature may consume that reserve.
+
+## R0.2 execution adjustment — Oct20 PT
+
+The product now leads with Play Replay, free event-driven detection and an opt-in, bounded live investigation rather than requiring chapter selection first. Fan view prioritizes the finding; Analyst view adds snapshot-window comparisons and review limits. The fixed chapters remain optional investigation shortcuts. Public prose uses finite evidence-bound rendering after the real Analyst selection and independent Verifier decision. This is an explicit tradeoff: fewer expressive narratives, stronger binding between metric, value and period. It does not replace real agents, decide a verdict in advance or establish a quality uplift. See [R0.2_RESULTS](R0.2_RESULTS.md) for actual calls/failures and remaining release gates.

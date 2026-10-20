@@ -44,8 +44,10 @@ class Event(BaseModel):
     outcome: Literal["complete", "saved", "goal"] = "complete"
 
 
-def generate_match(seed: int = 17) -> tuple[Event, ...]:
+def generate_match(seed: int = 17, scenario: str = "default") -> tuple[Event, ...]:
     """Controlled possession lengths; seeded pass paths, no AI claims or verdicts."""
+    if scenario not in ("default", "stalemate"):
+        raise ValueError("unknown_scenario")
     rng = random.Random(seed)
     result: list[Event] = []
     owner, holder, ball = "H", "H6", (52.5, 34.0)
@@ -73,6 +75,7 @@ def generate_match(seed: int = 17) -> tuple[Event, ...]:
             add(t, "pass", owner, holder, (x, round(rng.uniform(17, 51), 1)), receiver)
 
     add(0, "restart", "H", "H6", ball)
+    final_action = "saved" if scenario == "stalemate" else "goal"
     # (end time, pass profile, ending action). All are one continuous prefix.
     phases = [
         (50, "attack", "saved"), (100, "attack", "recover"),
@@ -82,7 +85,7 @@ def generate_match(seed: int = 17) -> tuple[Event, ...]:
         (408, "attack", "saved"), (470, "back", "recover"),
         (520, "attack", "saved"), (540, "back", "recover"),
         (580, "safe", "recover"), (630, "back", "recover"),
-        (690, "attack", "goal"),
+        (690, "attack", final_action),
     ]
     start = 0
     for stop, mode, action in phases:
@@ -95,8 +98,11 @@ def generate_match(seed: int = 17) -> tuple[Event, ...]:
             end_x = (105.0 if team == "H" else 0.0) if action == "goal" else (104.0 if team == "H" else 1.0)
             add(stop, "shot", team, holder, (end_x, 34.0), outcome=action)
         start = stop
-    add(692, "restart", "N", "N6", (52.5, 34.0))
-    passes(692, 720, "safe")
+    if scenario == "stalemate":
+        passes(690, 720, "safe")
+    else:
+        add(692, "restart", "N", "N6", (52.5, 34.0))
+        passes(692, 720, "safe")
     add(720, "end", owner, holder, ball)
     reduce_match(tuple(result), 720)  # Generation and ingestion use the same legality checks.
     return tuple(result)
@@ -272,3 +278,73 @@ def tool_evidence(snapshot: Snapshot) -> dict:
             relevant.update(v["event_ids"])
     return {"snapshot_id": snapshot.id, **{k: data[k] for k in ("as_of", "teams", "score", "candidate", "limitations")},
             "receipts": receipts, "selected_events": [e for e in data["events"] if e["id"] in relevant]}
+
+
+def detect_moments(state: dict) -> list[dict]:
+    """Detect candidate tactical moments dynamically from reduced match state."""
+    at, events = state["at"], state["events"]
+    receipts = metric_receipts(state)
+    moments = []
+
+    # Two complete comparison windows are required; timestamps are detection
+    # times, never chapter timestamps or an assumed future final whistle.
+    if at >= 360:
+        h_pos_curr = receipts.get("H.possession.current", {}).get("value", 0)
+        h_pos_prev = receipts.get("H.possession.previous", {}).get("value", 0)
+        h_shots_curr = receipts.get("H.shots.current", {}).get("value", 0)
+        h_entries_curr = receipts.get("H.entries.current", {}).get("value", 0)
+        if h_pos_curr > h_pos_prev and h_shots_curr <= 0 and h_entries_curr <= 0:
+            moments.append({
+                "id": "moment-possession",
+                "chapter_id": "A",
+                "at": at,
+                "badge": "TACTICAL DIVERGENCE",
+                "title": "Possession Without Penetration",
+                "question": "Has more of the ball meant more threat?",
+                "assertion": "possession_without_penetration",
+                "summary": f"Controlled possession: {h_pos_prev:g}% → {h_pos_curr:g}%. Current shots and attacking-third entries: zero.",
+                "priority": 3,
+                "metric_keys": ["H.possession.current", "H.possession.previous", "H.shots.current", "H.entries.current"],
+            })
+
+    # Association question, not a prescribed answer. Align with gate support.
+    if at >= 180:
+        high_rec = receipts.get("H.high_recoveries.current", {}).get("value", 0)
+        trans_shots = receipts.get("H.transition_shots.current", {}).get("value", 0)
+        if high_rec >= 2 and trans_shots >= 2:
+            moments.append({
+                "id": "moment-transition",
+                "chapter_id": "B",
+                "at": at,
+                "badge": "TRANSITION BURST",
+                "title": "High Recovery to Shot Chains",
+                "question": "What followed Harbor's high recoveries?",
+                "assertion": "recoveries_followed_by_shots",
+                "summary": f"Harbor won {int(high_rec)} high recoveries leading to {int(trans_shots)} quick transition shots.",
+                "priority": 2,
+                "metric_keys": ["H.high_recoveries.current", "H.transition_shots.current"],
+            })
+
+    if at >= 360 and receipts["H.shots.current"]["value"] >= 2 and all(
+        receipts[f"H.{metric}.current"]["value"] > receipts[f"H.{metric}.previous"]["value"] for metric in ("shots", "entries")
+    ):
+        moments.append({"id": "moment-activity", "chapter_id": "B", "at": at, "badge": "ATTACKING ACTIVITY", "title": "Attacking activity changed", "question": "What changed in Harbor's shot and entry counts?", "summary": "Both shot attempts and attacking-third entries increased against the preceding window.", "priority": 4, "metric_keys": [f"H.{metric}.{period}" for metric in ("shots", "entries") for period in ("previous", "current")]})
+
+    # T3: Breakthrough Goal Sequence (evaluated if goal present)
+    goals = [e for e in events if e.get("kind") == "shot" and e.get("outcome") == "goal"]
+    if goals:
+        g = goals[0]
+        moments.append({
+            "id": "moment-goal-" + g["id"],
+            "chapter_id": "C",
+            "at": g["t"],
+            "badge": "GOAL BREAKTHROUGH",
+            "title": f"{TEAMS[g['team']]} goal · {PLAYERS[g['team']][g['actor']]}",
+            "question": "Which sequence ended with the breakthrough goal?",
+            "assertion": "goal_sequence",
+            "summary": "A scoring shot is recorded. Inspect the possession chain leading to it.",
+            "priority": 1,
+            "metric_keys": ["H.goals.match"],
+        })
+
+    return moments

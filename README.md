@@ -4,9 +4,9 @@
 
 Repository: [Leionel/MatchLens](https://github.com/Leionel/MatchLens).
 
-R0.1 uses Microsoft Agent Framework, DeepSeek Flash, FastAPI and Next.js. The match, statistics and publication predicates are deterministic; both agents use the actual model API. Public hosting and the final competition video are not yet available. See [actual execution results](docs/R0.1_RESULTS.md).
+R0.2 uses Microsoft Agent Framework, DeepSeek Flash, FastAPI and Next.js. The match, statistics and publication predicates are deterministic; both agents use the actual model API. Public hosting and the final competition video are not yet available. See [current execution results](docs/R0.2_RESULTS.md) and [historical R0.1 results](docs/R0.1_RESULTS.md).
 
-![Actual browser run: recovery-to-shot insight with its original as-of time](evidence/r0.1/browser-b-fan.png)
+![Actual browser: real goal analysis, original as-of time and inspectable scoring event](evidence/r0.2/c-fan-1920.png)
 
 ## Run locally
 
@@ -19,6 +19,19 @@ powershell -ExecutionPolicy Bypass -File scripts/run.ps1
 ```
 
 Open **http://127.0.0.1:8000**. Subsequent starts can use `scripts/run.ps1 -SkipBuild`. Keep exactly one Uvicorn worker/replica. Without a key, the replay, statistics, source events and explicitly labeled fallback work; no model answer is simulated.
+
+
+Optional, to enable bounded paid automatic analysis, set `MATCHLENS_AUTO_ANALYSE=1` in server `.env` before startup. Default is free detection only. Never raise/reset a ledger limit implicitly. The local development ledger currently has insufficient six-request runway; fresh inference requires a separately configured allowance.
+
+To inspect historical **real** A/C analyses without another paid request, copy only the selected run receipts into `.runtime/runs` before starting:
+
+```powershell
+New-Item -ItemType Directory -Force .runtime/runs | Out-Null
+Copy-Item evidence/r0.2/runs/run-14e303594906f796.json .runtime/runs/
+Copy-Item evidence/r0.2/runs/run-c-verify-a359468b.json .runtime/runs/
+```
+
+The loader checks the exact canonical snapshot and current publication gates; incompatible records are excluded. Imported cards say **Historical real analysis**. Original receipts stay unchanged; their factual presentation is rendered under the current bound-facts contract.
 
 Other platforms:
 
@@ -34,11 +47,11 @@ Development: start FastAPI as above and `npm --prefix apps/web run dev` in anoth
 
 ## Try the football story
 
-1. Focus **A · 06:00**. Compare Harbor's controlled possession against shots and attacking entries. Select **Analyse this moment** for a real pair of model calls/tools. Focus freezes the match while they work.
-2. Read the actual decision. Select **Challenge with evidence**, choose a receipt, and click an event ID. Check its coordinates, original JSON and the highlighted pitch action. A zero count has no matching events; the whole prefix remains inspectable.
-3. Switch **Fan / Analyst**. Both views use the same claim and refs, without new inference. Expand **View run trace** for the actual tools and handoff. **Overlay preview** reuses approved Fan text.
-4. Focus **B · 09:00** and investigate the recorded recovery-to-shot chains. Association is not tactical causation. The agents may publish, qualify or withhold; no verdict is scripted.
-5. Focus **C · 12:00** for the goal sequence and a recap of already accepted session insights. Old cards and evidence keep their original as-of times. Exit Focus to resume; pending old-epoch work cannot publish.
+1. Press **Play Replay**. Default30x plays the 12-minute synthetic match in24 seconds. Event-boundary checks surface possession divergence, recovery-to-shot chains and goals without requiring chapter selection.
+2. With `MATCHLENS_AUTO_ANALYSE=1`, a configured server key and six-request runway, a detected moment can launch a real Analyst/Verifier workflow while playback continues. At most two auto runs/session, no repeated automatic charge for a candidate. With auto off or insufficient allowance, detection and source facts still work.
+3. Read the card's **as-of** time. **Fan View** leads with a concise finding; **Analyst View** adds frozen-window comparisons and limits. Both use the same accepted claim and refs; switching is free.
+4. **Challenge with Evidence** opens a keyboard-accessible drawer. Select a receipt, an event ID or a scoring/recovery chain; inspect exact coordinates and original JSON. **Inspect Agent Trace** reveals actual tools and handoff. Overlay preview reuses the approved summary and its original score/time.
+5. Investigate an automatically detected moment at its actual timestamp, or use A/B/C chapter shortcuts. Focus pauses; Exit Focus resumes. The final recap links approved findings at their original times.
 
 The replay is a **12-minute demonstration match**, not regulation football or live Premier League data. Harbor FC, Northbridge United and all players are fictional. Original SVG event map; no match footage or off-ball player tracking.
 
@@ -56,7 +69,7 @@ flowchart LR
     F --> U[Next.js / inspectable card]
 ```
 
-The Analyst selects a useful interpretation; a fresh Verifier checks its precise prose against original evidence and opposing metrics. `qualify` can select a narrower supplied variant of the **same true core**. It cannot rescue a false core with a disclaimer. Independent program checks enforce the bounded assertion, snapshot, refs, scope, tool roundtrips, handoff and numeric slots. No third agent, RAG, cloud agent service or arithmetic delegated to an LLM.
+The Analyst selects a useful interpretation; a fresh Verifier checks its precise prose against original evidence and opposing metrics. `qualify` can select a narrower supplied variant of the **same true core**. It cannot rescue a false core with a disclaimer. Independent program checks enforce the bounded assertion, snapshot, refs, scope, tool roundtrips, handoff and numeric slots. Public Fan/Analyst facts use the finite `bound-facts-v1` renderer: metric labels, values and periods come together from the approved assertion and frozen receipts. Original model prose and Verifier rationale remain in the operator receipt; public summaries are not verbatim model quotations. A false core is still withheld. No third agent, RAG, cloud agent service or arithmetic delegated to an LLM.
 
 JSON Object output is locally validated. At most one format correction per role, using the same role/session/evidence; no factual code repair or unbounded debate. Invalid/unfinished review yields statistics only. Detailed [contracts](docs/SPEC.md), [architecture](docs/ARCHITECTURE.md), [review](docs/R0.1_REVIEW.md) and historical [provider Spike](docs/TECH_SPIKE.md) are included.
 
@@ -72,13 +85,13 @@ npm --prefix apps/web run build
 services/api/.venv/Scripts/python.exe scripts/live_validation.py --out evidence/r0.1/my-run.json
 ```
 
-Offline regressions prove event arithmetic, source boundaries, publication rules, persistent reservations and cancellation isolation. They do not prove football-language quality. Real HTTP reports and manual review are separate in [R0.1_RESULTS](docs/R0.1_RESULTS.md). S0/S1/M comparative study and external audience tests remain **NOT RUN**; no multi-agent quality uplift is claimed.
+Offline regressions prove event arithmetic, source boundaries, publication rules, persistent reservations and cancellation isolation. They do not prove football-language quality. Real HTTP reports and independent human review status are separate in [R0.2_RESULTS](docs/R0.2_RESULTS.md). S0/S1/M comparative study and external audience tests remain **NOT RUN**; no multi-agent quality uplift is claimed.
 
 ## Reliability, privacy and cost
 
-Key is server-only in environment/root `.env` (ignored), never `NEXT_PUBLIC_*`. No public prompt/upload interface. Anonymous HttpOnly session, same-origin writes, fixed fixture/model/endpoint, finite session/IP/global rates, two workflow slots and one workflow/session. Focus analysis has a 25s model deadline plus up to 5s queue wait. A manual retry stays within budgets; no SDK auto-retries.
+Key is server-only in environment/root `.env` (ignored), never `NEXT_PUBLIC_*`. No public prompt/upload interface. Anonymous HttpOnly session, same-origin writes, fixed fixture/model/endpoint, finite session/IP/global rates, two workflow slots and one workflow/session. Analysis has a 25s model deadline plus up to 5s queue wait. A manual retry stays within budgets; no SDK auto-retries.
 
-`.runtime/budget.sqlite3` reserves $0.02 before **every** dispatch, including tool continuations and format correction; failures/cancellation do not refund it. Default **32 requests / $1 total reservation ceiling**, whichever binds first. The peak-price byte/output bound is conservative; actual usage estimates are not invoices. Restart preserves the ledger and loses sessions. Do not delete/reset the ledger to bypass a budget. Configure an explicit additional allowance when needed.
+`.runtime/budget.sqlite3` reserves $0.02 before **every** dispatch, including tool continuations and format correction; failures/cancellation do not refund it. Default **32 requests / $1 total reservation ceiling**, whichever binds first. The peak-price byte/output bound is conservative; actual usage estimates are not invoices. Before starting a workflow, admission checks capacity for all six possible dispatches and existing in-flight allowances. Restart preserves the ledger and loses sessions. Do not delete/reset the ledger to bypass a budget. Configure an explicit additional allowance when needed.
 
 Sanitized operator records in `.runtime/runs` contain raw/validated outputs and frozen evidence, never credentials or headers. Browser only sees accepted cards and sanitized trace summaries. Export relevant evidence before replacing a host/release. No calibrated xG, formations, pressing diagnosis, coaching intent or causal-effect estimates are supported.
 

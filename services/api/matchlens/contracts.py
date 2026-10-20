@@ -69,6 +69,14 @@ REQUIRED = {
 }
 SLOT = re.compile(r"\{\{([HN]\.[a-z_]+\.(?:previous|current|match))\}\}")
 UNSUPPORTED = re.compile(r"\bxg\b|\bpress(?:ing|ed)?\b|\bformation\b|\bfatigue\b|\bcoach(?:ing)?\b|\bcaus(?:e[ds]?|ed|ation)\b|\bbecause\b|\bforced\b|\bproves?\b|\bguarantee|\bhalf[- ]?time\b|\bafter the break\b|\b(?:first|second) half\b", re.I)
+QUANTITATIVE_WORDS = re.compile(
+    r"\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|dozen|once|twice|thrice)\b",
+    re.I,
+)
+PREVIOUS_WINDOW_REFERENCE = re.compile(
+    r"\b(?:previous|prior|earlier)\b.*\bwindow\b|\bprevious[- ]window\b|\bearlier window\b",
+    re.I,
+)
 
 
 def assertion_supported(assertion: str, snapshot: Snapshot) -> bool:
@@ -118,11 +126,47 @@ def render_text(text: str, refs: list[str], snapshot: Snapshot) -> str:
     # A valid limitation ("cannot show that pressing was the method") is not
     # an asserted tactic. Split contrast clauses so a disclaimer cannot hide a
     # positive unsupported claim after "but" or "however".
-    for clause in re.split(r"[.;!?]|\bbut\b|\bhowever\b", SLOT.sub("", text), flags=re.I):
+    stripped = SLOT.sub("", text)
+    if QUANTITATIVE_WORDS.search(stripped):
+        raise ValueError("unbound_spelled_number")
+    if PREVIOUS_WINDOW_REFERENCE.search(text) and not any(r.endswith(".previous") for r in refs):
+        raise ValueError("unreferenced_previous_window_fact")
+    for sentence in re.split(r"[!?;]|\.(?=\s|$)", text):
+        if PREVIOUS_WINDOW_REFERENCE.search(sentence) and not re.search(r"\bcurrent\b", SLOT.sub("", sentence), re.I):
+            if any(key.endswith(".current") for key in SLOT.findall(sentence)):
+                raise ValueError("fact_window_mismatch")
+    for clause in re.split(r"[.;!?]|\bbut\b|\bhowever\b", stripped, flags=re.I):
         negative = re.search(r"\b(?:cannot (?:show|establish|demonstrate|explain)|does not (?:show|establish|demonstrate)|no evidence (?:of|for)|not evidence (?:of|for))\b", clause, re.I)
         if UNSUPPORTED.search(clause) and not negative:
             raise ValueError("unsupported_prose_concept")
     return bind_slots(text, refs, snapshot)
+
+
+def evidence_summary(assertion: str, snapshot: Snapshot) -> tuple[str, str]:
+    """Finite public fact rendering after model selection/review, never a repair
+    of a false core. Free-form drafts remain in the operator run receipt only.
+    The renderer binds metric names, periods and values as a single fact.
+    """
+    r = snapshot.data["receipts"]
+    def value(metric, period="current"):
+        return f"{r[f'H.{metric}.{period}']['value']:g}"
+    at = snapshot.data["as_of"]
+    start = max(0, at-180)
+    window = f"{start//60:02d}:{start%60:02d}–{at//60:02d}:{at%60:02d}"
+    if assertion == "possession_without_penetration":
+        fan = f"More of the ball, no extra shots or entries: Harbor's controlled possession rose from {value('possession', 'previous')}% to {value('possession')}%, while shots and attacking-third entries did not increase."
+        analyst = f"Window {window}. Controlled possession: {value('possession', 'previous')}% → {value('possession')}%. Shots: {value('shots', 'previous')} → {value('shots')}. Attacking-third entries: {value('entries', 'previous')} → {value('entries')}. Greater controlled time did not coincide with greater activity on these measures."
+    elif assertion == "attacking_threat_increased":
+        fan = f"Harbor's attacking activity grew: shots increased from {value('shots', 'previous')} to {value('shots')}, and attacking-third entries from {value('entries', 'previous')} to {value('entries')}."
+        analyst = f"Window {window}. Both recorded shot attempts and attacking-third entries increased against the preceding window. These activity counts do not measure chance quality or establish a tactical cause."
+    elif assertion == "recoveries_followed_by_shots":
+        fan = f"Quick attacks after winning the ball: {value('transition_shots')} recovery-to-shot chains in this window. Harbor also recorded {value('high_recoveries')} high recoveries."
+        analyst = f"Window {window}. High recoveries: {value('high_recoveries')}. Recovery-to-shot chains within 10 seconds without a loss of possession: {value('transition_shots')}. Inspect each chain's recovery location and elapsed time. This is a short-window association, not evidence of pressing or causation."
+    else:
+        chain = r["H.goals.match"]["chains"][-1]
+        fan = f"Harbor scored. Follow the {len(chain)} recorded on-ball events in the scoring move, ending with the goal."
+        analyst = f"As of {at//60:02d}:{at%60:02d}: Harbor has {value('goals', 'match')} recorded goal(s). The latest uninterrupted scoring chain contains {len(chain)} events, from {chain[0]} to {chain[-1]}. The sequence establishes what happened on the ball; it does not explain off-ball tactics or why the goal occurred."
+    return fan, analyst
 
 
 def publication_gate(draft: ClaimDraft, review: VerifierDecision, snapshot: Snapshot, audit: list[dict]) -> dict:
@@ -176,8 +220,13 @@ def publication_gate(draft: ClaimDraft, review: VerifierDecision, snapshot: Snap
             rejected.append({"claim_id": claim.id, "assertion": claim.assertion, "verdict": d.verdict,
                              "gate": reason, "reason": public_reason})
         else:
+            # Typed assertion + frozen receipts own public facts, including the
+            # period and metric label. Do not render incidental model prose.
+            fan, analyst = evidence_summary(claim.assertion, snapshot)
             accepted.append({"claim_id": claim.id, "assertion": claim.assertion, "verdict": d.verdict,
                              "selected_variant": variant.id, "scope": variant.scope, "refs": variant.refs,
-                             "fan": fan, "analyst": analyst, "reason": public_reason,
-                             "limitations": public_limitations, "snapshot_id": snapshot.id, "as_of": snapshot.data["as_of"]})
+                             "fan": fan, "analyst": analyst,
+                             "reason": f"Verifier decision: {d.verdict}. The core assertion, scope and required receipt references passed publication checks.",
+                             "limitations": ["Synthetic on-ball events; no off-ball tracking or causal-effect evidence.", "A short window does not establish a whole-match trend."] if variant.scope == "window" else ["Recorded scoring sequence only; no off-ball tracking or tactical cause."],
+                             "render_contract": "bound-facts-v1", "snapshot_id": snapshot.id, "as_of": snapshot.data["as_of"]})
     return {"accepted": accepted, "rejected": rejected}

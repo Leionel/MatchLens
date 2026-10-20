@@ -22,7 +22,8 @@ from typing import Literal
 
 from .agents import AgentRunner, Run, PROMPT_VERSION
 from .budget import BudgetLedger
-from .football import CHAPTERS, PLAYERS, Snapshot, freeze, generate_match, metric_receipts, reduce_match
+from .contracts import ClaimDraft, VerifierDecision, publication_gate
+from .football import CHAPTERS, PLAYERS, Snapshot, detect_moments, freeze, generate_match, metric_receipts, reduce_match
 
 ROOT = Path(__file__).resolve().parents[3]
 load_dotenv(ROOT / ".env")
@@ -52,7 +53,7 @@ class Session:
     ip: str
     at: int = 0
     paused: bool = True
-    speed: int = 6
+    speed: int = 30
     epoch: int = 0
     revision: int = 0
     focus: str | None = None
@@ -64,6 +65,12 @@ class Session:
     run_info: dict | None = None
     task: asyncio.Task | None = None
     analyses: int = 0
+    moments: dict[str, dict] = field(default_factory=dict)
+    observed_at: int = -1
+    attempted: set[str] = field(default_factory=set)
+    attempts: dict[str, int] = field(default_factory=dict)
+    last_auto_at: int = -30
+    auto_started: int = 0
 
     def tick(self):
         if not self.paused:
@@ -84,8 +91,9 @@ class Session:
 
 class Control(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["focus", "exit_focus", "play", "pause", "speed", "restart"]
+    action: Literal["focus", "focus_moment", "exit_focus", "play", "pause", "speed", "restart"]
     chapter: Literal["A", "B", "C"] | None = None
+    moment_id: str | None = None
     speed: Literal[1, 6, 30] | None = None
 
 
@@ -94,11 +102,37 @@ class Engine:
         self.events = generate_match()
         self.sessions: dict[str, Session] = {}
         self.rates = RateLimits()
-        self.ledger = BudgetLedger(runtime / "budget.sqlite3", int(os.getenv("MATCHLENS_MAX_REQUESTS", "32")), float(os.getenv("MATCHLENS_MAX_RESERVED_USD", "1")))
+        self.ledger = BudgetLedger(runtime / "budget.sqlite3", int(os.getenv("MATCHLENS_MAX_REQUESTS", "32")), float(os.getenv("MATCHLENS_MAX_RESERVED_USD", "1.0")))
         self.runner = AgentRunner(key, self.ledger)
+        self.auto_enabled = os.getenv("MATCHLENS_AUTO_ANALYSE", "0") == "1"
+        self.auto_limit = min(2, max(0, int(os.getenv("MATCHLENS_AUTO_RUNS_PER_SESSION", "2"))))
+        self.admissions: set[str] = set()
         self.slots = asyncio.Semaphore(2)
         self.runtime = runtime
         (runtime / "runs").mkdir(parents=True, exist_ok=True)
+        self.saved_runs: dict[str, dict] = {}
+        self.saved_snapshots: dict[str, Snapshot] = {}
+        for p in sorted((runtime / "runs").glob("*.json")):
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+                snap_id = data.get("snapshot_id")
+                res = data.get("result")
+                if snap_id and res and res.get("status") == "completed" and res.get("accepted"):
+                    snap = freeze(self.events, data["evidence"]["as_of"])
+                    # A historical receipt must match this match prefix byte for
+                    # byte and pass today's gate. Never relabel an old hash.
+                    if snap.id != snap_id or snap.data != data["evidence"]:
+                        continue
+                    checked = publication_gate(ClaimDraft.model_validate(data["draft"]), VerifierDecision.model_validate(data["review"]), snap, data["audit"])
+                    if not checked["accepted"]:
+                        continue
+                    for card in checked["accepted"]:
+                        card.update(historical=True, source_run_id=data.get("run_id", p.stem))
+                    self.saved_runs[snap_id] = {**res, **checked, "reused": True, "snapshot_id": snap_id, "as_of": snap.data["as_of"],
+                                               "audit": data["audit"], "requests": data["requests"], "run_id": data.get("run_id", p.stem)}
+                    self.saved_snapshots[snap_id] = snap
+            except Exception:
+                pass
 
     def cleanup(self):
         for sid, s in list(self.sessions.items()):
@@ -109,18 +143,122 @@ class Engine:
     def view(self, s: Session) -> dict:
         s.tick()
         state = reduce_match(self.events, s.at)
-        snapshot = next((snap for snap in s.snapshots.values() if snap.data["as_of"] == s.at), None) if s.focus else None
-        result = s.cache.get(snapshot.id) if snapshot else None
-        if result:
-            result = {**result, "reused": s.run_info is None or s.run_info.get("run_id") != result["run_id"]}
-        accepted_history = [card for r in s.cache.values() if r["status"] == "completed" for card in r["accepted"]]
+        # Scan newly crossed event boundaries so 30x playback cannot skip a
+        # transient detector condition. Each type is latched once per session.
+        times = sorted({e.t for e in self.events if s.observed_at < e.t <= s.at} | ({s.at} if s.at > s.observed_at else set()))
+        for at in times:
+            for moment in detect_moments(reduce_match(self.events, at)):
+                if moment["id"] not in s.moments:
+                    s.moments[moment["id"]] = moment
+                    snap = freeze(self.events, moment["at"])
+                    s.snapshots[snap.id] = snap
+        s.observed_at = max(s.observed_at, s.at)
+        moments = sorted((m for m in s.moments.values() if m["at"] <= s.at), key=lambda m: m["at"])
+        active = min(moments, key=lambda m: (m["priority"], -m["at"])) if moments else None
+        if s.focus in ("A", "B", "C"):
+            active = None
+        elif s.focus in s.moments:
+            active = s.moments[s.focus]
+        elif s.run_info:
+            active = next((m for m in moments if m["at"] == s.run_info.get("as_of")), active)
+        if self.auto_enabled and not s.focus and (not s.paused or state["ended"]):
+            self.schedule_auto(s, moments)
+
+        # Snapshot resolution
+        if s.focus:
+            snapshot = next((snap for snap in s.snapshots.values() if snap.data["as_of"] == s.at), None)
+            if not snapshot:
+                snapshot = freeze(self.events, s.at)
+                s.snapshots[snapshot.id] = snapshot
+        elif s.run_info and s.run_info.get("as_of", 721) <= s.at:
+            snapshot = next((snap for snap in s.snapshots.values() if snap.data["as_of"] == s.run_info["as_of"]), None)
+        elif active:
+            snapshot = next((snap for snap in s.snapshots.values() if snap.data["as_of"] == active["at"]), None)
+            if not snapshot:
+                snapshot = freeze(self.events, active["at"])
+                s.snapshots[snapshot.id] = snapshot
+        else:
+            snapshot = None
+
+        # Result resolution: if actively analysing, result is None until finished
+        pending = s.run_info is not None and s.run_info.get("status") in ("queued", "analysing", "verifying")
+        if pending:
+            result = None
+        else:
+            result = s.cache.get(snapshot.id) if snapshot else None
+            if not result and snapshot and snapshot.id in self.saved_runs:
+                result = self.saved_runs[snapshot.id]
+            if result and "reused" not in result:
+                result = {**result, "reused": s.run_info is None or s.run_info.get("run_id") != result.get("run_id")}
+
+        # History resolution
+        all_accepted = {}
+        for snap_id, r in self.saved_runs.items():
+            for card in r.get("accepted", []):
+                all_accepted[f"{card['snapshot_id']}-{card['claim_id']}"] = card
+        for r in s.cache.values():
+            if r.get("status") == "completed":
+                for card in r.get("accepted", []):
+                    all_accepted[f"{card['snapshot_id']}-{card['claim_id']}"] = card
+        accepted_history = [card for card in all_accepted.values() if card.get("as_of", 0) <= s.at]
+        for card in accepted_history:
+            snap_id = card.get("snapshot_id")
+            if snap_id in self.saved_snapshots:
+                s.snapshots[snap_id] = self.saved_snapshots[snap_id]
+
         return {"revision": s.revision, "epoch": s.epoch, "at": s.at, "paused": s.paused, "speed": s.speed,
                 "focus": s.focus, "score": state["score"], "owner": state["owner"], "ball": state["ball"],
                 "events": state["events"], "players": PLAYERS, "receipts": metric_receipts(state),
-                "chapters": CHAPTERS, "snapshot_id": snapshot.id if snapshot else None,
+                "chapters": CHAPTERS, "moments": moments, "active_moment": active,
+                "snapshot_id": snapshot.id if snapshot else None,
+                "snapshot_as_of": snapshot.data["as_of"] if snapshot else None,
+                "analysis_receipts": snapshot.data["receipts"] if snapshot else None,
                 "analysis": s.run_info, "result": result, "history": accepted_history,
                 "model_configured": bool(self.runner.key), "session_analyses_remaining": max(0, 8-s.analyses),
+                "auto_status": "disabled" if not self.auto_enabled else "model_unavailable" if not self.runner.key else "budget_limited" if not self.can_admit() else "session_limited" if s.auto_started >= self.auto_limit else "enabled",
                 "format_seconds": 720, "ended": state["ended"]}
+
+    def can_admit(self) -> bool:
+        # Conservative whole-workflow runway; dispatches still reserve durably
+        # before HTTP. The application deliberately runs one worker/replica.
+        return self.ledger.has_runway(6 * (len(self.admissions) + 1))
+
+    def start_analysis(self, s: Session, snap: Snapshot, trigger: str) -> bool:
+        if s.task and not s.task.done() or s.analyses >= 8 or not self.can_admit():
+            return False
+        if snap.id in s.attempted and (trigger == "automatic" or s.attempts.get(snap.id, 0) >= 2):
+            return False
+        for key, cap in (("analyse:"+s.id, 3), ("analyse-ip:"+s.ip, 6), ("analyse:global", 12)):
+            self.rates.check(key, cap)
+        run = Run("run-"+secrets.token_hex(8), snap)
+        run.audit.append({"type": "trigger", "source": trigger, "as_of": snap.data["as_of"]})
+        s.attempted.add(snap.id)
+        s.attempts[snap.id] = s.attempts.get(snap.id, 0) + 1
+        s.analyses += 1
+        self.admissions.add(run.id)
+        s.run_info = {"run_id": run.id, "status": "queued", "as_of": snap.data["as_of"], "epoch": s.epoch}
+        s.revision += 1
+        s.task = asyncio.create_task(self.execute(s, snap, s.epoch, run))
+        # Cancellation can happen before the coroutine reaches its finally.
+        s.task.add_done_callback(lambda _: self.admissions.discard(run.id))
+        return True
+
+    def schedule_auto(self, s: Session, moments: list[dict]):
+        if not self.runner.key or s.auto_started >= self.auto_limit or s.task and not s.task.done() or s.at-s.last_auto_at < 30:
+            return
+        # Four detector types bound the queue; old-epoch tasks cannot commit.
+        for moment in sorted(moments, key=lambda m: (m["priority"], -m["at"])):
+            snap = next(v for v in s.snapshots.values() if v.data["as_of"] == moment["at"])
+            if snap.id in s.attempted:
+                continue
+            try:
+                asyncio.get_running_loop()
+                if self.start_analysis(s, snap, "automatic"):
+                    s.last_auto_at = s.at
+                    s.auto_started += 1
+            except (RuntimeError, HTTPException):
+                pass
+            break
 
     async def execute(self, s: Session, snapshot: Snapshot, epoch: int, run: Run):
         result = None
@@ -139,7 +277,7 @@ class Engine:
                 self.slots.release()
             result.update(run_id=run.id, snapshot_id=snapshot.id, as_of=snapshot.data["as_of"],
                           audit=run.audit, requests=run.requests)
-            if epoch == s.epoch and s.focus:
+            if epoch == s.epoch and snapshot.data["as_of"] <= s.at:
                 s.cache[snapshot.id] = result
                 s.run_info = {"run_id": run.id, "status": result["status"], "as_of": result["as_of"], "epoch": epoch}
                 s.revision += 1
@@ -155,6 +293,7 @@ class Engine:
                 s.run_info = {"status": "fallback", "run_id": run.id, "as_of": result["as_of"], "epoch": epoch}
                 s.revision += 1
         finally:
+            self.admissions.discard(run.id)
             record = {"run_id": run.id, "snapshot_id": snapshot.id, "evidence": snapshot.data,
                       "prompt_version": PROMPT_VERSION,
                       "bound_epoch": epoch, "current_epoch": s.epoch, "draft": run.draft, "review": run.review,
@@ -253,6 +392,12 @@ async def control(command: Control, request: Request):
         s.at, s.paused, s.focus = at, True, command.chapter
         snap = freeze(eng.events, at)
         s.snapshots[snap.id] = snap
+    elif command.action == "focus_moment":
+        moment = s.moments.get(command.moment_id)
+        if not moment or moment["at"] > s.at:
+            raise HTTPException(409, "moment_not_yet_detected")
+        s.invalidate()
+        s.at, s.paused, s.focus = moment["at"], True, moment["id"]
     elif command.action == "exit_focus":
         s.invalidate()
         s.focus, s.paused = None, s.at == 720
@@ -277,22 +422,15 @@ async def control(command: Control, request: Request):
 @app.post("/api/analyse", status_code=202)
 async def analyse(request: Request):
     s, eng = session(request), engine(request)
-    if not s.focus:
-        raise HTTPException(409, "focus_moment_required")
-    snap = next(v for v in s.snapshots.values() if v.data["as_of"] == s.at)
+    view = eng.view(s)
+    snap = s.snapshots.get(view["snapshot_id"])
+    if not snap:
+        raise HTTPException(409, "no_detected_moment")
     cached = s.cache.get(snap.id)
     if s.task and not s.task.done() or cached and cached["status"] == "completed":
         return eng.view(s)
-    eng.rates.check("analyse:"+s.id, 3)
-    eng.rates.check("analyse-ip:"+s.ip, 6)
-    eng.rates.check("analyse:global", 12)
-    if s.analyses >= 8:
-        raise HTTPException(429, "session_analysis_budget")
-    s.analyses += 1
-    run = Run("run-"+secrets.token_hex(8), snap)
-    s.run_info = {"run_id": run.id, "status": "queued", "as_of": s.at, "epoch": s.epoch}
-    s.revision += 1
-    s.task = asyncio.create_task(eng.execute(s, snap, s.epoch, run))
+    if not eng.start_analysis(s, snap, "manual"):
+        raise HTTPException(429, "workflow_budget_or_duplicate")
     return eng.view(s)
 
 

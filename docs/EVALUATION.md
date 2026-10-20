@@ -139,3 +139,7 @@ P1: ask one casual football viewer and one statistics-oriented viewer to perform
 Create the real report only after execution. Use columns `metric | target | observed | n/denominator | run IDs | decision`; leave observed values `NOT RUN` until measured. Archive raw receipts before aggregating. The planned scripts and commands are in [ROADMAP](ROADMAP.md).
 
 Release blockers: corrupt fixture or arithmetic, future evidence, unresolved refs, severe unsupported claims, silent mock substitution, no actual AI path, broken fresh-session journey, unlicensed material or no funded/free judging access. Failed comparative uplift blocks the uplift claim, not an otherwise useful release. Missed optional language/visual polish does not block P0. A latency failure requires product simplification and an honest scope change, not removal of failed samples.
+
+## R0.2 rendering control
+
+Keep `bound-facts-v1` identical across S0/S1/M. Measure original typed assertions, draft prose and independent review decisions separately from the deterministic public summary. A safe template is not evidence that a model produced a supported explanation or that two agents improved semantic accuracy. Retain rejection/coverage, raw-draft support and public-render safety as distinct outcomes. Budget-matched live comparison remains NOT RUN.

@@ -16,10 +16,10 @@ from pydantic import Field
 from typing import Literal
 
 from .budget import BudgetExceeded, BudgetLedger, MAX_BODY_BYTES, MAX_OUTPUT_TOKENS
-from .contracts import Assertion, ClosedModel, ClaimDraft, VerifierDecision, bind_slots, publication_gate, validate_draft
+from .contracts import Assertion, ClosedModel, ClaimDraft, VerifierDecision, QUANTITATIVE_WORDS, SLOT, bind_slots, publication_gate, validate_draft
 from .football import Snapshot, tool_evidence
 
-PROMPT_VERSION = "football-roles-r01-7-flat-wire"
+PROMPT_VERSION = "football-roles-r02-2-bound-facts"
 
 
 class WireDraft(ClosedModel):
@@ -70,16 +70,16 @@ class Run:
 def instructions(role: str) -> str:
     common = """You are MatchLens, analysing a synthetic football match. You MUST call get_evidence with the supplied snapshot_id at least once in your role's session before your first answer, even when another agent supplied evidence. A schema correction in the same session uses that existing evidence. Only tool evidence is authoritative. Return one JSON object, no markdown.
 Football: possession measures controlled time, entries measure passes crossing attacking x=70m, shots measure attempts. More possession alone is not increased threat. A shot after a recovery is an observed temporal association; it cannot establish pressing, coaching intent or causation. A short window cannot establish a whole-match trend. Goal chains show recorded on-ball events only. This continuous demo has NO HALFTIME or break: never say 'after the break', 'first half' or 'second half'. Say 'current/previous window'. Each complete window is 180 seconds; start/end/as_of are match seconds. Do not restate match length or window duration in prose; the UI shows exact times.
-Prose rules: describe only the selected assertion. No invented names, timings, coordinates, percentages or statistics. All numbers in fan/analyst/reason/limitations prose MUST be slots like {{H.shots.current}} with a matching ref; NEVER write literal digits there, including the match length. No xG, pressing, formation, fatigue, coaching intent, 'caused', 'because', 'forced', 'proves' or guarantees in Fan/Analyst text. Use simple English. Fan: one lively useful sentence, at most 45 words. Analyst: evidence comparison and appropriate uncertainty, visibly different from Fan, at most 100 words. Reasons/limitations can explain lack of causal evidence without numbers. Do not put unsupported speculation in published text.
+Prose rules: describe only the selected assertion. No invented names, timings, coordinates, percentages or statistics. Public facts are rendered from the selected typed assertion and frozen receipts; your prose stays in the operator audit. The Verifier must still reject incorrect prose. Never spell any quantity, including 'one', 'eleven', or 'once'; use a referenced metric slot or omit that quantity. All numbers in fan/analyst/reason/limitations prose MUST be slots like {{H.shots.current}} with a matching ref; NEVER write literal digits or spelled-out number words like 'zero', 'twice', 'two shots' there. If you discuss or compare the previous window, you MUST include the corresponding .previous receipts in refs. No xG, pressing, formation, fatigue, coaching intent, 'caused', 'because', 'forced', 'proves' or guarantees in Fan/Analyst text. Use simple English. Fan: one lively useful sentence, at most 45 words. Analyst: evidence comparison and appropriate uncertainty, visibly different from Fan, at most 100 words. Reasons/limitations can explain lack of causal evidence without numbers. Do not put unsupported speculation in published text.
 """
     if role == "Analyst":
         task = """Investigate the candidate question using the receipts and selected events. Choose ONE useful supported core assertion, or propose a tentative assertion for review if evidence is insufficient. Do not select a verdict.
 Allowed assertions and mandatory refs:
 possession_without_penetration: all six H.possession/H.shots/H.entries previous/current receipts; increased possession with no increase in shots and entries.
 attacking_threat_increased: H.shots and H.entries previous/current; both must increase.
-recoveries_followed_by_shots: H.high_recoveries.current and H.transition_shots.current; at least two linked transition shots. Mention the short sample, not a general tactical cause.
+recoveries_followed_by_shots: H.high_recoveries.current and H.transition_shots.current; at least two linked transition shots. Mention the short sample, not a general tactical cause. If you mention previous window values, you must include the matching .previous receipts.
 recoveries_caused_shots: cannot be proven by these events; do not disguise it as association.
-goal_sequence: H.goals.match and its event chain; match scope is appropriate for the recorded goal.
+goal_sequence: H.goals.match and its event chain; scope MUST be 'match'. Describe the uninterrupted on-ball passing and recovery chain culminating in the goal without claiming tactical causality.
 Normally use scope 'window'; only goal_sequence uses 'match'. primary.id='primary'. conservative is null unless a narrower version of the SAME true assertion is useful; conservative.id='conservative'. A conservative variant cannot reverse an incorrect assertion. Keep refs explicit and prose concise. claim id uses 'claim-' plus lowercase words. JSON structure: {snapshot_id,claims:[{id,assertion,primary:{id,scope,refs,fan,analyst},conservative:null or variant}]}.
 """
     else:
@@ -202,6 +202,8 @@ class AgentRunner:
                     if variant:
                         for prose in (variant.fan, variant.analyst):
                             bind_slots(prose, variant.refs, run.snapshot)
+                            if QUANTITATIVE_WORDS.search(SLOT.sub("", prose)):
+                                raise ValueError("unbound_spelled_number: use a referenced metric slot or omit the unsupported quantity")
         else:
             review = WireReview.model_validate_json(raw).canonical()
             for decision in review.decisions:

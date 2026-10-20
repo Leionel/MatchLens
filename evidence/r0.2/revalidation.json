@@ -1,0 +1,88 @@
+[
+  {
+    "run_id": "run-14e303594906f796",
+    "exact_snapshot": true,
+    "accepted": [
+      {
+        "claim_id": "claim-possession-no-penetration",
+        "assertion": "possession_without_penetration",
+        "verdict": "publish",
+        "selected_variant": "primary",
+        "scope": "window",
+        "refs": [
+          "H.possession.previous",
+          "H.possession.current",
+          "H.shots.previous",
+          "H.shots.current",
+          "H.entries.previous",
+          "H.entries.current"
+        ],
+        "fan": "More of the ball, no extra shots or entries: Harbor's controlled possession rose from 44.44% to 83.33%, while shots and attacking-third entries did not increase.",
+        "analyst": "Window 03:00\u201306:00. Controlled possession: 44.44% \u2192 83.33%. Shots: 2 \u2192 0. Attacking-third entries: 2 \u2192 0. Greater controlled time did not coincide with greater activity on these measures.",
+        "reason": "Verifier decision: publish. The core assertion, scope and required receipt references passed publication checks.",
+        "limitations": [
+          "Synthetic on-ball events; no off-ball tracking or causal-effect evidence.",
+          "A short window does not establish a whole-match trend."
+        ],
+        "render_contract": "bound-facts-v1",
+        "snapshot_id": "snap-a49c6e92a3532222538d",
+        "as_of": 360
+      }
+    ],
+    "rejected": []
+  },
+  {
+    "run_id": "run-c-verify-21124973",
+    "exact_snapshot": true,
+    "accepted": [],
+    "rejected": [
+      {
+        "claim_id": "claim-goal-on-ball-chain",
+        "assertion": "goal_sequence",
+        "verdict": "publish",
+        "gate": "unbound_spelled_number",
+        "reason": "Goal chain confirms a recovery, then successive completed passes, then the scoring shot; the current window counts one goal, a high recovery and a shot. Analyst text correctly limits to the on-ball sequence and disclaims cause."
+      }
+    ]
+  },
+  {
+    "run_id": "run-c-verify-29254a79",
+    "exact_snapshot": true,
+    "accepted": [],
+    "rejected": [
+      {
+        "claim_id": "claim-goal-sequence",
+        "assertion": "goal_sequence",
+        "verdict": "publish",
+        "gate": "unbound_spelled_number",
+        "reason": "The goal chain is a recovery followed by complete passes and a scoring shot; both texts stay within recorded on-ball events and explicitly deny tactical cause. No conservative variant was supplied."
+      }
+    ]
+  },
+  {
+    "run_id": "run-c-verify-a359468b",
+    "exact_snapshot": true,
+    "accepted": [
+      {
+        "claim_id": "claim-goal-sequence",
+        "assertion": "goal_sequence",
+        "verdict": "publish",
+        "selected_variant": "primary",
+        "scope": "match",
+        "refs": [
+          "H.goals.match"
+        ],
+        "fan": "Harbor scored. Follow the 13 recorded on-ball events in the scoring move, ending with the goal.",
+        "analyst": "As of 12:00: Harbor has 1 recorded goal(s). The latest uninterrupted scoring chain contains 13 events, from E0129 to E0141. The sequence establishes what happened on the ball; it does not explain off-ball tactics or why the goal occurred.",
+        "reason": "Verifier decision: publish. The core assertion, scope and required receipt references passed publication checks.",
+        "limitations": [
+          "Recorded scoring sequence only; no off-ball tracking or tactical cause."
+        ],
+        "render_contract": "bound-facts-v1",
+        "snapshot_id": "snap-b73efce83f1ae5d3d5b0",
+        "as_of": 720
+      }
+    ],
+    "rejected": []
+  }
+]

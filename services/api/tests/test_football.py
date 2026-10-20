@@ -64,3 +64,27 @@ def test_goal_must_end_in_goal_mouth_and_markers_cannot_score():
     events[0] = events[0].model_copy(update={"outcome": "goal"})
     with pytest.raises(ValueError, match="illegal_event_payload"):
         reduce_match(tuple(events), 720)
+
+
+def test_cross_scenario_stalemate_reduces_legally_and_withholds_goal():
+    from matchlens.contracts import assertion_supported
+    events = generate_match(seed=17, scenario="stalemate")
+    full = reduce_match(events, 720)
+    assert full["score"] == {"H": 0, "N": 0}
+    assert full["ended"] is True
+    snap = freeze(events, 720)
+    assert snap.data["receipts"]["H.goals.match"]["value"] == 0
+    assert not assertion_supported("goal_sequence", snap)
+
+
+def test_auto_moment_detection_invariants():
+    from matchlens.football import detect_moments
+    events = generate_match(17)
+    assert detect_moments(reduce_match(events, 100)) == []
+    m_360 = detect_moments(reduce_match(events, 360))
+    assert len(m_360) >= 1
+    assert any(m["assertion"] == "possession_without_penetration" for m in m_360)
+    m_540 = detect_moments(reduce_match(events, 540))
+    assert any(m["assertion"] == "recoveries_followed_by_shots" for m in m_540)
+    m_720 = detect_moments(reduce_match(events, 720))
+    assert any(m["assertion"] == "goal_sequence" for m in m_720)

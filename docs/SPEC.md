@@ -37,7 +37,7 @@ Reducer rejects ID/order/time corruption, unknown actors/receivers, non-owner ac
 
 ## Deterministic metrics
 
-Previous `(t−360,t−180]`, current `(t−180,t]`, clipped at zero. Clip controlled intervals at boundaries; goal-to-kickoff dead time excluded. Comparative analysis requires two complete 180s windows; incomplete startup metrics are descriptive. R0.1 analyses use complete chapter cutoffs only.
+Previous `(t−360,t−180]`, current `(t−180,t]`, clipped at zero. Clip controlled intervals at boundaries; goal-to-kickoff dead time excluded. Comparative analysis requires two complete 180s windows; incomplete startup metrics are descriptive. Possession/attacking-activity comparisons require complete windows. Recovery-chain detection needs a complete current window; a goal can trigger immediately at its actual event time.
 
 | Receipt | Formula |
 | --- | --- |
@@ -50,7 +50,7 @@ Previous `(t−360,t−180]`, current `(t−180,t]`, clipped at zero. Clip contr
 
 Attack_x = x for Harbor, 105−x for Northbridge. Receipt fields: `id,value,unit,event_ids,definition,start,end`, optional `numerator,denominator,chains`. UI does no metric recomputation. Boundary comparisons use counts/durations rather than rounded display values when relevant.
 
-Candidate question: current linked transition shots >=2 → investigate recoveries; otherwise compare possession/shots/entries; an observed goal takes priority. Publication independently checks the assertion. No automatic model-dispatch queue in R0.1. General tick/cooldown detector precision/recall is P1. No xG, player speed, fatigue, formations, coaching intent, predictions or causal effects.
+Candidate question: current linked transition shots >=2 → investigate recoveries; otherwise compare possession/shots/entries; an observed goal takes priority. Publication independently checks the assertion. R0.2 scans newly crossed event boundaries, latches candidate questions once per type, and binds each snapshot to its detection time. Default replay is 30x. Optional automatic inference is non-blocking, priority ordered (goal, recovery chain, possession divergence, activity), has a 30-match-second cooldown and at most two auto workflows/session. No hidden phase labels or future events enter tools. Detector generalization remains unmeasured. No xG, player speed, fatigue, formations, coaching intent, predictions or causal effects.
 
 ## Evidence and publication
 
@@ -74,7 +74,7 @@ R0.1 provider wire format deliberately emits one flat claim: `snapshot_id,claim_
 - `qualify` selects a supplied conservative variant of that same **true** core; narrowing scope may repair overstatement.
 - `withhold` selects no variant: false, contradicted, insufficient/unverifiable assertion or no adequate wording.
 
-A limitation cannot repair an incorrect threat or causal assertion. Verifier cannot write arbitrary replacement prose. No debate loop. Local checks cover schema, identity/refs, complete review, both roles' actual tool-result roundtrips, validated handoff, core predicate, selected scope/variant, required refs and fact slots. Accepted prose uses `{{H.shots.current}}` slots; numeric literals, unknown slots and unavailable/causal concepts are blocked. Public review reason/limitations also bind numeric slots. Meaning beyond the bounded predicates requires semantic/manual review; citations alone are not entailment.
+A limitation cannot repair an incorrect threat or causal assertion. Verifier cannot write arbitrary replacement prose. No debate loop. Local checks cover schema, identity/refs, complete review, both roles' actual tool-result roundtrips, validated handoff, core predicate, selected scope/variant, required refs and fact slots. Draft prose uses `{{H.shots.current}}` slots; numeric literals, spelled quantities, unknown slots and unavailable/causal concepts are checked. Final public Fan/Analyst facts use the finite `bound-facts-v1` renderer: metric names, periods, values and chain lengths come together from the approved assertion and frozen receipts. Draft language and original Verifier rationale stay in the operator record. This narrows expressive freedom to prevent incidental prose from adding claims; it never rescues a false core. Public review reason/limitations also bind numeric slots. Meaning beyond the bounded predicates requires semantic/manual review; citations alone are not entailment.
 
 Published card: exact selected Fan/Analyst text, claim/assertion/verdict/variant/scope/refs, public review, snapshot/as-of. Result: `origin=live_model|deterministic`, run/model/prompt identity, duration, requests, sanitized audit. Session-cache reuse retains original run/as-of, is identified by UI and incurs no new inference. Fallback contains facts/error status, not a simulated AI answer.
 
@@ -88,8 +88,14 @@ Same-origin, opaque HttpOnly/SameSite cookie. One fixture; no prompts/uploads/ar
 | `POST /api/sessions` | Reuse valid cookie or create bounded anonymous session |
 | `GET /api/state` | Full authoritative clock/score/prefix/metrics, Focus result and history |
 | `POST /api/control` | `focus|exit_focus|play|pause|speed|restart`, optional chapter/speed |
-| `POST /api/analyse` | Focus only; deduplicate active/completed snapshot; 202; bounded retry after failure |
+| `POST /api/analyse` | Investigate a Focus or detected snapshot; 202; deduplicate active/completed work, at most one explicit retry of a failed snapshot |
 | `GET /api/evidence/{snapshot_id}` | Frozen evidence owned by session, otherwise 404 |
 | `GET /api/stream` | `event:state` full JSON on revision change, comment heartbeat |
 
 State contains monotonic epoch/revision; browser ignores stale versions. Reconnect resynchronizes full state; no cursor/ring buffer. P1: polling fallback/public transport probe, arbitrary seek. Recap and old evidence always retain original as-of.
+
+## R0.2 runtime additions
+
+`POST /api/control` also accepts `{action:"focus_moment",moment_id:"…"}` for a previously detected moment at or before the current clock. State returns `moments`, `auto_status`, `snapshot_as_of` and `analysis_receipts`. Live scoreboard receipts advance; analytical comparison receipts stay at the snapshot time. Changing audience never calls a model.
+
+Paid automatic investigation requires `MATCHLENS_AUTO_ANALYSE=1`; free detection is always available. Whole-workflow admission checks six-request runway plus in-flight allowances before creating a task. Per-dispatch SQLite reservations remain authoritative. This is a single-worker deployment. Historical real runs must match the current canonical prefix and pass current gates before import; they retain original snapshot/run IDs and are explicitly marked historical. Original files are never rewritten.

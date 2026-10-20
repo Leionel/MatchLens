@@ -1,0 +1,132 @@
+{
+  "checked_at_utc": "2026-10-20T11:06:12.594759+00:00",
+  "git_base": "1c68adeca66a5b328e5db5514e85f746ad6e013f",
+  "working_tree": true,
+  "hash_line_endings": "CRLF normalized to LF, matching Git eol=lf",
+  "source_hashes_captured_after_verification": {
+    "apps/web/app/components/AudienceSwitcher.tsx": "7bf251d052dd8e699d2fefe2759535e49f78877fd8bc0a5318648f36166af4d3",
+    "apps/web/app/components/BroadcastOverlay.tsx": "eb9aa44a9a15c21691bf7bc33e8cacad80de3284fab7da043df52ec1fa713d54",
+    "apps/web/app/components/EventFeed.tsx": "bd6550359b3dcdfaf983dfee753785a500c0a987ab99bd1337f8dd38a615f079",
+    "apps/web/app/components/EvidenceDrawer.tsx": "df2db89b629259f3e96f98479abff0f212d45f1b446329aa65eb76a97101e34c",
+    "apps/web/app/components/InsightSpotlight.tsx": "a067fefae9246ffe044b4d7227e15a785ac9d34aa7ee4ad3214923f564f7cec5",
+    "apps/web/app/components/MatchRecap.tsx": "a24e152bc124f65e4d4e2aedf84705b1da687d083cee010d4362ea8af85f6110",
+    "apps/web/app/components/MatchStage.tsx": "927d3a168215a6836649f9bd485c694dd5a5ba93b68534f262b82d6a1571d78b",
+    "apps/web/app/components/MatchTimeline.tsx": "41b12a3a84ea29de21ce1375a9eb6810464dddb265d939fbb06ae62aae211158",
+    "apps/web/app/components/MetricComparison.tsx": "6c340b3e75b4afcc323c505c63d7e82e729b5278a7fbd74a83f69e71b2220b9f",
+    "apps/web/app/components/ReplayControls.tsx": "ac2357367af0b2c4a4d1eb16a40e455f9c44c8ffb367fd18dd483e4b25beb662",
+    "apps/web/app/components/Scoreboard.tsx": "12cbf6a10856adb15399600c898b65741ddbcddd49a568bf1dba42b79cca8e36",
+    "apps/web/app/globals.css": "da8fa652b433b8b7591d4deacbec1506d1057b82323a0bce6c5c6b713b19e847",
+    "apps/web/app/icon.svg": "090a143eaaffcabaad14acf1bf71feaa2247e146caa3863e447eba267755f32b",
+    "apps/web/app/layout.tsx": "7b29d5268670067d3b402cb82029c95c9eb9b0a5c8fdb5a0ba6eb0ede4d2f97e",
+    "apps/web/app/page.tsx": "0f0824bcd16ce195361563b7ad2774892268af122e9c56589ac857752bcdbdb9",
+    "apps/web/app/tokens.css": "077d171afc89c2edac74a48ad5785443c509bec1d3ca19dbdd19576694c3ffd5",
+    "apps/web/package-lock.json": "1ba1b8c9360c9d98868a98a292be45bc107d364b9f1723698bcedd9f0b655335",
+    "services/api/matchlens/__init__.py": "366096c0e387f756a1a2b9ea5d7b66891e4ce2e712032851b8b7e2ad65e58100",
+    "services/api/matchlens/agents.py": "af4dd72495409d3a1b49f2ddc54c47dab9c3a308e30293319ffed0d54cd0ce85",
+    "services/api/matchlens/budget.py": "95cbf394ae463dc6f76238a0868777066d99f735dc8404328a316fb0afd32f3b",
+    "services/api/matchlens/contracts.py": "d93fa591915bac7495ac619bc5ec782207a3bf7e5c52e7d6414429c14806f140",
+    "services/api/matchlens/football.py": "2601f3e6aa9320dfb9e2c2a2e840975ff2871ba94c1a8c5f6b858ec4877ad032",
+    "services/api/matchlens/main.py": "d480f3e99a8fddf6ed95a9fe8456dfd4a63345b325b292e72890d40763fca9ee",
+    "services/api/uv.lock": "1a389396d60a5f24f289873f14aabae438500e2bbdfd0c4a219c9b4e876360a6"
+  },
+  "source_binding_note": "Original runs have prompt/snapshot versions, not per-file hashes. These current code hashes are a release inspection snapshot, not retroactive execution attestation. Gate revalidation is separate from original outcomes.",
+  "runs": [
+    {
+      "file": "evidence/r0.2/runs/run-14e303594906f796.json",
+      "sha256": "87d03b7948f9cd2d5e75ab092ca25ae9e22f478304f579a3bf24137a56ad9d02",
+      "run_id": "run-14e303594906f796",
+      "snapshot_id": "snap-a49c6e92a3532222538d",
+      "prompt_version": "football-roles-r02-2-bound-facts",
+      "requests": 4,
+      "duration_ms": 16419,
+      "accepted_at_execution": 1,
+      "audit_counts": {
+        "trigger": 1,
+        "http_dispatch": 4,
+        "http_receipt": 4,
+        "tool": 2,
+        "tool_receipt": 2,
+        "handoff": 1
+      }
+    },
+    {
+      "file": "evidence/r0.2/runs/run-c-verify-21124973.json",
+      "sha256": "390bb2b98489682dbd6a8acebe766c8d6a975fe0cf3351789efda7fd76c32c63",
+      "run_id": "run-c-verify-21124973",
+      "snapshot_id": "snap-b73efce83f1ae5d3d5b0",
+      "prompt_version": "football-roles-r02-1-strict-wire",
+      "requests": 5,
+      "duration_ms": 10718,
+      "accepted_at_execution": 1,
+      "audit_counts": {
+        "http_dispatch": 5,
+        "http_receipt": 5,
+        "tool": 2,
+        "tool_receipt": 3,
+        "handoff": 1,
+        "schema_correction": 1
+      }
+    },
+    {
+      "file": "evidence/r0.2/runs/run-c-verify-29254a79.json",
+      "sha256": "af56e0a5dd2c96f9e8e023bb3afed44378f8b50ffbc64e5e5311046e862e4d51",
+      "run_id": "run-c-verify-29254a79",
+      "snapshot_id": "snap-b73efce83f1ae5d3d5b0",
+      "prompt_version": "football-roles-r02-2-bound-facts",
+      "requests": 4,
+      "duration_ms": 9846,
+      "accepted_at_execution": 0,
+      "audit_counts": {
+        "http_dispatch": 4,
+        "http_receipt": 4,
+        "tool": 2,
+        "tool_receipt": 2,
+        "handoff": 1
+      }
+    },
+    {
+      "file": "evidence/r0.2/runs/run-c-verify-a359468b.json",
+      "sha256": "0f9e2b7edeaf560d28a51c3a9220d6908f1555646828eb791b0938ee4a5982b0",
+      "run_id": "run-c-verify-a359468b",
+      "snapshot_id": "snap-b73efce83f1ae5d3d5b0",
+      "prompt_version": "football-roles-r02-2-bound-facts",
+      "requests": 4,
+      "duration_ms": 9748,
+      "accepted_at_execution": 1,
+      "audit_counts": {
+        "http_dispatch": 4,
+        "http_receipt": 4,
+        "tool": 2,
+        "tool_receipt": 2,
+        "handoff": 1
+      }
+    }
+  ],
+  "budget": {
+    "requests_reserved": 78,
+    "reserved_usd": 1.56,
+    "max_requests": 80,
+    "max_reserved_usd": 2.0,
+    "usage": {
+      "prompt_tokens": 190522,
+      "completion_tokens": 10310,
+      "prompt_cache_hit_tokens": 97536,
+      "prompt_cache_miss_tokens": 92986
+    },
+    "known_usage_estimate_usd": 0.04085302
+  },
+  "checks": {
+    "python_tests": 50,
+    "python_failed": 0,
+    "secret_pattern_matches": [],
+    "broken_local_doc_links": []
+  },
+  "browser_checks": "browser-checks.json",
+  "not_run": [
+    "container build: Linux Docker daemon unavailable",
+    "public deployment/egress",
+    "independent human review",
+    "S0/S1/M",
+    "latest B model"
+  ]
+}

@@ -61,7 +61,8 @@ def test_session_focus_evidence_and_missing_model_fallback(client):
     assert b["epoch"] > old_epoch and b["result"] is None
     resumed = client.post("/api/control", json={"action": "exit_focus"}).json()
     assert resumed["focus"] is None and not resumed["paused"]
-    assert client.post("/api/analyse").status_code == 409
+    # Detected moments can now be investigated without freezing replay.
+    assert client.post("/api/analyse").status_code == 202
     assert client.get("/api/missing").headers["content-type"].startswith("application/json")
 
 
@@ -152,3 +153,15 @@ def test_other_session_cannot_read_snapshot(client):
     client.cookies.clear()
     client.post("/api/sessions")
     assert client.get("/api/evidence/"+state["snapshot_id"]).status_code == 404
+
+
+def test_detected_goal_focus_preserves_actual_event_time(client):
+    client.post("/api/sessions")
+    state = client.post("/api/control", json={"action": "focus", "chapter": "C"}).json()
+    goal = next(m for m in state["moments"] if m.get("assertion") == "goal_sequence")
+    focused = client.post("/api/control", json={"action": "focus_moment", "moment_id": goal["id"]}).json()
+    assert focused["at"] == 690 and focused["paused"]
+    evidence = client.get("/api/evidence/"+focused["snapshot_id"]).json()
+    assert evidence["as_of"] == 690 and max(e["t"] for e in evidence["events"]) == 690
+    assert evidence["snapshot_id"] == focused["snapshot_id"]
+    assert client.post("/api/control", json={"action": "focus_moment", "moment_id": "not-detected"}).status_code == 409

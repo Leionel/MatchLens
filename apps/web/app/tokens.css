@@ -1,10 +1,41 @@
 :root {
-  --canvas: #eef2f4;
-  --ink: #102238;
-  --muted: #526779;
-  --line: #1022381a;
-  --well: #e3eae9;
-  --teal: #124f50;
-  --amber: #ffce8e;
-  --away: #bacafa;
+  /* Surfaces */
+  --pitch-bg: #070d17;
+  --pitch-surface: #0e1927;
+  --pitch-card: #142236;
+  --pitch-card-hover: #1b2d47;
+  --pitch-card-subtle: #0b1420;
+  --pitch-well: #101d2e;
+
+  /* Borders */
+  --pitch-border: rgba(255, 255, 255, 0.08);
+  --pitch-border-bright: rgba(255, 255, 255, 0.16);
+  --pitch-border-active: rgba(0, 229, 153, 0.5);
+
+  /* Tactical Accents */
+  --turf-emerald: #00e599;
+  --turf-emerald-glow: rgba(0, 229, 153, 0.25);
+  --turf-dark: #092c22;
+  --turf-line: rgba(0, 229, 153, 0.35);
+
+  --electric-gold: #f59e0b;
+  --electric-gold-glow: rgba(245, 158, 11, 0.25);
+
+  --ice-blue: #60a5fa;
+  --ice-blue-glow: rgba(96, 165, 250, 0.25);
+
+  --crimson-warn: #ef4444;
+  --crimson-warn-bg: rgba(239, 68, 68, 0.12);
+
+  /* Typography / Inks */
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+  --text-emerald: #00e599;
+  --text-gold: #fbbf24;
+
+  /* Gate Status */
+  --gate-published: #00e599;
+  --gate-qualified: #fbbf24;
+  --gate-withheld: #f87171;
 }
