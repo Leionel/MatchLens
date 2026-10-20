@@ -487,8 +487,18 @@ def detect_moments(state: dict) -> list[dict]:
     return moments
 
 
+def channel_name(team: str, y: float) -> str:
+    """Classify y coordinate into left, center, or right channel relative to attack direction."""
+    if 22.67 <= y <= 45.33:
+        return "center"
+    if team == "H":
+        return "left" if y > 45.33 else "right"
+    else:
+        return "left" if y < 22.67 else "right"
+
+
 def build_sequences(state: dict, team: str | None = None) -> list[dict]:
-    """Organize discrete on-ball events into continuous possession sequences."""
+    """Organize discrete on-ball events into continuous possession sequences with step details."""
     events = state["events"]
     grouped: dict[int, list[dict]] = {}
     for e in events:
@@ -533,6 +543,30 @@ def build_sequences(state: dict, team: str | None = None) -> list[dict]:
             for p in (e["actor"], e.get("receiver")):
                 if p and p not in players_involved:
                     players_involved.append(p)
+
+        start_pt = same_team_events[0]["start"]
+        end_pt = last_ev["end"]
+        territory_gained = round(attack_x(seq_team, end_pt[0]) - attack_x(seq_team, start_pt[0]), 1)
+        events_detail = [
+            {
+                "seq_step": idx + 1,
+                "id": e["id"],
+                "kind": e["kind"],
+                "team": seq_team,
+                "actor": e["actor"],
+                "actor_name": PLAYERS.get(seq_team, {}).get(e["actor"], e["actor"]),
+                "receiver": e.get("receiver"),
+                "receiver_name": PLAYERS.get(seq_team, {}).get(e.get("receiver"), e.get("receiver")) if e.get("receiver") else None,
+                "start": e["start"],
+                "end": e["end"],
+                "outcome": e.get("outcome", "success"),
+                "t": e["t"],
+                "gain_m": round(attack_x(seq_team, e["end"][0]) - attack_x(seq_team, e["start"][0]), 1),
+                "channel": channel_name(seq_team, e["start"][1]),
+            }
+            for idx, e in enumerate(same_team_events)
+        ]
+
         sequences.append({
             "sequence_id": f"SEQ-{pid:03d}",
             "possession_id": pid,
@@ -543,16 +577,20 @@ def build_sequences(state: dict, team: str | None = None) -> list[dict]:
             "origin_kind": same_team_events[0]["kind"],
             "pass_count": len(passes),
             "progressive_distance": round(prog_dist, 1),
+            "territory_gained": territory_gained,
+            "start_coords": list(start_pt),
+            "end_coords": list(end_pt),
             "entered_final_third": entered_final_third,
             "outcome": outcome,
             "players": players_involved,
             "event_ids": [e["id"] for e in same_team_events],
+            "events_detail": events_detail,
         })
     return sequences
 
 
 def build_tactical_explorer(state: dict, team: str = "H") -> dict:
-    """Compute event-grounded passing network, progressive passes, recoveries and zones."""
+    """Compute event-grounded passing network, progressive passes, recoveries, channels and zones."""
     team = "N" if team == "N" else "H"
     events = [e for e in state["events"] if e["team"] == team and e["kind"] != "end"]
     node_touches: dict[str, list[tuple[float, float]]] = {p: [] for p in PLAYERS[team]}
@@ -560,15 +598,21 @@ def build_tactical_explorer(state: dict, team: str = "H") -> dict:
     progressive_passes: list[dict] = []
     recoveries: list[dict] = []
     zone_counts = {"defensive_third": 0, "middle_third": 0, "attacking_third": 0}
+    channel_counts = {"left": 0, "center": 0, "right": 0}
+    attacking_channel_counts = {"left": 0, "center": 0, "right": 0}
 
     for e in events:
         ax_start = attack_x(team, e["start"][0])
+        ch_start = channel_name(team, e["start"][1])
+        channel_counts[ch_start] += 1
+
         if ax_start < 35:
             zone_counts["defensive_third"] += 1
         elif ax_start <= 70:
             zone_counts["middle_third"] += 1
         else:
             zone_counts["attacking_third"] += 1
+            attacking_channel_counts[ch_start] += 1
 
         if e["actor"] in node_touches:
             node_touches[e["actor"]].append(tuple(e["start"]))
@@ -585,20 +629,26 @@ def build_tactical_explorer(state: dict, team: str = "H") -> dict:
                     "id": e["id"],
                     "t": e["t"],
                     "actor": e["actor"],
+                    "actor_name": PLAYERS[team].get(e["actor"], e["actor"]),
                     "receiver": e["receiver"],
+                    "receiver_name": PLAYERS[team].get(e["receiver"], e["receiver"]),
                     "start": e["start"],
                     "end": e["end"],
                     "gain_m": gain_m,
                     "is_entry": is_entry,
+                    "channel": ch_start,
+                    "entry_channel": channel_name(team, e["end"][1]) if is_entry else None,
                 })
         elif e["kind"] == "recovery":
             recoveries.append({
                 "id": e["id"],
                 "t": e["t"],
                 "actor": e["actor"],
+                "actor_name": PLAYERS[team].get(e["actor"], e["actor"]),
                 "location": e["start"],
                 "attack_x": round(ax_start, 1),
                 "is_high": ax_start >= 70,
+                "channel": ch_start,
             })
 
     nodes = []
@@ -610,6 +660,34 @@ def build_tactical_explorer(state: dict, team: str = "H") -> dict:
 
     total_ev = max(1, len(events))
     zones = {k: round(100.0 * v / total_ev, 1) for k, v in zone_counts.items()}
+    channels = {
+        "left": round(100.0 * channel_counts["left"] / total_ev, 1),
+        "center": round(100.0 * channel_counts["center"] / total_ev, 1),
+        "right": round(100.0 * channel_counts["right"] / total_ev, 1),
+        "left_count": channel_counts["left"],
+        "center_count": channel_counts["center"],
+        "right_count": channel_counts["right"],
+    }
+    total_att = max(1, sum(attacking_channel_counts.values()))
+    attacking_channels = {
+        "left": round(100.0 * attacking_channel_counts["left"] / total_att, 1),
+        "center": round(100.0 * attacking_channel_counts["center"] / total_att, 1),
+        "right": round(100.0 * attacking_channel_counts["right"] / total_att, 1),
+        "left_count": attacking_channel_counts["left"],
+        "center_count": attacking_channel_counts["center"],
+        "right_count": attacking_channel_counts["right"],
+    }
+    final_third_entries = [p for p in progressive_passes if p["is_entry"]]
+
+    territorial_progression = {
+        "total_progressive_passes": len(progressive_passes),
+        "final_third_entries_count": len(final_third_entries),
+        "avg_progressive_gain_m": round(sum(p["gain_m"] for p in progressive_passes) / len(progressive_passes), 1) if progressive_passes else 0.0,
+        "high_recoveries_count": len([r for r in recoveries if r["is_high"]]),
+        "total_recoveries_count": len(recoveries),
+        "high_recovery_threshold_x": 70.0 if team == "H" else 35.0,
+    }
+
     return {
         "team": team,
         "team_name": TEAMS[team],
@@ -617,8 +695,12 @@ def build_tactical_explorer(state: dict, team: str = "H") -> dict:
         "nodes": nodes,
         "edges": list(edges_map.values()),
         "progressive_passes": progressive_passes,
+        "final_third_entries": final_third_entries,
         "recoveries": recoveries,
         "zones": zones,
+        "channels": channels,
+        "attacking_channels": attacking_channels,
+        "territorial_progression": territorial_progression,
         "disclaimer": "Derived strictly from recorded on-ball events; does not represent off-ball formation or pitch control.",
     }
 

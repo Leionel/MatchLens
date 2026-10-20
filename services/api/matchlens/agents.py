@@ -17,7 +17,7 @@ from typing import Literal
 
 from .budget import BudgetExceeded, BudgetLedger, MAX_BODY_BYTES, MAX_OUTPUT_TOKENS
 from .contracts import Assertion, ClosedModel, ClaimDraft, VerifierDecision, QUANTITATIVE_WORDS, SLOT, bind_slots, publication_gate, validate_draft
-from .football import Snapshot, tool_evidence
+from .football import Snapshot, build_sequences, tool_evidence
 
 PROMPT_VERSION = "football-roles-r02-2-bound-facts"
 
@@ -121,6 +121,15 @@ class AgentRunner:
             run.audit.append({"type": "tool", "role": role, "name": "get_event_chain", "snapshot_id": run.snapshot.id, "event_ids": event_ids})
             return json.dumps({"snapshot_id": run.snapshot.id, "events": [known[i] for i in event_ids]}, separators=(",", ":"))
 
+        def get_sequence(sequence_id: str) -> str:
+            """Inspect a specific possession sequence with player involvements and step-by-step progression."""
+            seqs = build_sequences(run.snapshot.data)
+            match = next((s for s in seqs if s["sequence_id"] == sequence_id), None)
+            if not match:
+                raise ValueError("sequence_not_found")
+            run.audit.append({"type": "tool", "role": role, "name": "get_sequence", "snapshot_id": run.snapshot.id, "sequence_id": sequence_id})
+            return json.dumps({"snapshot_id": run.snapshot.id, "sequence": match}, separators=(",", ":"))
+
         async def before(request: httpx.Request) -> None:
             raw = request.content
             body = json.loads(raw)
@@ -161,7 +170,7 @@ class AgentRunner:
                 client = OpenAIChatCompletionClient(model="deepseek-flash", async_client=sdk,
                     function_invocation_configuration={"max_iterations": 3, "max_function_calls": 2})
                 agent = Agent(client=client, name=role, instructions=instructions(role),
-                    tools=[get_evidence, get_event_chain], default_options={"response_format": {"type": "json_object"},
+                    tools=[get_evidence, get_event_chain, get_sequence], default_options={"response_format": {"type": "json_object"},
                     "extra_body": {"thinking": {"type": "disabled"}, "max_tokens": MAX_OUTPUT_TOKENS}})
                 session = agent.create_session()
                 response = await agent.run(prompt, session=session)

@@ -352,4 +352,14 @@ summary { cursor: pointer; padding: 10px 0; color: #c0d5dc; }
 .seq-outcome { font-size: 9px; font-weight: 700; letter-spacing: .6px; color: var(--turf-emerald); white-space: nowrap; }
 .seq-outcome.goal { color: var(--text-gold); }
 .seq-outcome.turnover { color: var(--text-secondary); }
+.sequence-step-controller { display: flex; align-items: center; gap: 8px; padding: 4px 20px 8px; flex-wrap: wrap; }
+.step-chips-row { display: flex; gap: 4px; overflow-x: auto; max-width: 100%; padding: 2px 0; }
+.step-chip { padding: 3px 8px; font-size: 10px; font-weight: 600; border: 1px solid #27504a; background: #08161f; color: #cbd5e1; border-radius: 3px; cursor: pointer; white-space: nowrap; }
+.step-chip.active { background: #00e599; color: #041017; border-color: #00e599; }
+.channel-mode-toggle { background: transparent; border: 1px solid #27504a; color: var(--turf-emerald); font-size: 10px; padding: 2px 6px; border-radius: 3px; cursor: pointer; }
+.channel-mode-toggle:hover { background: rgba(0, 229, 153, 0.12); }
+.zone-subgroup { display: flex; align-items: center; gap: 8px; }
+.seq-steps-preview { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+.seq-step-pill { font-size: 9px; padding: 2px 6px; background: rgba(255,255,255,0.06); border-radius: 2px; color: #cbd5e1; cursor: pointer; }
+.seq-step-pill:hover { background: rgba(0, 229, 153, 0.2); color: #00e599; }
 @media (max-width: 720px) { .r1-scenario-select { min-width: 0; width: 100%; } .sequence-row-btn { flex-wrap: wrap; } }

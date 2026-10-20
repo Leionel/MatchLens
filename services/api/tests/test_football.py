@@ -133,11 +133,24 @@ def test_r1_all_six_scenarios_and_both_team_intelligence():
     default_state = reduce_match(generate_match(17, "default"), 720)
     seqs = build_sequences(default_state)
     assert len(seqs) >= 10
-    assert any(s["outcome"] == "goal" and s["team"] == "H" for s in seqs)
+    goal_seq = next(s for s in seqs if s["outcome"] == "goal" and s["team"] == "H")
+    assert goal_seq["territory_gained"] > 0
+    assert len(goal_seq["start_coords"]) == 2 and len(goal_seq["end_coords"]) == 2
+    assert len(goal_seq["events_detail"]) == len(goal_seq["event_ids"])
+    assert goal_seq["events_detail"][0]["seq_step"] == 1
+    assert "actor_name" in goal_seq["events_detail"][0]
+    assert "gain_m" in goal_seq["events_detail"][0]
+
     tac_h = build_tactical_explorer(default_state, "H")
     tac_n = build_tactical_explorer(default_state, "N")
     assert tac_h["attack_direction"] == "right" and tac_n["attack_direction"] == "left"
     assert len(tac_h["nodes"]) == 4 and len(tac_n["nodes"]) == 4
+    assert "channels" in tac_h and "attacking_channels" in tac_h
+    assert set(tac_h["channels"]) >= {"left", "center", "right"}
+    assert tac_h["territorial_progression"]["high_recovery_threshold_x"] == 70.0
+    assert tac_n["territorial_progression"]["high_recovery_threshold_x"] == 35.0
+    assert len(tac_h["final_third_entries"]) == tac_h["territorial_progression"]["final_third_entries_count"]
+
     players = build_player_spotlight(default_state)
     assert len(players) == 8
     assert sum(p["goals"] for p in players) == 1

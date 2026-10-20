@@ -123,10 +123,29 @@ type PossessionSequence = {
   origin_kind: string;
   pass_count: number;
   progressive_distance: number;
+  territory_gained?: number;
+  start_coords?: [number, number];
+  end_coords?: [number, number];
   entered_final_third: boolean;
   outcome: string;
   players: string[];
   event_ids: string[];
+  events_detail?: {
+    seq_step: number;
+    id: string;
+    kind: string;
+    team: "H" | "N";
+    actor: string;
+    actor_name?: string;
+    receiver?: string | null;
+    receiver_name?: string | null;
+    start: [number, number];
+    end: [number, number];
+    outcome: string;
+    t: number;
+    gain_m: number;
+    channel?: string;
+  }[];
 };
 
 type PlayerSpotlight = {
@@ -492,8 +511,8 @@ export default function MatchLens() {
                 <MatchStage
                   events={state.events}
                   selectedEvent={selectedEvent}
-                  selectedSequenceIds={
-                    state.sequences?.find((sq) => sq.sequence_id === selectedSeqId)?.event_ids || []
+                  selectedSequence={
+                    state.sequences?.find((sq) => sq.sequence_id === selectedSeqId) || null
                   }
                   ball={state.ball}
                   players={state.players}
@@ -501,9 +520,9 @@ export default function MatchLens() {
                   focusTeam={state.focus_team || "H"}
                   tactical={state.tactical}
                   onSelectEvent={(id) => {
-                    setSelectedSeqId("");
                     setSelectedId(id);
                   }}
+                  onClearSequence={() => setSelectedSeqId("")}
                 />
 
                 {mode === "analyst" && (
@@ -550,23 +569,38 @@ export default function MatchLens() {
                         .slice(-6)
                         .reverse()
                         .map((sq) => (
-                          <button
-                            key={sq.sequence_id}
-                            type="button"
-                            className={`sequence-row-btn ${selectedSeqId === sq.sequence_id ? "active" : ""}`}
-                            onClick={() => {
-                              setSelectedSeqId(selectedSeqId === sq.sequence_id ? "" : sq.sequence_id);
-                              setSelectedId(sq.event_ids.at(-1) || "");
-                            }}
-                          >
-                            <span className="seq-id-badge">{sq.sequence_id}</span>
-                            <span className="seq-meta">
-                              {clock(sq.start_t)}–{clock(sq.end_t)} ({sq.duration}s) · {sq.pass_count} passes · +{sq.progressive_distance}m
-                            </span>
-                            <span className={`seq-outcome ${sq.outcome}`}>
-                              {sq.outcome.replace("_", " ").toUpperCase()}
-                            </span>
-                          </button>
+                          <div key={sq.sequence_id} className="sequence-row-container">
+                            <button
+                              type="button"
+                              className={`sequence-row-btn ${selectedSeqId === sq.sequence_id ? "active" : ""}`}
+                              onClick={() => {
+                                setSelectedSeqId(selectedSeqId === sq.sequence_id ? "" : sq.sequence_id);
+                                setSelectedId(sq.event_ids.at(-1) || "");
+                              }}
+                            >
+                              <span className="seq-id-badge">{sq.sequence_id}</span>
+                              <span className="seq-meta">
+                                {clock(sq.start_t)}–{clock(sq.end_t)} ({sq.duration}s) · {sq.pass_count} passes · {sq.territory_gained !== undefined ? `net ${sq.territory_gained > 0 ? `+${sq.territory_gained}` : sq.territory_gained}m` : `+${sq.progressive_distance}m`}
+                              </span>
+                              <span className={`seq-outcome ${sq.outcome}`}>
+                                {sq.outcome.replace("_", " ").toUpperCase()}
+                              </span>
+                            </button>
+                            {selectedSeqId === sq.sequence_id && sq.events_detail && sq.events_detail.length > 0 && (
+                              <div className="seq-steps-preview">
+                                {sq.events_detail.map((st) => (
+                                  <span
+                                    key={st.id}
+                                    className="seq-step-pill"
+                                    onClick={() => setSelectedId(st.id)}
+                                  >
+                                    {st.seq_step}. {st.actor_name?.split(" ")[1] || st.actor} {st.kind}
+                                    {st.gain_m !== 0 ? ` (${st.gain_m > 0 ? `+${st.gain_m}` : st.gain_m}m)` : ""}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         ))}
                       {(state.sequences || []).filter((sq) => sq.team === (state.focus_team || "H")).length === 0 && (
                         <p className="comparison-footer">Play or focus the match to inspect possession sequences.</p>
