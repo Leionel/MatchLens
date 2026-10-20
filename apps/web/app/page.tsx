@@ -233,7 +233,29 @@ export default function MatchLens() {
   const [showTrace, setShowTrace] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const inspectionRequest = useRef(0);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("matchlens-theme");
+      if (saved === "light" || saved === "dark") {
+        setTheme(saved);
+        document.documentElement.setAttribute("data-theme", saved);
+      } else {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    } catch {}
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    document.documentElement.setAttribute("data-theme", next);
+    try {
+      localStorage.setItem("matchlens-theme", next);
+    } catch {}
+  };
 
   useEffect(() => {
     inspectionRequest.current += 1;
@@ -387,6 +409,15 @@ export default function MatchLens() {
           </div>
 
           <div className="masthead-status">
+            <button
+              type="button"
+              className="theme-toggle-btn"
+              onClick={toggleTheme}
+              aria-label={`Switch to ${theme === "dark" ? "Light" : "Dark"} theme`}
+              title={`Switch to ${theme === "dark" ? "Light" : "Dark"} theme`}
+            >
+              {theme === "dark" ? "☀️ Light" : "🌙 Dark"}
+            </button>
             <span className={`connection-pill ${connection === "Connected" ? "connected" : ""}`}>
               <i className="status-dot" />
               <span>{connection}</span>
