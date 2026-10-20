@@ -751,3 +751,106 @@ def build_player_spotlight(state: dict, team: str | None = None) -> list[dict]:
                 "event_ids": [e["id"] for e in actor_events],
             })
     return spotlight
+
+
+def compare_windows(
+    events: tuple[Event, ...] | list[Event] | list[dict] | dict,
+    w1_start: int,
+    w1_end: int,
+    w2_start: int,
+    w2_end: int,
+    team: str = "H",
+) -> dict:
+    """Compare team tactical metrics between two arbitrary legal time windows.
+
+    Returns structured metrics, deltas, denominators, and insufficient sample warnings.
+    """
+    team = "N" if team == "N" else "H"
+    max_t = max(w1_end, w2_end, 1)
+
+    if isinstance(events, dict) and "intervals" in events:
+        state = events
+    elif isinstance(events, (tuple, list)) and events and not isinstance(events[0], dict):
+        state = reduce_match(tuple(events), max_t)
+    elif isinstance(events, (tuple, list)) and events and isinstance(events[0], dict):
+        raw = tuple(Event(**e) for e in events)
+        state = reduce_match(raw, max_t)
+    else:
+        state = reduce_match(generate_match(), max_t)
+
+    all_evs = state["events"]
+
+    def compute_window_stats(start: int, end: int) -> dict:
+        duration = max(0, end - start)
+        window_events = [e for e in all_evs if start < e["t"] <= end]
+        durations = {"H": 0, "N": 0}
+        for interval in state["intervals"]:
+            d = max(0, min(end, interval["end"]) - max(start, interval["start"]))
+            if d:
+                durations[interval["team"]] += d
+        total_controlled = sum(durations.values())
+        team_controlled = durations[team]
+        possession_pct = round(100 * team_controlled / total_controlled, 2) if total_controlled else 0.0
+
+        passes = [e for e in window_events if e["team"] == team and e["kind"] == "pass"]
+        prog_passes = [
+            e for e in passes
+            if (attack_x(team, e["end"][0]) - attack_x(team, e["start"][0])) >= 12.0
+            or (attack_x(team, e["start"][0]) <= 70 < attack_x(team, e["end"][0]))
+        ]
+        shots = [e for e in window_events if e["team"] == team and e["kind"] == "shot"]
+        goals = [e for e in shots if e["outcome"] == "goal"]
+        high_recs = [
+            e for e in window_events
+            if e["team"] == team and e["kind"] == "recovery" and attack_x(team, e["start"][0]) >= 70
+        ]
+        entries = [
+            e for e in passes
+            if attack_x(team, e["start"][0]) <= 70 < attack_x(team, e["end"][0])
+        ]
+
+        warnings = []
+        if duration < 60:
+            warnings.append("short_window_duration")
+        if total_controlled < 30:
+            warnings.append("insufficient_controlled_seconds")
+        if len(window_events) < 5:
+            warnings.append("low_event_sample")
+
+        return {
+            "start": start,
+            "end": end,
+            "duration": duration,
+            "team": team,
+            "total_controlled_seconds": total_controlled,
+            "team_controlled_seconds": team_controlled,
+            "possession_pct": possession_pct,
+            "passes_completed": len(passes),
+            "progressive_passes": len(prog_passes),
+            "final_third_entries": len(entries),
+            "high_recoveries": len(high_recs),
+            "shots": len(shots),
+            "goals": len(goals),
+            "warnings": warnings,
+        }
+
+    w1 = compute_window_stats(w1_start, w1_end)
+    w2 = compute_window_stats(w2_start, w2_end)
+
+    deltas = {
+        "possession_pct": round(w2["possession_pct"] - w1["possession_pct"], 2),
+        "passes_completed": w2["passes_completed"] - w1["passes_completed"],
+        "progressive_passes": w2["progressive_passes"] - w1["progressive_passes"],
+        "final_third_entries": w2["final_third_entries"] - w1["final_third_entries"],
+        "high_recoveries": w2["high_recoveries"] - w1["high_recoveries"],
+        "shots": w2["shots"] - w1["shots"],
+        "goals": w2["goals"] - w1["goals"],
+    }
+
+    return {
+        "team": team,
+        "team_name": TEAMS[team],
+        "window_1": w1,
+        "window_2": w2,
+        "deltas": deltas,
+    }

@@ -154,3 +154,18 @@ def test_r1_all_six_scenarios_and_both_team_intelligence():
     players = build_player_spotlight(default_state)
     assert len(players) == 8
     assert sum(p["goals"] for p in players) == 1
+
+    # Compare Match Windows
+    from matchlens.football import compare_windows
+    cmp_res = compare_windows(default_state, 0, 180, 180, 360, "H")
+    assert cmp_res["team"] == "H"
+    assert "window_1" in cmp_res and "window_2" in cmp_res and "deltas" in cmp_res
+    assert cmp_res["window_1"]["duration"] == 180
+    assert cmp_res["window_2"]["duration"] == 180
+    assert cmp_res["window_1"]["passes_completed"] > 0
+    assert "possession_pct" in cmp_res["deltas"]
+
+    # Short window triggers sample warning
+    short_cmp = compare_windows(default_state, 0, 45, 45, 90, "H")
+    assert "short_window_duration" in short_cmp["window_1"]["warnings"]
+    assert "short_window_duration" in short_cmp["window_2"]["warnings"]

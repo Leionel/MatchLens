@@ -46,6 +46,11 @@ export function MetricComparison({
     "transition_shots",
   ];
 
+  const prevDuration = prevEnd - prevStart;
+  const currDuration = currEnd - currStart;
+  const isSampleInsufficient = at < 180;
+  const isSingleWindow = at >= 180 && at < 360;
+
   return (
     <section className="metric-comparison-card" aria-label="Window Metric Delta Comparison">
       <div className="comparison-header">
@@ -54,11 +59,45 @@ export function MetricComparison({
           <h3 className="comparison-title">3-Minute Window Comparison ({teamLabel})</h3>
         </div>
         <div className="comparison-windows">
-          <span className="window-pill prev">{clock(prevStart)}–{clock(prevEnd)}</span>
+          <span className="window-pill prev" title={`Previous window: ${prevDuration}s duration`}>
+            {clock(prevStart)}–{clock(prevEnd)} ({prevDuration}s)
+          </span>
           <span className="window-arrow">→</span>
-          <span className="window-pill curr">{clock(currStart)}–{clock(currEnd)}</span>
+          <span className="window-pill curr" title={`Current window: ${currDuration}s duration`}>
+            {clock(currStart)}–{clock(currEnd)} ({currDuration}s)
+          </span>
         </div>
       </div>
+
+      {isSampleInsufficient && (
+        <div className="window-sample-warning" role="status" style={{
+          padding: "6px 12px",
+          margin: "8px 0 12px",
+          borderRadius: "6px",
+          background: "rgba(245, 158, 11, 0.1)",
+          border: "1px solid rgba(245, 158, 11, 0.3)",
+          color: "var(--text-gold)",
+          fontSize: "12px",
+          fontWeight: 600,
+        }}>
+          ⚠️ Early match stage (t &lt; 3m): insufficient sample for two distinct 180s comparison windows.
+        </div>
+      )}
+
+      {isSingleWindow && (
+        <div className="window-sample-warning" role="status" style={{
+          padding: "6px 12px",
+          margin: "8px 0 12px",
+          borderRadius: "6px",
+          background: "rgba(59, 130, 246, 0.08)",
+          border: "1px solid rgba(59, 130, 246, 0.25)",
+          color: "var(--ice-blue)",
+          fontSize: "12px",
+          fontWeight: 500,
+        }}>
+          ℹ️ Single baseline window active (00:00–03:00); previous window represents opening baseline.
+        </div>
+      )}
 
       <div className="comparison-table">
         <div className="table-head">
@@ -114,7 +153,7 @@ export function MetricComparison({
       </div>
 
       <div className="comparison-footer">
-        <span>Metrics stay fixed at this evidence snapshot. Select a row to inspect its calculation.</span>
+        <span>Metrics stay fixed at this evidence snapshot. Controlled possession denominator excludes dead-ball intervals. Select any row to inspect proof.</span>
       </div>
     </section>
   );
