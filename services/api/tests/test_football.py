@@ -169,3 +169,59 @@ def test_r1_all_six_scenarios_and_both_team_intelligence():
     short_cmp = compare_windows(default_state, 0, 45, 45, 90, "H")
     assert "short_window_duration" in short_cmp["window_1"]["warnings"]
     assert "short_window_duration" in short_cmp["window_2"]["warnings"]
+
+
+def test_all_six_scenarios_comprehensive_moments_and_tactical_invariants():
+    from matchlens.football import (
+        SCENARIOS,
+        build_player_spotlight,
+        build_sequences,
+        build_tactical_explorer,
+        compare_windows,
+        detect_moments,
+        generate_match,
+        reduce_match,
+    )
+    for sc in SCENARIOS:
+        events = generate_match(seed=17, scenario=sc)
+        state = reduce_match(events, 720)
+        assert state["ended"] is True
+
+        # Moments detected (active scenarios produce candidates; stalemate is defensive baseline)
+        moments = detect_moments(state)
+        if sc != "stalemate":
+            assert len(moments) >= 1, f"Scenario {sc} must detect at least 1 moment"
+            for m in moments:
+                assert m["team"] in ("H", "N")
+                assert "trigger_type" in m and "assertion" in m
+                assert "priority" in m and m["priority"] >= 1
+        else:
+            assert state["score"] == {"H": 0, "N": 0}
+
+        # Sequences
+        seqs = build_sequences(state)
+        assert len(seqs) >= 8, f"Scenario {sc} must have >= 8 sequences"
+        for s in seqs:
+            assert s["team"] in ("H", "N")
+            assert s["duration"] >= 0
+            assert "outcome" in s
+
+        # Tactical layers for both teams
+        for t in ("H", "N"):
+            tac = build_tactical_explorer(state, t)
+            assert tac["team"] == t
+            assert len(tac["nodes"]) == 4
+            assert set(tac["zones"]) >= {"defensive_third", "middle_third", "attacking_third"}
+            assert set(tac["channels"]) >= {"left", "center", "right"}
+            assert "disclaimer" in tac
+
+        # Player spotlight
+        players = build_player_spotlight(state)
+        assert len(players) == 8
+        assert all(p["passes"] >= 0 for p in players)
+
+        # Compare windows
+        cmp_res = compare_windows(state, 0, 360, 360, 720, "H")
+        assert cmp_res["window_1"]["duration"] == 360
+        assert cmp_res["window_2"]["duration"] == 360
+        assert "deltas" in cmp_res
