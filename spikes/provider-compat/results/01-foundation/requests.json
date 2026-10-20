@@ -1,0 +1,537 @@
+[
+  {
+    "attempt": 1,
+    "route": "direct-json-58717075",
+    "started_at": "2026-10-20T02:49:37.960312+00:00",
+    "request": {
+      "model": "deepseek-flash",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Return only JSON {\"ok\":true}."
+        }
+      ],
+      "max_tokens": 128,
+      "response_format": {
+        "type": "json_object"
+      },
+      "thinking": {
+        "type": "disabled"
+      }
+    },
+    "status": 200,
+    "duration_ms": 1668.63,
+    "request_id": null,
+    "response": {
+      "id": "9a0c5f1a-82af-4831-b3a1-f2fec35274f5",
+      "object": "chat.completion",
+      "created": 1792464578,
+      "model": "deepseek-flash",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "{\"ok\":\ntrue}"
+          },
+          "logprobs": null,
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 36,
+        "completion_tokens": 5,
+        "total_tokens": 41,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 36
+      },
+      "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+    }
+  },
+  {
+    "attempt": 2,
+    "route": "direct-strict-58719754",
+    "started_at": "2026-10-20T02:49:40.269076+00:00",
+    "request": {
+      "model": "deepseek-flash",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Return only JSON {\"ok\":true}."
+        }
+      ],
+      "max_tokens": 128,
+      "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+          "name": "Ping",
+          "strict": true,
+          "schema": {
+            "additionalProperties": false,
+            "properties": {
+              "ok": {
+                "title": "Ok",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "ok"
+            ],
+            "title": "Ping",
+            "type": "object"
+          }
+        }
+      },
+      "thinking": {
+        "type": "disabled"
+      }
+    },
+    "status": 400,
+    "duration_ms": 490.17,
+    "request_id": null,
+    "response": {
+      "error": {
+        "message": "This response_format type is unavailable now (request_id: 6ec1369b-ddba-44c0-a049-f879f5df7d28)",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "invalid_request_error"
+      }
+    }
+  },
+  {
+    "attempt": 3,
+    "route": "maf-flash-58720867",
+    "started_at": "2026-10-20T02:49:41.534120+00:00",
+    "request": {
+      "model": "deepseek-flash",
+      "stream": false,
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are MatchLens Analyst. Explain whether increased possession implies increased attacking threat. You MUST call get_evidence once before answering. Use only its evidence, preserve its snapshot_id and claim_id C1. Return only one JSON object, no markdown. JSON schema: {\"type\": \"object\", \"additionalProperties\": false, \"properties\": {\"snapshot_id\": {\"const\": \"spike-possession-v1\"}, \"claim_id\": {\"const\": \"C1\"}, \"statement\": {\"type\": \"string\", \"minLength\": 1}, \"evidence_refs\": {\"type\": \"array\", \"minItems\": 3, \"items\": {\"enum\": [\"r-possession\", \"r-shots\", \"r-entries\"]}}}, \"required\": [\"snapshot_id\", \"claim_id\", \"statement\", \"evidence_refs\"]}"
+        },
+        {
+          "role": "user",
+          "content": "Investigate snapshot spike-possession-v1 using get_evidence."
+        }
+      ],
+      "response_format": {
+        "type": "json_object"
+      },
+      "tool_choice": "auto",
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_evidence",
+            "description": "Read the immutable football snapshot and all three metric receipts.",
+            "parameters": {
+              "properties": {
+                "snapshot_id": {
+                  "title": "Snapshot Id",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "snapshot_id"
+              ],
+              "title": "get_evidence_input",
+              "type": "object"
+            }
+          }
+        }
+      ],
+      "thinking": {
+        "type": "disabled"
+      },
+      "max_tokens": 512
+    },
+    "status": 200,
+    "duration_ms": 1164.27,
+    "request_id": null,
+    "response": {
+      "id": "136a5fd6-15aa-4a80-a05f-caf58bf0fd23",
+      "object": "chat.completion",
+      "created": 1792464581,
+      "model": "deepseek-flash",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+              {
+                "index": 0,
+                "id": "call_00_2wCir7jAF18usqtBXmmp9167",
+                "type": "function",
+                "function": {
+                  "name": "get_evidence",
+                  "arguments": "{\"snapshot_id\": \"spike-possession-v1\"}"
+                }
+              }
+            ]
+          },
+          "logprobs": null,
+          "finish_reason": "tool_calls"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 500,
+        "completion_tokens": 46,
+        "total_tokens": 546,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 500
+      },
+      "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+    }
+  },
+  {
+    "attempt": 4,
+    "route": "maf-flash-58720867",
+    "started_at": "2026-10-20T02:49:42.723788+00:00",
+    "request": {
+      "model": "deepseek-flash",
+      "stream": false,
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are MatchLens Analyst. Explain whether increased possession implies increased attacking threat. You MUST call get_evidence once before answering. Use only its evidence, preserve its snapshot_id and claim_id C1. Return only one JSON object, no markdown. JSON schema: {\"type\": \"object\", \"additionalProperties\": false, \"properties\": {\"snapshot_id\": {\"const\": \"spike-possession-v1\"}, \"claim_id\": {\"const\": \"C1\"}, \"statement\": {\"type\": \"string\", \"minLength\": 1}, \"evidence_refs\": {\"type\": \"array\", \"minItems\": 3, \"items\": {\"enum\": [\"r-possession\", \"r-shots\", \"r-entries\"]}}}, \"required\": [\"snapshot_id\", \"claim_id\", \"statement\", \"evidence_refs\"]}"
+        },
+        {
+          "role": "user",
+          "content": "Investigate snapshot spike-possession-v1 using get_evidence."
+        },
+        {
+          "role": "assistant",
+          "tool_calls": [
+            {
+              "id": "call_00_2wCir7jAF18usqtBXmmp9167",
+              "type": "function",
+              "function": {
+                "name": "get_evidence",
+                "arguments": "{\"snapshot_id\": \"spike-possession-v1\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_00_2wCir7jAF18usqtBXmmp9167",
+          "content": "{\"snapshot_id\": \"spike-possession-v1\", \"synthetic\": true, \"as_of_seq\": 42, \"window_seconds\": 180, \"receipts\": [{\"id\": \"r-possession\", \"previous\": 45, \"current\": 65, \"unit\": \"percent\"}, {\"id\": \"r-shots\", \"previous\": 2, \"current\": 1, \"unit\": \"count\"}, {\"id\": \"r-entries\", \"previous\": 3, \"current\": 2, \"unit\": \"count\"}], \"event_ids\": [\"e38\", \"e40\", \"e42\"]}"
+        }
+      ],
+      "response_format": {
+        "type": "json_object"
+      },
+      "tool_choice": "auto",
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_evidence",
+            "description": "Read the immutable football snapshot and all three metric receipts.",
+            "parameters": {
+              "properties": {
+                "snapshot_id": {
+                  "title": "Snapshot Id",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "snapshot_id"
+              ],
+              "title": "get_evidence_input",
+              "type": "object"
+            }
+          }
+        }
+      ],
+      "thinking": {
+        "type": "disabled"
+      },
+      "max_tokens": 512
+    },
+    "status": 200,
+    "duration_ms": 1161.31,
+    "request_id": null,
+    "response": {
+      "id": "aa7a7f05-d30f-4137-8930-22cd110b232b",
+      "object": "chat.completion",
+      "created": 1792464582,
+      "model": "deepseek-flash",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "{\"snapshot_id\": \"spike-possession-v1\", \"claim_id\": \"C1\", \"statement\": \"No: in this snapshot, possession rose from 45% to 65% while shots fell from 2 to 1 and final-third entries fell from 3 to 2, so the possession increase did not accompany greater attacking threat.\", \"evidence_refs\": [\"r-possession\", \"r-shots\", \"r-entries\"]}"
+          },
+          "logprobs": null,
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 696,
+        "completion_tokens": 96,
+        "total_tokens": 792,
+        "prompt_tokens_details": {
+          "cached_tokens": 512
+        },
+        "prompt_cache_hit_tokens": 512,
+        "prompt_cache_miss_tokens": 184
+      },
+      "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+    }
+  },
+  {
+    "attempt": 5,
+    "route": "maf-flash-58720867",
+    "started_at": "2026-10-20T02:49:44.579719+00:00",
+    "request": {
+      "model": "deepseek-flash",
+      "stream": false,
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are MatchLens Verifier. Check the handed-off claim against all receipts. Do not infer coaching intent or causality. You MUST call get_evidence once before answering. Use only its evidence, preserve its snapshot_id and claim_id C1. Return only one JSON object, no markdown. JSON schema: {\"type\": \"object\", \"additionalProperties\": false, \"properties\": {\"snapshot_id\": {\"const\": \"spike-possession-v1\"}, \"claim_id\": {\"const\": \"C1\"}, \"verdict\": {\"enum\": [\"publish\", \"qualify\", \"withhold\"]}, \"reason\": {\"type\": \"string\", \"minLength\": 1}, \"evidence_refs\": {\"type\": \"array\", \"minItems\": 3, \"items\": {\"enum\": [\"r-possession\", \"r-shots\", \"r-entries\"]}}}, \"required\": [\"snapshot_id\", \"claim_id\", \"verdict\", \"reason\", \"evidence_refs\"]}"
+        },
+        {
+          "role": "user",
+          "content": "{\"snapshot_id\": \"spike-possession-v1\", \"draft\": {\"snapshot_id\": \"spike-possession-v1\", \"claim_id\": \"C1\", \"statement\": \"No: in this snapshot, possession rose from 45% to 65% while shots fell from 2 to 1 and final-third entries fell from 3 to 2, so the possession increase did not accompany greater attacking threat.\", \"evidence_refs\": [\"r-possession\", \"r-shots\", \"r-entries\"]}}"
+        }
+      ],
+      "response_format": {
+        "type": "json_object"
+      },
+      "tool_choice": "auto",
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_evidence",
+            "description": "Read the immutable football snapshot and all three metric receipts.",
+            "parameters": {
+              "properties": {
+                "snapshot_id": {
+                  "title": "Snapshot Id",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "snapshot_id"
+              ],
+              "title": "get_evidence_input",
+              "type": "object"
+            }
+          }
+        }
+      ],
+      "thinking": {
+        "type": "disabled"
+      },
+      "max_tokens": 512
+    },
+    "status": 200,
+    "duration_ms": 1000.89,
+    "request_id": null,
+    "response": {
+      "id": "eaa0f03a-ddb7-49b8-bd62-dfd11389615c",
+      "object": "chat.completion",
+      "created": 1792464584,
+      "model": "deepseek-flash",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+              {
+                "index": 0,
+                "id": "call_00_YaFHikktth5yuXG2hGsq6908",
+                "type": "function",
+                "function": {
+                  "name": "get_evidence",
+                  "arguments": "{\"snapshot_id\": \"spike-possession-v1\"}"
+                }
+              }
+            ]
+          },
+          "logprobs": null,
+          "finish_reason": "tool_calls"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 633,
+        "completion_tokens": 46,
+        "total_tokens": 679,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 633
+      },
+      "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+    }
+  },
+  {
+    "attempt": 6,
+    "route": "maf-flash-58720867",
+    "started_at": "2026-10-20T02:49:45.597115+00:00",
+    "request": {
+      "model": "deepseek-flash",
+      "stream": false,
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are MatchLens Verifier. Check the handed-off claim against all receipts. Do not infer coaching intent or causality. You MUST call get_evidence once before answering. Use only its evidence, preserve its snapshot_id and claim_id C1. Return only one JSON object, no markdown. JSON schema: {\"type\": \"object\", \"additionalProperties\": false, \"properties\": {\"snapshot_id\": {\"const\": \"spike-possession-v1\"}, \"claim_id\": {\"const\": \"C1\"}, \"verdict\": {\"enum\": [\"publish\", \"qualify\", \"withhold\"]}, \"reason\": {\"type\": \"string\", \"minLength\": 1}, \"evidence_refs\": {\"type\": \"array\", \"minItems\": 3, \"items\": {\"enum\": [\"r-possession\", \"r-shots\", \"r-entries\"]}}}, \"required\": [\"snapshot_id\", \"claim_id\", \"verdict\", \"reason\", \"evidence_refs\"]}"
+        },
+        {
+          "role": "user",
+          "content": "{\"snapshot_id\": \"spike-possession-v1\", \"draft\": {\"snapshot_id\": \"spike-possession-v1\", \"claim_id\": \"C1\", \"statement\": \"No: in this snapshot, possession rose from 45% to 65% while shots fell from 2 to 1 and final-third entries fell from 3 to 2, so the possession increase did not accompany greater attacking threat.\", \"evidence_refs\": [\"r-possession\", \"r-shots\", \"r-entries\"]}}"
+        },
+        {
+          "role": "assistant",
+          "tool_calls": [
+            {
+              "id": "call_00_YaFHikktth5yuXG2hGsq6908",
+              "type": "function",
+              "function": {
+                "name": "get_evidence",
+                "arguments": "{\"snapshot_id\": \"spike-possession-v1\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_00_YaFHikktth5yuXG2hGsq6908",
+          "content": "{\"snapshot_id\": \"spike-possession-v1\", \"synthetic\": true, \"as_of_seq\": 42, \"window_seconds\": 180, \"receipts\": [{\"id\": \"r-possession\", \"previous\": 45, \"current\": 65, \"unit\": \"percent\"}, {\"id\": \"r-shots\", \"previous\": 2, \"current\": 1, \"unit\": \"count\"}, {\"id\": \"r-entries\", \"previous\": 3, \"current\": 2, \"unit\": \"count\"}], \"event_ids\": [\"e38\", \"e40\", \"e42\"]}"
+        }
+      ],
+      "response_format": {
+        "type": "json_object"
+      },
+      "tool_choice": "auto",
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "get_evidence",
+            "description": "Read the immutable football snapshot and all three metric receipts.",
+            "parameters": {
+              "properties": {
+                "snapshot_id": {
+                  "title": "Snapshot Id",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "snapshot_id"
+              ],
+              "title": "get_evidence_input",
+              "type": "object"
+            }
+          }
+        }
+      ],
+      "thinking": {
+        "type": "disabled"
+      },
+      "max_tokens": 512
+    },
+    "status": 200,
+    "duration_ms": 1399.92,
+    "request_id": null,
+    "response": {
+      "id": "c80694c2-29cd-475a-b8d2-e306dd680852",
+      "object": "chat.completion",
+      "created": 1792464585,
+      "model": "deepseek-flash",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "{\"snapshot_id\": \"spike-possession-v1\", \"claim_id\": \"C1\", \"verdict\": \"publish\", \"reason\": \"All three receipts match the statement exactly within this snapshot: possession 45% to 65% (r-possession), shots 2 to 1 (r-shots), final-third entries 3 to 2 (r-entries). The claim is a descriptive comparison of these observed deltas and asserts no coaching intent or causal explanation, so it is supported as stated.\", \"evidence_refs\": [\"r-possession\", \"r-shots\", \"r-entries\"]}"
+          },
+          "logprobs": null,
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 829,
+        "completion_tokens": 132,
+        "total_tokens": 961,
+        "prompt_tokens_details": {
+          "cached_tokens": 640
+        },
+        "prompt_cache_hit_tokens": 640,
+        "prompt_cache_miss_tokens": 189
+      },
+      "system_fingerprint": "e72d3c7f663d3e1383b00b3884cb4501"
+    }
+  },
+  {
+    "attempt": 7,
+    "route": "maf-typed-58727113",
+    "started_at": "2026-10-20T02:49:47.565775+00:00",
+    "request": {
+      "model": "deepseek-flash",
+      "stream": false,
+      "messages": [
+        {
+          "role": "system",
+          "content": "Return JSON {\"ok\":true}."
+        },
+        {
+          "role": "user",
+          "content": "Return JSON {\"ok\":true}."
+        }
+      ],
+      "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+          "schema": {
+            "additionalProperties": false,
+            "properties": {
+              "ok": {
+                "title": "Ok",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "ok"
+            ],
+            "title": "Ping",
+            "type": "object"
+          },
+          "name": "Ping",
+          "strict": true
+        }
+      },
+      "thinking": {
+        "type": "disabled"
+      },
+      "max_tokens": 512
+    },
+    "status": 400,
+    "duration_ms": 498.88,
+    "request_id": null,
+    "response": {
+      "error": {
+        "message": "This response_format type is unavailable now (request_id: f7dc20f0-4191-4d05-b499-86ded9accef0)",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "invalid_request_error"
+      }
+    }
+  }
+]

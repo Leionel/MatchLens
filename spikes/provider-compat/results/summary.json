@@ -1,0 +1,90 @@
+{
+  "started_at": "2026-10-20T02:47:56.622625+00:00",
+  "origin": "live_provider",
+  "request_cap": 30,
+  "versions": {
+    "agent-framework-core": "1.22.0",
+    "agent-framework-openai": "1.17.0",
+    "github-copilot-sdk": "1.0.23",
+    "openai": "3.35.1"
+  },
+  "snapshot": {
+    "snapshot_id": "spike-possession-v1",
+    "synthetic": true,
+    "as_of_seq": 42,
+    "window_seconds": 180,
+    "receipts": [
+      {
+        "id": "r-possession",
+        "previous": 45,
+        "current": 65,
+        "unit": "percent"
+      },
+      {
+        "id": "r-shots",
+        "previous": 2,
+        "current": 1,
+        "unit": "count"
+      },
+      {
+        "id": "r-entries",
+        "previous": 3,
+        "current": 2,
+        "unit": "count"
+      }
+    ],
+    "event_ids": [
+      "e38",
+      "e40",
+      "e42"
+    ]
+  },
+  "snapshot_sha256": "cb454a9cf303f77a40f43ee4fba4f7ce80758b211754a338c4b182f9766d8133",
+  "cases": [
+    {
+      "case": "direct-json",
+      "model": "deepseek-flash",
+      "started_at": "2026-10-20T02:47:58.666411+00:00",
+      "tool_and_handoff_events": [],
+      "status": "failed",
+      "error_type": "InternalServerError",
+      "error": "Error code: 502",
+      "duration_ms": 5674.49,
+      "upstream_requests": 0
+    },
+    {
+      "case": "direct-strict",
+      "model": "deepseek-flash",
+      "started_at": "2026-10-20T02:48:04.342411+00:00",
+      "tool_and_handoff_events": [],
+      "status": "failed",
+      "error_type": "InternalServerError",
+      "error": "Error code: 502",
+      "duration_ms": 3973.59,
+      "upstream_requests": 0
+    },
+    {
+      "case": "maf-flash",
+      "model": "deepseek-flash",
+      "started_at": "2026-10-20T02:48:08.316891+00:00",
+      "tool_and_handoff_events": [],
+      "status": "failed",
+      "error_type": "ValueError",
+      "error": "Handler parameter 'ctx' must be annotated as WorkflowContext, WorkflowContext[T], or WorkflowContext[T, U], got WorkflowContext[str]",
+      "duration_ms": 172.58,
+      "upstream_requests": 0
+    },
+    {
+      "case": "maf-typed",
+      "model": "deepseek-flash",
+      "started_at": "2026-10-20T02:48:08.490649+00:00",
+      "tool_and_handoff_events": [],
+      "status": "failed",
+      "error_type": "ChatClientException",
+      "error": "(\"<class 'agent_framework_openai._chat_completion_client.OpenAIChatCompletionClient'> service failed to complete the prompt: Error code: 502\", InternalServerError('Error code: 502'))",
+      "duration_ms": 3095.94,
+      "upstream_requests": 0
+    }
+  ],
+  "upstream_requests": 0
+}

@@ -1,0 +1,12 @@
+{
+  "missing_local_links": [],
+  "intended_files_scanned": 92,
+  "credential_pattern_matches": [],
+  "client_bundle_credential_matches": [],
+  "health": {
+    "ok": true,
+    "model_configured": true,
+    "format": "12-minute synthetic match"
+  },
+  "ui_http_status": 200
+}

@@ -1,0 +1,2726 @@
+{
+  "run_id": "run-6a11dba6df6014fd",
+  "snapshot_id": "snap-fef7e363151a52fa4fe4",
+  "evidence": {
+    "as_of": 360,
+    "candidate": "Compare Harbor's possession, shots and entries in the two windows. Look for contrary evidence.",
+    "events": [
+      {
+        "actor": "H6",
+        "end": [
+          52.5,
+          34.0
+        ],
+        "holder_after": "H6",
+        "id": "E0001",
+        "kind": "restart",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 1,
+        "receiver": null,
+        "seq": 1,
+        "start": [
+          52.5,
+          34.0
+        ],
+        "t": 0,
+        "team": "H"
+      },
+      {
+        "actor": "H6",
+        "end": [
+          88.1,
+          49.7
+        ],
+        "holder_after": "H9",
+        "id": "E0002",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 1,
+        "receiver": "H9",
+        "seq": 2,
+        "start": [
+          52.5,
+          34.0
+        ],
+        "t": 5,
+        "team": "H"
+      },
+      {
+        "actor": "H9",
+        "end": [
+          78.6,
+          41.0
+        ],
+        "holder_after": "H8",
+        "id": "E0003",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 1,
+        "receiver": "H8",
+        "seq": 3,
+        "start": [
+          88.1,
+          49.7
+        ],
+        "t": 10,
+        "team": "H"
+      },
+      {
+        "actor": "H8",
+        "end": [
+          77.7,
+          17.9
+        ],
+        "holder_after": "H9",
+        "id": "E0004",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 1,
+        "receiver": "H9",
+        "seq": 4,
+        "start": [
+          78.6,
+          41.0
+        ],
+        "t": 15,
+        "team": "H"
+      },
+      {
+        "actor": "H9",
+        "end": [
+          88.2,
+          31.3
+        ],
+        "holder_after": "H8",
+        "id": "E0005",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 1,
+        "receiver": "H8",
+        "seq": 5,
+        "start": [
+          77.7,
+          17.9
+        ],
+        "t": 20,
+        "team": "H"
+      },
+      {
+        "actor": "H8",
+        "end": [
+          85.6,
+          40.3
+        ],
+        "holder_after": "H9",
+        "id": "E0006",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 1,
+        "receiver": "H9",
+        "seq": 6,
+        "start": [
+          88.2,
+          31.3
+        ],
+        "t": 25,
+        "team": "H"
+      },
+      {
+        "actor": "H9",
+        "end": [
+          78.1,
+          35.7
+        ],
+        "holder_after": "H8",
+        "id": "E0007",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 1,
+        "receiver": "H8",
+        "seq": 7,
+        "start": [
+          85.6,
+          40.3
+        ],
+        "t": 30,
+        "team": "H"
+      },
+      {
+        "actor": "H8",
+        "end": [
+          88.2,
+          46.8
+        ],
+        "holder_after": "H6",
+        "id": "E0008",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 1,
+        "receiver": "H6",
+        "seq": 8,
+        "start": [
+          78.1,
+          35.7
+        ],
+        "t": 35,
+        "team": "H"
+      },
+      {
+        "actor": "H6",
+        "end": [
+          89.2,
+          35.1
+        ],
+        "holder_after": "H8",
+        "id": "E0009",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 1,
+        "receiver": "H8",
+        "seq": 9,
+        "start": [
+          88.2,
+          46.8
+        ],
+        "t": 40,
+        "team": "H"
+      },
+      {
+        "actor": "H8",
+        "end": [
+          81.0,
+          21.2
+        ],
+        "holder_after": "H6",
+        "id": "E0010",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 1,
+        "receiver": "H6",
+        "seq": 10,
+        "start": [
+          89.2,
+          35.1
+        ],
+        "t": 45,
+        "team": "H"
+      },
+      {
+        "actor": "H6",
+        "end": [
+          104.0,
+          34.0
+        ],
+        "holder_after": "N1",
+        "id": "E0011",
+        "kind": "shot",
+        "outcome": "saved",
+        "owner_after": "N",
+        "possession_id": 2,
+        "receiver": null,
+        "seq": 11,
+        "start": [
+          81.0,
+          21.2
+        ],
+        "t": 50,
+        "team": "H"
+      },
+      {
+        "actor": "N1",
+        "end": [
+          19.4,
+          27.5
+        ],
+        "holder_after": "N9",
+        "id": "E0012",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 2,
+        "receiver": "N9",
+        "seq": 12,
+        "start": [
+          104.0,
+          34.0
+        ],
+        "t": 55,
+        "team": "N"
+      },
+      {
+        "actor": "N9",
+        "end": [
+          21.4,
+          46.2
+        ],
+        "holder_after": "N6",
+        "id": "E0013",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 2,
+        "receiver": "N6",
+        "seq": 13,
+        "start": [
+          19.4,
+          27.5
+        ],
+        "t": 60,
+        "team": "N"
+      },
+      {
+        "actor": "N6",
+        "end": [
+          18.8,
+          30.9
+        ],
+        "holder_after": "N8",
+        "id": "E0014",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 2,
+        "receiver": "N8",
+        "seq": 14,
+        "start": [
+          21.4,
+          46.2
+        ],
+        "t": 65,
+        "team": "N"
+      },
+      {
+        "actor": "N8",
+        "end": [
+          28.7,
+          29.7
+        ],
+        "holder_after": "N9",
+        "id": "E0015",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 2,
+        "receiver": "N9",
+        "seq": 15,
+        "start": [
+          18.8,
+          30.9
+        ],
+        "t": 70,
+        "team": "N"
+      },
+      {
+        "actor": "N9",
+        "end": [
+          15.5,
+          42.1
+        ],
+        "holder_after": "N6",
+        "id": "E0016",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 2,
+        "receiver": "N6",
+        "seq": 16,
+        "start": [
+          28.7,
+          29.7
+        ],
+        "t": 75,
+        "team": "N"
+      },
+      {
+        "actor": "N6",
+        "end": [
+          14.6,
+          29.7
+        ],
+        "holder_after": "N8",
+        "id": "E0017",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 2,
+        "receiver": "N8",
+        "seq": 17,
+        "start": [
+          15.5,
+          42.1
+        ],
+        "t": 80,
+        "team": "N"
+      },
+      {
+        "actor": "N8",
+        "end": [
+          16.0,
+          25.1
+        ],
+        "holder_after": "N6",
+        "id": "E0018",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 2,
+        "receiver": "N6",
+        "seq": 18,
+        "start": [
+          14.6,
+          29.7
+        ],
+        "t": 85,
+        "team": "N"
+      },
+      {
+        "actor": "N6",
+        "end": [
+          14.6,
+          34.9
+        ],
+        "holder_after": "N8",
+        "id": "E0019",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 2,
+        "receiver": "N8",
+        "seq": 19,
+        "start": [
+          16.0,
+          25.1
+        ],
+        "t": 90,
+        "team": "N"
+      },
+      {
+        "actor": "N8",
+        "end": [
+          28.1,
+          19.2
+        ],
+        "holder_after": "N9",
+        "id": "E0020",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 2,
+        "receiver": "N9",
+        "seq": 20,
+        "start": [
+          14.6,
+          34.9
+        ],
+        "t": 95,
+        "team": "N"
+      },
+      {
+        "actor": "H8",
+        "end": [
+          28.1,
+          19.2
+        ],
+        "holder_after": "H8",
+        "id": "E0021",
+        "kind": "recovery",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 3,
+        "receiver": null,
+        "seq": 21,
+        "start": [
+          28.1,
+          19.2
+        ],
+        "t": 100,
+        "team": "H"
+      },
+      {
+        "actor": "H8",
+        "end": [
+          78.9,
+          37.5
+        ],
+        "holder_after": "H9",
+        "id": "E0022",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 3,
+        "receiver": "H9",
+        "seq": 22,
+        "start": [
+          28.1,
+          19.2
+        ],
+        "t": 105,
+        "team": "H"
+      },
+      {
+        "actor": "H9",
+        "end": [
+          79.8,
+          27.5
+        ],
+        "holder_after": "H6",
+        "id": "E0023",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 3,
+        "receiver": "H6",
+        "seq": 23,
+        "start": [
+          78.9,
+          37.5
+        ],
+        "t": 110,
+        "team": "H"
+      },
+      {
+        "actor": "H6",
+        "end": [
+          80.8,
+          28.3
+        ],
+        "holder_after": "H9",
+        "id": "E0024",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 3,
+        "receiver": "H9",
+        "seq": 24,
+        "start": [
+          79.8,
+          27.5
+        ],
+        "t": 115,
+        "team": "H"
+      },
+      {
+        "actor": "H9",
+        "end": [
+          81.0,
+          18.7
+        ],
+        "holder_after": "H8",
+        "id": "E0025",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 3,
+        "receiver": "H8",
+        "seq": 25,
+        "start": [
+          80.8,
+          28.3
+        ],
+        "t": 120,
+        "team": "H"
+      },
+      {
+        "actor": "H8",
+        "end": [
+          76.3,
+          42.3
+        ],
+        "holder_after": "H9",
+        "id": "E0026",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 3,
+        "receiver": "H9",
+        "seq": 26,
+        "start": [
+          81.0,
+          18.7
+        ],
+        "t": 125,
+        "team": "H"
+      },
+      {
+        "actor": "H9",
+        "end": [
+          104.0,
+          34.0
+        ],
+        "holder_after": "N1",
+        "id": "E0027",
+        "kind": "shot",
+        "outcome": "saved",
+        "owner_after": "N",
+        "possession_id": 4,
+        "receiver": null,
+        "seq": 27,
+        "start": [
+          76.3,
+          42.3
+        ],
+        "t": 130,
+        "team": "H"
+      },
+      {
+        "actor": "N1",
+        "end": [
+          19.5,
+          41.8
+        ],
+        "holder_after": "N8",
+        "id": "E0028",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 4,
+        "receiver": "N8",
+        "seq": 28,
+        "start": [
+          104.0,
+          34.0
+        ],
+        "t": 135,
+        "team": "N"
+      },
+      {
+        "actor": "N8",
+        "end": [
+          25.1,
+          42.4
+        ],
+        "holder_after": "N9",
+        "id": "E0029",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 4,
+        "receiver": "N9",
+        "seq": 29,
+        "start": [
+          19.5,
+          41.8
+        ],
+        "t": 140,
+        "team": "N"
+      },
+      {
+        "actor": "N9",
+        "end": [
+          28.7,
+          36.2
+        ],
+        "holder_after": "N8",
+        "id": "E0030",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 4,
+        "receiver": "N8",
+        "seq": 30,
+        "start": [
+          25.1,
+          42.4
+        ],
+        "t": 145,
+        "team": "N"
+      },
+      {
+        "actor": "N8",
+        "end": [
+          23.0,
+          41.9
+        ],
+        "holder_after": "N6",
+        "id": "E0031",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 4,
+        "receiver": "N6",
+        "seq": 31,
+        "start": [
+          28.7,
+          36.2
+        ],
+        "t": 150,
+        "team": "N"
+      },
+      {
+        "actor": "N6",
+        "end": [
+          26.3,
+          50.8
+        ],
+        "holder_after": "N9",
+        "id": "E0032",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 4,
+        "receiver": "N9",
+        "seq": 32,
+        "start": [
+          23.0,
+          41.9
+        ],
+        "t": 155,
+        "team": "N"
+      },
+      {
+        "actor": "N9",
+        "end": [
+          18.9,
+          47.9
+        ],
+        "holder_after": "N6",
+        "id": "E0033",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 4,
+        "receiver": "N6",
+        "seq": 33,
+        "start": [
+          26.3,
+          50.8
+        ],
+        "t": 160,
+        "team": "N"
+      },
+      {
+        "actor": "N6",
+        "end": [
+          16.4,
+          35.3
+        ],
+        "holder_after": "N8",
+        "id": "E0034",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 4,
+        "receiver": "N8",
+        "seq": 34,
+        "start": [
+          18.9,
+          47.9
+        ],
+        "t": 165,
+        "team": "N"
+      },
+      {
+        "actor": "N8",
+        "end": [
+          16.8,
+          18.7
+        ],
+        "holder_after": "N9",
+        "id": "E0035",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 4,
+        "receiver": "N9",
+        "seq": 35,
+        "start": [
+          16.4,
+          35.3
+        ],
+        "t": 170,
+        "team": "N"
+      },
+      {
+        "actor": "N9",
+        "end": [
+          27.6,
+          43.2
+        ],
+        "holder_after": "N8",
+        "id": "E0036",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 4,
+        "receiver": "N8",
+        "seq": 36,
+        "start": [
+          16.8,
+          18.7
+        ],
+        "t": 175,
+        "team": "N"
+      },
+      {
+        "actor": "H8",
+        "end": [
+          27.6,
+          43.2
+        ],
+        "holder_after": "H8",
+        "id": "E0037",
+        "kind": "recovery",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": null,
+        "seq": 37,
+        "start": [
+          27.6,
+          43.2
+        ],
+        "t": 180,
+        "team": "H"
+      },
+      {
+        "actor": "H8",
+        "end": [
+          48.4,
+          30.7
+        ],
+        "holder_after": "H9",
+        "id": "E0038",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H9",
+        "seq": 38,
+        "start": [
+          27.6,
+          43.2
+        ],
+        "t": 185,
+        "team": "H"
+      },
+      {
+        "actor": "H9",
+        "end": [
+          44.8,
+          35.5
+        ],
+        "holder_after": "H6",
+        "id": "E0039",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H6",
+        "seq": 39,
+        "start": [
+          48.4,
+          30.7
+        ],
+        "t": 190,
+        "team": "H"
+      },
+      {
+        "actor": "H6",
+        "end": [
+          35.0,
+          49.6
+        ],
+        "holder_after": "H8",
+        "id": "E0040",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H8",
+        "seq": 40,
+        "start": [
+          44.8,
+          35.5
+        ],
+        "t": 195,
+        "team": "H"
+      },
+      {
+        "actor": "H8",
+        "end": [
+          52.8,
+          18.7
+        ],
+        "holder_after": "H6",
+        "id": "E0041",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H6",
+        "seq": 41,
+        "start": [
+          35.0,
+          49.6
+        ],
+        "t": 200,
+        "team": "H"
+      },
+      {
+        "actor": "H6",
+        "end": [
+          46.2,
+          45.0
+        ],
+        "holder_after": "H9",
+        "id": "E0042",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H9",
+        "seq": 42,
+        "start": [
+          52.8,
+          18.7
+        ],
+        "t": 205,
+        "team": "H"
+      },
+      {
+        "actor": "H9",
+        "end": [
+          45.2,
+          34.5
+        ],
+        "holder_after": "H6",
+        "id": "E0043",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H6",
+        "seq": 43,
+        "start": [
+          46.2,
+          45.0
+        ],
+        "t": 210,
+        "team": "H"
+      },
+      {
+        "actor": "H6",
+        "end": [
+          30.4,
+          32.6
+        ],
+        "holder_after": "H9",
+        "id": "E0044",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H9",
+        "seq": 44,
+        "start": [
+          45.2,
+          34.5
+        ],
+        "t": 215,
+        "team": "H"
+      },
+      {
+        "actor": "H9",
+        "end": [
+          35.1,
+          27.8
+        ],
+        "holder_after": "H6",
+        "id": "E0045",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H6",
+        "seq": 45,
+        "start": [
+          30.4,
+          32.6
+        ],
+        "t": 220,
+        "team": "H"
+      },
+      {
+        "actor": "H6",
+        "end": [
+          58.1,
+          37.3
+        ],
+        "holder_after": "H8",
+        "id": "E0046",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H8",
+        "seq": 46,
+        "start": [
+          35.1,
+          27.8
+        ],
+        "t": 225,
+        "team": "H"
+      },
+      {
+        "actor": "H8",
+        "end": [
+          29.7,
+          45.3
+        ],
+        "holder_after": "H9",
+        "id": "E0047",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H9",
+        "seq": 47,
+        "start": [
+          58.1,
+          37.3
+        ],
+        "t": 230,
+        "team": "H"
+      },
+      {
+        "actor": "H9",
+        "end": [
+          56.8,
+          35.9
+        ],
+        "holder_after": "H6",
+        "id": "E0048",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H6",
+        "seq": 48,
+        "start": [
+          29.7,
+          45.3
+        ],
+        "t": 235,
+        "team": "H"
+      },
+      {
+        "actor": "H6",
+        "end": [
+          39.4,
+          50.9
+        ],
+        "holder_after": "H9",
+        "id": "E0049",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H9",
+        "seq": 49,
+        "start": [
+          56.8,
+          35.9
+        ],
+        "t": 240,
+        "team": "H"
+      },
+      {
+        "actor": "H9",
+        "end": [
+          37.4,
+          29.1
+        ],
+        "holder_after": "H6",
+        "id": "E0050",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H6",
+        "seq": 50,
+        "start": [
+          39.4,
+          50.9
+        ],
+        "t": 245,
+        "team": "H"
+      },
+      {
+        "actor": "H6",
+        "end": [
+          44.1,
+          34.8
+        ],
+        "holder_after": "H8",
+        "id": "E0051",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H8",
+        "seq": 51,
+        "start": [
+          37.4,
+          29.1
+        ],
+        "t": 250,
+        "team": "H"
+      },
+      {
+        "actor": "H8",
+        "end": [
+          57.2,
+          47.6
+        ],
+        "holder_after": "H6",
+        "id": "E0052",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H6",
+        "seq": 52,
+        "start": [
+          44.1,
+          34.8
+        ],
+        "t": 255,
+        "team": "H"
+      },
+      {
+        "actor": "H6",
+        "end": [
+          41.9,
+          32.1
+        ],
+        "holder_after": "H8",
+        "id": "E0053",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H8",
+        "seq": 53,
+        "start": [
+          57.2,
+          47.6
+        ],
+        "t": 260,
+        "team": "H"
+      },
+      {
+        "actor": "H8",
+        "end": [
+          44.6,
+          33.1
+        ],
+        "holder_after": "H6",
+        "id": "E0054",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H6",
+        "seq": 54,
+        "start": [
+          41.9,
+          32.1
+        ],
+        "t": 265,
+        "team": "H"
+      },
+      {
+        "actor": "H6",
+        "end": [
+          37.1,
+          23.3
+        ],
+        "holder_after": "H8",
+        "id": "E0055",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H8",
+        "seq": 55,
+        "start": [
+          44.6,
+          33.1
+        ],
+        "t": 270,
+        "team": "H"
+      },
+      {
+        "actor": "H8",
+        "end": [
+          53.6,
+          32.9
+        ],
+        "holder_after": "H6",
+        "id": "E0056",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H6",
+        "seq": 56,
+        "start": [
+          37.1,
+          23.3
+        ],
+        "t": 275,
+        "team": "H"
+      },
+      {
+        "actor": "H6",
+        "end": [
+          34.5,
+          26.1
+        ],
+        "holder_after": "H9",
+        "id": "E0057",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H9",
+        "seq": 57,
+        "start": [
+          53.6,
+          32.9
+        ],
+        "t": 280,
+        "team": "H"
+      },
+      {
+        "actor": "H9",
+        "end": [
+          28.9,
+          33.0
+        ],
+        "holder_after": "H6",
+        "id": "E0058",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H6",
+        "seq": 58,
+        "start": [
+          34.5,
+          26.1
+        ],
+        "t": 285,
+        "team": "H"
+      },
+      {
+        "actor": "H6",
+        "end": [
+          47.0,
+          50.8
+        ],
+        "holder_after": "H9",
+        "id": "E0059",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H9",
+        "seq": 59,
+        "start": [
+          28.9,
+          33.0
+        ],
+        "t": 290,
+        "team": "H"
+      },
+      {
+        "actor": "H9",
+        "end": [
+          52.1,
+          44.9
+        ],
+        "holder_after": "H6",
+        "id": "E0060",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H6",
+        "seq": 60,
+        "start": [
+          47.0,
+          50.8
+        ],
+        "t": 295,
+        "team": "H"
+      },
+      {
+        "actor": "H6",
+        "end": [
+          42.1,
+          44.9
+        ],
+        "holder_after": "H8",
+        "id": "E0061",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H8",
+        "seq": 61,
+        "start": [
+          52.1,
+          44.9
+        ],
+        "t": 300,
+        "team": "H"
+      },
+      {
+        "actor": "H8",
+        "end": [
+          54.9,
+          18.0
+        ],
+        "holder_after": "H6",
+        "id": "E0062",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H6",
+        "seq": 62,
+        "start": [
+          42.1,
+          44.9
+        ],
+        "t": 305,
+        "team": "H"
+      },
+      {
+        "actor": "H6",
+        "end": [
+          52.6,
+          31.6
+        ],
+        "holder_after": "H9",
+        "id": "E0063",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H9",
+        "seq": 63,
+        "start": [
+          54.9,
+          18.0
+        ],
+        "t": 310,
+        "team": "H"
+      },
+      {
+        "actor": "H9",
+        "end": [
+          50.9,
+          19.0
+        ],
+        "holder_after": "H6",
+        "id": "E0064",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H6",
+        "seq": 64,
+        "start": [
+          52.6,
+          31.6
+        ],
+        "t": 315,
+        "team": "H"
+      },
+      {
+        "actor": "H6",
+        "end": [
+          36.4,
+          28.8
+        ],
+        "holder_after": "H9",
+        "id": "E0065",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H9",
+        "seq": 65,
+        "start": [
+          50.9,
+          19.0
+        ],
+        "t": 320,
+        "team": "H"
+      },
+      {
+        "actor": "H9",
+        "end": [
+          40.6,
+          17.3
+        ],
+        "holder_after": "H8",
+        "id": "E0066",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "H",
+        "possession_id": 5,
+        "receiver": "H8",
+        "seq": 66,
+        "start": [
+          36.4,
+          28.8
+        ],
+        "t": 325,
+        "team": "H"
+      },
+      {
+        "actor": "N8",
+        "end": [
+          40.6,
+          17.3
+        ],
+        "holder_after": "N8",
+        "id": "E0067",
+        "kind": "recovery",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 6,
+        "receiver": null,
+        "seq": 67,
+        "start": [
+          40.6,
+          17.3
+        ],
+        "t": 330,
+        "team": "N"
+      },
+      {
+        "actor": "N8",
+        "end": [
+          84.2,
+          42.5
+        ],
+        "holder_after": "N9",
+        "id": "E0068",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 6,
+        "receiver": "N9",
+        "seq": 68,
+        "start": [
+          40.6,
+          17.3
+        ],
+        "t": 335,
+        "team": "N"
+      },
+      {
+        "actor": "N9",
+        "end": [
+          78.7,
+          46.4
+        ],
+        "holder_after": "N6",
+        "id": "E0069",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 6,
+        "receiver": "N6",
+        "seq": 69,
+        "start": [
+          84.2,
+          42.5
+        ],
+        "t": 340,
+        "team": "N"
+      },
+      {
+        "actor": "N6",
+        "end": [
+          81.8,
+          28.4
+        ],
+        "holder_after": "N9",
+        "id": "E0070",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 6,
+        "receiver": "N9",
+        "seq": 70,
+        "start": [
+          78.7,
+          46.4
+        ],
+        "t": 345,
+        "team": "N"
+      },
+      {
+        "actor": "N9",
+        "end": [
+          75.8,
+          44.9
+        ],
+        "holder_after": "N6",
+        "id": "E0071",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 6,
+        "receiver": "N6",
+        "seq": 71,
+        "start": [
+          81.8,
+          28.4
+        ],
+        "t": 350,
+        "team": "N"
+      },
+      {
+        "actor": "N6",
+        "end": [
+          83.8,
+          25.5
+        ],
+        "holder_after": "N9",
+        "id": "E0072",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 6,
+        "receiver": "N9",
+        "seq": 72,
+        "start": [
+          75.8,
+          44.9
+        ],
+        "t": 355,
+        "team": "N"
+      },
+      {
+        "actor": "N9",
+        "end": [
+          81.9,
+          23.8
+        ],
+        "holder_after": "N8",
+        "id": "E0073",
+        "kind": "pass",
+        "outcome": "complete",
+        "owner_after": "N",
+        "possession_id": 6,
+        "receiver": "N8",
+        "seq": 73,
+        "start": [
+          83.8,
+          25.5
+        ],
+        "t": 360,
+        "team": "N"
+      }
+    ],
+    "format_seconds": 720,
+    "generator_version": "controlled-r01-2",
+    "intervals": [
+      {
+        "end": 5,
+        "event_id": "E0001",
+        "start": 0,
+        "team": "H"
+      },
+      {
+        "end": 10,
+        "event_id": "E0002",
+        "start": 5,
+        "team": "H"
+      },
+      {
+        "end": 15,
+        "event_id": "E0003",
+        "start": 10,
+        "team": "H"
+      },
+      {
+        "end": 20,
+        "event_id": "E0004",
+        "start": 15,
+        "team": "H"
+      },
+      {
+        "end": 25,
+        "event_id": "E0005",
+        "start": 20,
+        "team": "H"
+      },
+      {
+        "end": 30,
+        "event_id": "E0006",
+        "start": 25,
+        "team": "H"
+      },
+      {
+        "end": 35,
+        "event_id": "E0007",
+        "start": 30,
+        "team": "H"
+      },
+      {
+        "end": 40,
+        "event_id": "E0008",
+        "start": 35,
+        "team": "H"
+      },
+      {
+        "end": 45,
+        "event_id": "E0009",
+        "start": 40,
+        "team": "H"
+      },
+      {
+        "end": 50,
+        "event_id": "E0010",
+        "start": 45,
+        "team": "H"
+      },
+      {
+        "end": 55,
+        "event_id": "E0011",
+        "start": 50,
+        "team": "N"
+      },
+      {
+        "end": 60,
+        "event_id": "E0012",
+        "start": 55,
+        "team": "N"
+      },
+      {
+        "end": 65,
+        "event_id": "E0013",
+        "start": 60,
+        "team": "N"
+      },
+      {
+        "end": 70,
+        "event_id": "E0014",
+        "start": 65,
+        "team": "N"
+      },
+      {
+        "end": 75,
+        "event_id": "E0015",
+        "start": 70,
+        "team": "N"
+      },
+      {
+        "end": 80,
+        "event_id": "E0016",
+        "start": 75,
+        "team": "N"
+      },
+      {
+        "end": 85,
+        "event_id": "E0017",
+        "start": 80,
+        "team": "N"
+      },
+      {
+        "end": 90,
+        "event_id": "E0018",
+        "start": 85,
+        "team": "N"
+      },
+      {
+        "end": 95,
+        "event_id": "E0019",
+        "start": 90,
+        "team": "N"
+      },
+      {
+        "end": 100,
+        "event_id": "E0020",
+        "start": 95,
+        "team": "N"
+      },
+      {
+        "end": 105,
+        "event_id": "E0021",
+        "start": 100,
+        "team": "H"
+      },
+      {
+        "end": 110,
+        "event_id": "E0022",
+        "start": 105,
+        "team": "H"
+      },
+      {
+        "end": 115,
+        "event_id": "E0023",
+        "start": 110,
+        "team": "H"
+      },
+      {
+        "end": 120,
+        "event_id": "E0024",
+        "start": 115,
+        "team": "H"
+      },
+      {
+        "end": 125,
+        "event_id": "E0025",
+        "start": 120,
+        "team": "H"
+      },
+      {
+        "end": 130,
+        "event_id": "E0026",
+        "start": 125,
+        "team": "H"
+      },
+      {
+        "end": 135,
+        "event_id": "E0027",
+        "start": 130,
+        "team": "N"
+      },
+      {
+        "end": 140,
+        "event_id": "E0028",
+        "start": 135,
+        "team": "N"
+      },
+      {
+        "end": 145,
+        "event_id": "E0029",
+        "start": 140,
+        "team": "N"
+      },
+      {
+        "end": 150,
+        "event_id": "E0030",
+        "start": 145,
+        "team": "N"
+      },
+      {
+        "end": 155,
+        "event_id": "E0031",
+        "start": 150,
+        "team": "N"
+      },
+      {
+        "end": 160,
+        "event_id": "E0032",
+        "start": 155,
+        "team": "N"
+      },
+      {
+        "end": 165,
+        "event_id": "E0033",
+        "start": 160,
+        "team": "N"
+      },
+      {
+        "end": 170,
+        "event_id": "E0034",
+        "start": 165,
+        "team": "N"
+      },
+      {
+        "end": 175,
+        "event_id": "E0035",
+        "start": 170,
+        "team": "N"
+      },
+      {
+        "end": 180,
+        "event_id": "E0036",
+        "start": 175,
+        "team": "N"
+      },
+      {
+        "end": 185,
+        "event_id": "E0037",
+        "start": 180,
+        "team": "H"
+      },
+      {
+        "end": 190,
+        "event_id": "E0038",
+        "start": 185,
+        "team": "H"
+      },
+      {
+        "end": 195,
+        "event_id": "E0039",
+        "start": 190,
+        "team": "H"
+      },
+      {
+        "end": 200,
+        "event_id": "E0040",
+        "start": 195,
+        "team": "H"
+      },
+      {
+        "end": 205,
+        "event_id": "E0041",
+        "start": 200,
+        "team": "H"
+      },
+      {
+        "end": 210,
+        "event_id": "E0042",
+        "start": 205,
+        "team": "H"
+      },
+      {
+        "end": 215,
+        "event_id": "E0043",
+        "start": 210,
+        "team": "H"
+      },
+      {
+        "end": 220,
+        "event_id": "E0044",
+        "start": 215,
+        "team": "H"
+      },
+      {
+        "end": 225,
+        "event_id": "E0045",
+        "start": 220,
+        "team": "H"
+      },
+      {
+        "end": 230,
+        "event_id": "E0046",
+        "start": 225,
+        "team": "H"
+      },
+      {
+        "end": 235,
+        "event_id": "E0047",
+        "start": 230,
+        "team": "H"
+      },
+      {
+        "end": 240,
+        "event_id": "E0048",
+        "start": 235,
+        "team": "H"
+      },
+      {
+        "end": 245,
+        "event_id": "E0049",
+        "start": 240,
+        "team": "H"
+      },
+      {
+        "end": 250,
+        "event_id": "E0050",
+        "start": 245,
+        "team": "H"
+      },
+      {
+        "end": 255,
+        "event_id": "E0051",
+        "start": 250,
+        "team": "H"
+      },
+      {
+        "end": 260,
+        "event_id": "E0052",
+        "start": 255,
+        "team": "H"
+      },
+      {
+        "end": 265,
+        "event_id": "E0053",
+        "start": 260,
+        "team": "H"
+      },
+      {
+        "end": 270,
+        "event_id": "E0054",
+        "start": 265,
+        "team": "H"
+      },
+      {
+        "end": 275,
+        "event_id": "E0055",
+        "start": 270,
+        "team": "H"
+      },
+      {
+        "end": 280,
+        "event_id": "E0056",
+        "start": 275,
+        "team": "H"
+      },
+      {
+        "end": 285,
+        "event_id": "E0057",
+        "start": 280,
+        "team": "H"
+      },
+      {
+        "end": 290,
+        "event_id": "E0058",
+        "start": 285,
+        "team": "H"
+      },
+      {
+        "end": 295,
+        "event_id": "E0059",
+        "start": 290,
+        "team": "H"
+      },
+      {
+        "end": 300,
+        "event_id": "E0060",
+        "start": 295,
+        "team": "H"
+      },
+      {
+        "end": 305,
+        "event_id": "E0061",
+        "start": 300,
+        "team": "H"
+      },
+      {
+        "end": 310,
+        "event_id": "E0062",
+        "start": 305,
+        "team": "H"
+      },
+      {
+        "end": 315,
+        "event_id": "E0063",
+        "start": 310,
+        "team": "H"
+      },
+      {
+        "end": 320,
+        "event_id": "E0064",
+        "start": 315,
+        "team": "H"
+      },
+      {
+        "end": 325,
+        "event_id": "E0065",
+        "start": 320,
+        "team": "H"
+      },
+      {
+        "end": 330,
+        "event_id": "E0066",
+        "start": 325,
+        "team": "H"
+      },
+      {
+        "end": 335,
+        "event_id": "E0067",
+        "start": 330,
+        "team": "N"
+      },
+      {
+        "end": 340,
+        "event_id": "E0068",
+        "start": 335,
+        "team": "N"
+      },
+      {
+        "end": 345,
+        "event_id": "E0069",
+        "start": 340,
+        "team": "N"
+      },
+      {
+        "end": 350,
+        "event_id": "E0070",
+        "start": 345,
+        "team": "N"
+      },
+      {
+        "end": 355,
+        "event_id": "E0071",
+        "start": 350,
+        "team": "N"
+      },
+      {
+        "end": 360,
+        "event_id": "E0072",
+        "start": 355,
+        "team": "N"
+      }
+    ],
+    "limitations": [
+      "Synthetic 12-minute demonstration match.",
+      "On-ball events only; no off-ball tracking, pressure, xG or coaching intent."
+    ],
+    "match_id": "harbor-northbridge-17",
+    "metric_version": "football-v1",
+    "receipts": {
+      "H.entries.current": {
+        "definition": "First completed pass crossing attacking x=70m per possession; no tracking or xG.",
+        "end": 360,
+        "event_ids": [],
+        "id": "H.entries.current",
+        "start": 180,
+        "unit": "entries",
+        "value": 0
+      },
+      "H.entries.previous": {
+        "definition": "First completed pass crossing attacking x=70m per possession; no tracking or xG.",
+        "end": 180,
+        "event_ids": [
+          "E0002",
+          "E0022"
+        ],
+        "id": "H.entries.previous",
+        "start": 0,
+        "unit": "entries",
+        "value": 2
+      },
+      "H.goals.match": {
+        "chains": [],
+        "definition": "Harbor goals and the uninterrupted on-ball event sequence ending in each goal.",
+        "end": 360,
+        "event_ids": [],
+        "id": "H.goals.match",
+        "start": 0,
+        "unit": "goals",
+        "value": 0
+      },
+      "H.high_recoveries.current": {
+        "definition": "Opponent possession gained at attacking x >= 70m; not proof of pressing.",
+        "end": 360,
+        "event_ids": [],
+        "id": "H.high_recoveries.current",
+        "start": 180,
+        "unit": "recoveries",
+        "value": 0
+      },
+      "H.high_recoveries.previous": {
+        "definition": "Opponent possession gained at attacking x >= 70m; not proof of pressing.",
+        "end": 180,
+        "event_ids": [],
+        "id": "H.high_recoveries.previous",
+        "start": 0,
+        "unit": "recoveries",
+        "value": 0
+      },
+      "H.possession.current": {
+        "definition": "Controlled seconds / controlled seconds of both teams; dead-ball time excluded.",
+        "denominator": 180,
+        "end": 360,
+        "event_ids": [
+          "E0037",
+          "E0038",
+          "E0039",
+          "E0040",
+          "E0041",
+          "E0042",
+          "E0043",
+          "E0044",
+          "E0045",
+          "E0046",
+          "E0047",
+          "E0048",
+          "E0049",
+          "E0050",
+          "E0051",
+          "E0052",
+          "E0053",
+          "E0054",
+          "E0055",
+          "E0056",
+          "E0057",
+          "E0058",
+          "E0059",
+          "E0060",
+          "E0061",
+          "E0062",
+          "E0063",
+          "E0064",
+          "E0065",
+          "E0066",
+          "E0067",
+          "E0068",
+          "E0069",
+          "E0070",
+          "E0071",
+          "E0072"
+        ],
+        "id": "H.possession.current",
+        "numerator": 150,
+        "start": 180,
+        "unit": "%",
+        "value": 83.33
+      },
+      "H.possession.previous": {
+        "definition": "Controlled seconds / controlled seconds of both teams; dead-ball time excluded.",
+        "denominator": 180,
+        "end": 180,
+        "event_ids": [
+          "E0001",
+          "E0002",
+          "E0003",
+          "E0004",
+          "E0005",
+          "E0006",
+          "E0007",
+          "E0008",
+          "E0009",
+          "E0010",
+          "E0011",
+          "E0012",
+          "E0013",
+          "E0014",
+          "E0015",
+          "E0016",
+          "E0017",
+          "E0018",
+          "E0019",
+          "E0020",
+          "E0021",
+          "E0022",
+          "E0023",
+          "E0024",
+          "E0025",
+          "E0026",
+          "E0027",
+          "E0028",
+          "E0029",
+          "E0030",
+          "E0031",
+          "E0032",
+          "E0033",
+          "E0034",
+          "E0035",
+          "E0036"
+        ],
+        "id": "H.possession.previous",
+        "numerator": 80,
+        "start": 0,
+        "unit": "%",
+        "value": 44.44
+      },
+      "H.shots.current": {
+        "definition": "All shot events, including saved shots and goals.",
+        "end": 360,
+        "event_ids": [],
+        "id": "H.shots.current",
+        "start": 180,
+        "unit": "shots",
+        "value": 0
+      },
+      "H.shots.previous": {
+        "definition": "All shot events, including saved shots and goals.",
+        "end": 180,
+        "event_ids": [
+          "E0011",
+          "E0027"
+        ],
+        "id": "H.shots.previous",
+        "start": 0,
+        "unit": "shots",
+        "value": 2
+      },
+      "H.transition_shots.current": {
+        "chains": [],
+        "definition": "Shot <=10s after a recovery with no intervening loss; a temporal association, not causation.",
+        "end": 360,
+        "event_ids": [],
+        "id": "H.transition_shots.current",
+        "start": 180,
+        "unit": "shots",
+        "value": 0
+      },
+      "H.transition_shots.previous": {
+        "chains": [],
+        "definition": "Shot <=10s after a recovery with no intervening loss; a temporal association, not causation.",
+        "end": 180,
+        "event_ids": [],
+        "id": "H.transition_shots.previous",
+        "start": 0,
+        "unit": "shots",
+        "value": 0
+      },
+      "N.entries.current": {
+        "definition": "First completed pass crossing attacking x=70m per possession; no tracking or xG.",
+        "end": 360,
+        "event_ids": [],
+        "id": "N.entries.current",
+        "start": 180,
+        "unit": "entries",
+        "value": 0
+      },
+      "N.entries.previous": {
+        "definition": "First completed pass crossing attacking x=70m per possession; no tracking or xG.",
+        "end": 180,
+        "event_ids": [
+          "E0012",
+          "E0028"
+        ],
+        "id": "N.entries.previous",
+        "start": 0,
+        "unit": "entries",
+        "value": 2
+      },
+      "N.high_recoveries.current": {
+        "definition": "Opponent possession gained at attacking x >= 70m; not proof of pressing.",
+        "end": 360,
+        "event_ids": [],
+        "id": "N.high_recoveries.current",
+        "start": 180,
+        "unit": "recoveries",
+        "value": 0
+      },
+      "N.high_recoveries.previous": {
+        "definition": "Opponent possession gained at attacking x >= 70m; not proof of pressing.",
+        "end": 180,
+        "event_ids": [],
+        "id": "N.high_recoveries.previous",
+        "start": 0,
+        "unit": "recoveries",
+        "value": 0
+      },
+      "N.possession.current": {
+        "definition": "Controlled seconds / controlled seconds of both teams; dead-ball time excluded.",
+        "denominator": 180,
+        "end": 360,
+        "event_ids": [
+          "E0037",
+          "E0038",
+          "E0039",
+          "E0040",
+          "E0041",
+          "E0042",
+          "E0043",
+          "E0044",
+          "E0045",
+          "E0046",
+          "E0047",
+          "E0048",
+          "E0049",
+          "E0050",
+          "E0051",
+          "E0052",
+          "E0053",
+          "E0054",
+          "E0055",
+          "E0056",
+          "E0057",
+          "E0058",
+          "E0059",
+          "E0060",
+          "E0061",
+          "E0062",
+          "E0063",
+          "E0064",
+          "E0065",
+          "E0066",
+          "E0067",
+          "E0068",
+          "E0069",
+          "E0070",
+          "E0071",
+          "E0072"
+        ],
+        "id": "N.possession.current",
+        "numerator": 30,
+        "start": 180,
+        "unit": "%",
+        "value": 16.67
+      },
+      "N.possession.previous": {
+        "definition": "Controlled seconds / controlled seconds of both teams; dead-ball time excluded.",
+        "denominator": 180,
+        "end": 180,
+        "event_ids": [
+          "E0001",
+          "E0002",
+          "E0003",
+          "E0004",
+          "E0005",
+          "E0006",
+          "E0007",
+          "E0008",
+          "E0009",
+          "E0010",
+          "E0011",
+          "E0012",
+          "E0013",
+          "E0014",
+          "E0015",
+          "E0016",
+          "E0017",
+          "E0018",
+          "E0019",
+          "E0020",
+          "E0021",
+          "E0022",
+          "E0023",
+          "E0024",
+          "E0025",
+          "E0026",
+          "E0027",
+          "E0028",
+          "E0029",
+          "E0030",
+          "E0031",
+          "E0032",
+          "E0033",
+          "E0034",
+          "E0035",
+          "E0036"
+        ],
+        "id": "N.possession.previous",
+        "numerator": 100,
+        "start": 0,
+        "unit": "%",
+        "value": 55.56
+      },
+      "N.shots.current": {
+        "definition": "All shot events, including saved shots and goals.",
+        "end": 360,
+        "event_ids": [],
+        "id": "N.shots.current",
+        "start": 180,
+        "unit": "shots",
+        "value": 0
+      },
+      "N.shots.previous": {
+        "definition": "All shot events, including saved shots and goals.",
+        "end": 180,
+        "event_ids": [],
+        "id": "N.shots.previous",
+        "start": 0,
+        "unit": "shots",
+        "value": 0
+      },
+      "N.transition_shots.current": {
+        "chains": [],
+        "definition": "Shot <=10s after a recovery with no intervening loss; a temporal association, not causation.",
+        "end": 360,
+        "event_ids": [],
+        "id": "N.transition_shots.current",
+        "start": 180,
+        "unit": "shots",
+        "value": 0
+      },
+      "N.transition_shots.previous": {
+        "chains": [],
+        "definition": "Shot <=10s after a recovery with no intervening loss; a temporal association, not causation.",
+        "end": 180,
+        "event_ids": [],
+        "id": "N.transition_shots.previous",
+        "start": 0,
+        "unit": "shots",
+        "value": 0
+      }
+    },
+    "schema": "evidence-v1",
+    "score": {
+      "H": 0,
+      "N": 0
+    },
+    "seed": 17,
+    "teams": {
+      "H": "Harbor FC",
+      "N": "Northbridge United"
+    }
+  },
+  "bound_epoch": 1,
+  "current_epoch": 1,
+  "draft": {
+    "snapshot_id": "snap-fef7e363151a52fa4fe4",
+    "claims": [
+      {
+        "id": "claim-possession-no-penetration",
+        "assertion": "possession_without_penetration",
+        "primary": {
+          "id": "primary",
+          "scope": "window",
+          "refs": [
+            "H.possession.previous",
+            "H.possession.current",
+            "H.shots.previous",
+            "H.shots.current",
+            "H.entries.previous",
+            "H.entries.current"
+          ],
+          "fan": "Harbor had much more of the ball after the break, but it did not turn into shots or passes into the attacking zone.",
+          "analyst": "Harbor's possession rose from {{H.possession.previous}} to {{H.possession.current}}, yet shots fell from {{H.shots.previous}} to {{H.shots.current}} and entries fell from {{H.entries.previous}} to {{H.entries.current}}. The receipts cover only the two recorded windows of a synthetic sample with on-ball events only, so this shows no penetration increase here, not a broader pattern."
+        },
+        "conservative": null
+      }
+    ]
+  },
+  "review": {
+    "snapshot_id": "snap-fef7e363151a52fa4fe4",
+    "decisions": [
+      {
+        "claim_id": "claim-possession-no-penetration",
+        "verdict": "publish",
+        "selected_variant": "primary",
+        "reason": "Receipts match the draft: possession rose from {{H.possession.previous}} to {{H.possession.current}} while shots dropped {{H.shots.previous}} to {{H.shots.current}} and entries {{H.entries.previous}} to {{H.entries.current}}. Scope is limited to the recorded windows and prose keeps uncertainty.",
+        "limitations": [
+          "Two recorded windows only; no whole-match trend can be established.",
+          "Synthetic sample with on-ball events only; no off-ball or intent data.",
+          "No conservative variant was supplied, so only publish or withhold applied."
+        ]
+      }
+    ]
+  },
+  "result": {
+    "status": "completed",
+    "origin": "live_model",
+    "accepted": [
+      {
+        "claim_id": "claim-possession-no-penetration",
+        "assertion": "possession_without_penetration",
+        "verdict": "publish",
+        "selected_variant": "primary",
+        "scope": "window",
+        "refs": [
+          "H.possession.previous",
+          "H.possession.current",
+          "H.shots.previous",
+          "H.shots.current",
+          "H.entries.previous",
+          "H.entries.current"
+        ],
+        "fan": "Harbor had much more of the ball after the break, but it did not turn into shots or passes into the attacking zone.",
+        "analyst": "Harbor's possession rose from 44.44% to 83.33%, yet shots fell from 2 to 0 and entries fell from 2 to 0. The receipts cover only the two recorded windows of a synthetic sample with on-ball events only, so this shows no penetration increase here, not a broader pattern.",
+        "reason": "Receipts match the draft: possession rose from 44.44% to 83.33% while shots dropped 2 to 0 and entries 2 to 0. Scope is limited to the recorded windows and prose keeps uncertainty.",
+        "limitations": [
+          "Two recorded windows only; no whole-match trend can be established.",
+          "Synthetic sample with on-ball events only; no off-ball or intent data.",
+          "No conservative variant was supplied, so only publish or withhold applied."
+        ],
+        "snapshot_id": "snap-fef7e363151a52fa4fe4",
+        "as_of": 360
+      }
+    ],
+    "rejected": [],
+    "duration_ms": 9730,
+    "model": "deepseek-flash",
+    "prompt_version": "football-roles-r01-6-flat-wire",
+    "run_id": "run-6a11dba6df6014fd",
+    "snapshot_id": "snap-fef7e363151a52fa4fe4",
+    "as_of": 360,
+    "audit": [
+      {
+        "type": "http_dispatch",
+        "role": "Analyst",
+        "request_id": 49,
+        "body_bytes": 5241,
+        "model": "deepseek-flash",
+        "max_tokens": 1024
+      },
+      {
+        "type": "http_receipt",
+        "role": "Analyst",
+        "request_id": 49,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1353,
+          "completion_tokens": 61,
+          "total_tokens": 1414,
+          "prompt_tokens_details": {
+            "cached_tokens": 512
+          },
+          "prompt_cache_hit_tokens": 512,
+          "prompt_cache_miss_tokens": 841
+        },
+        "returned_model": "deepseek-flash"
+      },
+      {
+        "type": "tool",
+        "role": "Analyst",
+        "name": "get_evidence",
+        "snapshot_id": "snap-fef7e363151a52fa4fe4"
+      },
+      {
+        "type": "http_dispatch",
+        "role": "Analyst",
+        "request_id": 50,
+        "body_bytes": 10327,
+        "model": "deepseek-flash",
+        "max_tokens": 1024
+      },
+      {
+        "type": "tool_receipt",
+        "role": "Analyst",
+        "snapshot_id": "snap-fef7e363151a52fa4fe4",
+        "tool_call_id": "call_00_yOvJeHWz6Qo3LN8hvHYt9731",
+        "sha256": "35426170e151760d581f7768a7889e776076f00925bfdf99010e01e50b701694"
+      },
+      {
+        "type": "http_receipt",
+        "role": "Analyst",
+        "request_id": 50,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 2805,
+          "completion_tokens": 223,
+          "total_tokens": 3028,
+          "prompt_tokens_details": {
+            "cached_tokens": 1280
+          },
+          "prompt_cache_hit_tokens": 1280,
+          "prompt_cache_miss_tokens": 1525
+        },
+        "returned_model": "deepseek-flash"
+      },
+      {
+        "type": "handoff",
+        "from": "Analyst",
+        "to": "Verifier",
+        "snapshot_id": "snap-fef7e363151a52fa4fe4",
+        "claim_ids": [
+          "claim-possession-no-penetration"
+        ],
+        "draft_sha256": "9f86076c9a83425a95eb4a9eec4ee75907ad9a0daa7eb7a3d5b2ec069703a2be"
+      },
+      {
+        "type": "http_dispatch",
+        "role": "Verifier",
+        "request_id": 51,
+        "body_bytes": 5269,
+        "model": "deepseek-flash",
+        "max_tokens": 1024
+      },
+      {
+        "type": "http_receipt",
+        "role": "Verifier",
+        "request_id": 51,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 1372,
+          "completion_tokens": 53,
+          "total_tokens": 1425,
+          "prompt_tokens_details": {
+            "cached_tokens": 256
+          },
+          "prompt_cache_hit_tokens": 256,
+          "prompt_cache_miss_tokens": 1116
+        },
+        "returned_model": "deepseek-flash"
+      },
+      {
+        "type": "tool",
+        "role": "Verifier",
+        "name": "get_evidence",
+        "snapshot_id": "snap-fef7e363151a52fa4fe4"
+      },
+      {
+        "type": "http_dispatch",
+        "role": "Verifier",
+        "request_id": 52,
+        "body_bytes": 10333,
+        "model": "deepseek-flash",
+        "max_tokens": 1024
+      },
+      {
+        "type": "tool_receipt",
+        "role": "Verifier",
+        "snapshot_id": "snap-fef7e363151a52fa4fe4",
+        "tool_call_id": "call_00_2XvW6qxXsjnFthwxRhxy9245",
+        "sha256": "35426170e151760d581f7768a7889e776076f00925bfdf99010e01e50b701694"
+      },
+      {
+        "type": "http_receipt",
+        "role": "Verifier",
+        "request_id": 52,
+        "status": 200,
+        "usage": {
+          "prompt_tokens": 2823,
+          "completion_tokens": 174,
+          "total_tokens": 2997,
+          "prompt_tokens_details": {
+            "cached_tokens": 1408
+          },
+          "prompt_cache_hit_tokens": 1408,
+          "prompt_cache_miss_tokens": 1415
+        },
+        "returned_model": "deepseek-flash"
+      }
+    ],
+    "requests": 4
+  },
+  "audit": [
+    {
+      "type": "http_dispatch",
+      "role": "Analyst",
+      "request_id": 49,
+      "body_bytes": 5241,
+      "model": "deepseek-flash",
+      "max_tokens": 1024
+    },
+    {
+      "type": "http_receipt",
+      "role": "Analyst",
+      "request_id": 49,
+      "status": 200,
+      "usage": {
+        "prompt_tokens": 1353,
+        "completion_tokens": 61,
+        "total_tokens": 1414,
+        "prompt_tokens_details": {
+          "cached_tokens": 512
+        },
+        "prompt_cache_hit_tokens": 512,
+        "prompt_cache_miss_tokens": 841
+      },
+      "returned_model": "deepseek-flash"
+    },
+    {
+      "type": "tool",
+      "role": "Analyst",
+      "name": "get_evidence",
+      "snapshot_id": "snap-fef7e363151a52fa4fe4"
+    },
+    {
+      "type": "http_dispatch",
+      "role": "Analyst",
+      "request_id": 50,
+      "body_bytes": 10327,
+      "model": "deepseek-flash",
+      "max_tokens": 1024
+    },
+    {
+      "type": "tool_receipt",
+      "role": "Analyst",
+      "snapshot_id": "snap-fef7e363151a52fa4fe4",
+      "tool_call_id": "call_00_yOvJeHWz6Qo3LN8hvHYt9731",
+      "sha256": "35426170e151760d581f7768a7889e776076f00925bfdf99010e01e50b701694"
+    },
+    {
+      "type": "http_receipt",
+      "role": "Analyst",
+      "request_id": 50,
+      "status": 200,
+      "usage": {
+        "prompt_tokens": 2805,
+        "completion_tokens": 223,
+        "total_tokens": 3028,
+        "prompt_tokens_details": {
+          "cached_tokens": 1280
+        },
+        "prompt_cache_hit_tokens": 1280,
+        "prompt_cache_miss_tokens": 1525
+      },
+      "returned_model": "deepseek-flash"
+    },
+    {
+      "type": "handoff",
+      "from": "Analyst",
+      "to": "Verifier",
+      "snapshot_id": "snap-fef7e363151a52fa4fe4",
+      "claim_ids": [
+        "claim-possession-no-penetration"
+      ],
+      "draft_sha256": "9f86076c9a83425a95eb4a9eec4ee75907ad9a0daa7eb7a3d5b2ec069703a2be"
+    },
+    {
+      "type": "http_dispatch",
+      "role": "Verifier",
+      "request_id": 51,
+      "body_bytes": 5269,
+      "model": "deepseek-flash",
+      "max_tokens": 1024
+    },
+    {
+      "type": "http_receipt",
+      "role": "Verifier",
+      "request_id": 51,
+      "status": 200,
+      "usage": {
+        "prompt_tokens": 1372,
+        "completion_tokens": 53,
+        "total_tokens": 1425,
+        "prompt_tokens_details": {
+          "cached_tokens": 256
+        },
+        "prompt_cache_hit_tokens": 256,
+        "prompt_cache_miss_tokens": 1116
+      },
+      "returned_model": "deepseek-flash"
+    },
+    {
+      "type": "tool",
+      "role": "Verifier",
+      "name": "get_evidence",
+      "snapshot_id": "snap-fef7e363151a52fa4fe4"
+    },
+    {
+      "type": "http_dispatch",
+      "role": "Verifier",
+      "request_id": 52,
+      "body_bytes": 10333,
+      "model": "deepseek-flash",
+      "max_tokens": 1024
+    },
+    {
+      "type": "tool_receipt",
+      "role": "Verifier",
+      "snapshot_id": "snap-fef7e363151a52fa4fe4",
+      "tool_call_id": "call_00_2XvW6qxXsjnFthwxRhxy9245",
+      "sha256": "35426170e151760d581f7768a7889e776076f00925bfdf99010e01e50b701694"
+    },
+    {
+      "type": "http_receipt",
+      "role": "Verifier",
+      "request_id": 52,
+      "status": 200,
+      "usage": {
+        "prompt_tokens": 2823,
+        "completion_tokens": 174,
+        "total_tokens": 2997,
+        "prompt_tokens_details": {
+          "cached_tokens": 1408
+        },
+        "prompt_cache_hit_tokens": 1408,
+        "prompt_cache_miss_tokens": 1415
+      },
+      "returned_model": "deepseek-flash"
+    }
+  ],
+  "requests": 4,
+  "raw_outputs": [
+    {
+      "role": "Analyst",
+      "attempt": "initial",
+      "text": "         {\"snapshot_id\":\"snap-fef7e363151a52fa4fe4\",\"claim_id\":\"claim-possession-no-penetration\",\"assertion\":\"possession_without_penetration\",\"scope\":\"window\",\"refs\":[\"H.possession.previous\",\"H.possession.current\",\"H.shots.previous\",\"H.shots.current\",\"H.entries.previous\",\"H.entries.current\"],\"fan\":\"Harbor had much more of the ball after the break, but it did not turn into shots or passes into the attacking zone.\",\"analyst\":\"Harbor's possession rose from {{H.possession.previous}} to {{H.possession.current}}, yet shots fell from {{H.shots.previous}} to {{H.shots.current}} and entries fell from {{H.entries.previous}} to {{H.entries.current}}. The receipts cover only the two recorded windows of a synthetic sample with on-ball events only, so this shows no penetration increase here, not a broader pattern.\",\"conservative_fan\":null,\"conservative_analyst\":null}"
+    },
+    {
+      "role": "Verifier",
+      "attempt": "initial",
+      "text": "{\"snapshot_id\": \"snap-fef7e363151a52fa4fe4\", \"claim_id\": \"claim-possession-no-penetration\", \"verdict\": \"publish\", \"selected_variant\": \"primary\", \"reason\": \"Receipts match the draft: possession rose from {{H.possession.previous}} to {{H.possession.current}} while shots dropped {{H.shots.previous}} to {{H.shots.current}} and entries {{H.entries.previous}} to {{H.entries.current}}. Scope is limited to the recorded windows and prose keeps uncertainty.\", \"limitations\": [\"Two recorded windows only; no whole-match trend can be established.\", \"Synthetic sample with on-ball events only; no off-ball or intent data.\", \"No conservative variant was supplied, so only publish or withhold applied.\"]}"
+    }
+  ]
+}

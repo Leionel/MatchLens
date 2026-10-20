@@ -1,0 +1,26 @@
+{
+  "method": "Codex-operated actual Chrome through browser UI tools",
+  "human_user_study": "NOT RUN",
+  "model_fixture_or_mock_used": false,
+  "live_runs": ["run-459e5d749c3fb447", "run-2368fe80d99c572a"],
+  "observed": [
+    "Actual pending Focus status fixed at 06:00 / 09:00",
+    "Published A and B insight cards from real Analyst and Verifier",
+    "A Fan/Analyst switch retains the actual run and references",
+    "A previous shots receipt selects E0011 and E0027; source JSON and pitch coordinate highlight work",
+    "B transition receipt shows E0075 to E0077 and E0082 to E0084, each 8 seconds",
+    "Evidence heading receives focus; closing current UI returns focus to the opening metric button",
+    "390px viewport: layout width375px and document scroll width375px, no horizontal overflow; evidence can be opened",
+    "Exit Focus at 09:00, 30x replay advances continuously to full time, score1-0,148 events",
+    "Full-time recap links A at06:00 and B at09:00; prior cards do not become current commentary",
+    "Current C goal receipt exposes13 events, ending E0141 at105,34; current C model was not requested",
+    "Revisit B marks saved analysis; overlay retains as-of09:00 and score0-0 from that focused prefix"
+  ],
+  "not_established": [
+    "Public deployed ingress/model egress",
+    "Three consecutive clean release rehearsals",
+    "Browser-paint p95",
+    "Independent human football-quality assessment",
+    "Multi-agent quality uplift"
+  ]
+}

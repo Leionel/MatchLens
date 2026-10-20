@@ -1,0 +1,74 @@
+{
+  "scope": "localhost HTTP, not public ingress or browser paint",
+  "model_requests": 0,
+  "control_rtt_ms": {
+    "n": 30,
+    "median": 14.4,
+    "p95_nearest_rank": 19.3,
+    "all": [
+      13.63,
+      16.28,
+      11.74,
+      15.77,
+      12.31,
+      21.37,
+      12.54,
+      19.3,
+      14.9,
+      15.61,
+      12.52,
+      14.3,
+      12.48,
+      14.4,
+      14.83,
+      17.85,
+      11.85,
+      14.24,
+      9.88,
+      14.51,
+      9.76,
+      15.07,
+      14.81,
+      15.21,
+      11.25,
+      17.81,
+      11.6,
+      14.66,
+      10.79,
+      15.4
+    ]
+  },
+  "replay": [
+    {
+      "speed": 1,
+      "elapsed_seconds": 1.055,
+      "match_seconds": 1
+    },
+    {
+      "speed": 6,
+      "elapsed_seconds": 1.055,
+      "match_seconds": 6
+    },
+    {
+      "speed": 30,
+      "elapsed_seconds": 1.06,
+      "match_seconds": 31
+    }
+  ],
+  "sse_initial_and_reconnect": [
+    {
+      "epoch": 34,
+      "revision": 77,
+      "at": 720
+    },
+    {
+      "epoch": 34,
+      "revision": 77,
+      "at": 720
+    }
+  ],
+  "final_score": {
+    "H": 1,
+    "N": 0
+  }
+}

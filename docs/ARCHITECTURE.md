@@ -1,0 +1,89 @@
+# MatchLens AI: Architecture
+
+R0.1, 2026-10-19 PT. Stable stack: Microsoft Agent Framework + DeepSeek Flash, Python/FastAPI, Next.js/TypeScript. [SPEC](SPEC.md) owns contracts; [TECH_SPIKE](TECH_SPIKE.md) retains historical tests; [R0.1_REVIEW](R0.1_REVIEW.md) explains scope decisions.
+
+```mermaid
+flowchart LR
+    G[Seeded legal events] --> R[Reducer and ownership intervals]
+    R --> M[Metrics and candidate question]
+    M --> E[Frozen evidence]
+    E --> A[MAF Analyst and read-only tools]
+    A --> D[Schema and reference gate]
+    D --> V[MAF Verifier and fresh evidence]
+    E --> V
+    V --> P[Publication predicates and renderer]
+    P --> F[FastAPI session / SSE]
+    R --> F
+    F --> N[Static Next.js match desk]
+    N -->|Focus / replay / analyse| F
+    P --> C[Recap of approved cards]
+    C --> F
+    A --> B[Before-send ledger / HTTP client]
+    V --> B
+    B --> L[DeepSeek Flash]
+    L --> O[Sanitized run audit]
+```
+
+## One deployable unit
+
+One FastAPI process, one Uvicorn worker/replica owns sessions, clocks, evidence, task cancellation and inference semaphore. Next static export is served by FastAPI; Node is build-only. Development can use Next's `/api` proxy. API routes precede static fallback. No Foundry, Copilot CLI, proxy gateway, generic provider layer or third agent.
+
+| Actual file | Responsibility |
+| --- | --- |
+| `services/api/matchlens/football.py` | Frozen events, controlled generator, reducer, intervals, metrics, candidates/snapshots |
+| `contracts.py` | Claim/review schemas, core predicates, numeric slots and gate |
+| `agents.py` | Real MAF graph, agents/tools, JSON parsing and HTTP instrumentation |
+| `budget.py` | Persistent SQLite reservation ledger, separate from match state |
+| `main.py` | Lifespan, sessions, controls/Focus epochs, SSE, concurrency, local run receipts/static UI |
+| `apps/web/app/page.tsx` | Match desk, pitch, comparisons, modes, evidence/trace/overlay/recap |
+| `scripts/live_validation.py` | Actual HTTP integration path with retained results |
+
+This replaces a broad empty-folder plan. Add abstractions only for a demonstrated consumer.
+
+## Collaboration and publication
+
+Analyst chooses interpretation and audience wording; Verifier independently checks meaning, scope, counterevidence and uncertainty. Arithmetic, detection, freezing, gates and rendering are ordinary code. Each run/role has fresh context. `WorkflowBuilder` connects two executors; parsed/ref-checked Analyst output crosses an explicit hashed handoff. Verifier must retrieve original evidence independently.
+
+Tools: `get_evidence(snapshot_id)` returns Harbor receipts and selected original chains; `get_event_chain(event_ids)` expands at most 20 in-prefix events. Snapshot scope is server-bound; no mutation, future expansion, web/shell/file tools or public prompt input.
+
+Flash options: `json_object`, thinking explicitly disabled, `max_tokens=1024`, SDK retries zero. Strict native schema failed in the Spike; use local validation. Product runs led to a flat one-claim wire schema mapped into canonical variants. One bounded format correction per role uses the same session/evidence and cannot change claim/assertion/scope; all calls count toward the six-request cap. Version prompts and retain initial/corrected outputs. No code-based factual repair, agent debate or Pro retry.
+
+Gate: schema/refs/identity → complete review + both tool receipt roundtrips + handoff → true core + valid selected scope/variant → bound prose. `qualify` cannot launder a false core through a disclaimer. UI renders accepted selected text only; raw role output stays in local operator records.
+
+## State and time
+
+Immutable event tuple is generated/validated at startup. Reducer recomputes current prefix; browser does not advance score itself. Session owns clock, pause/speed, epoch/revision, Focus, snapshots and local completed-result cache. Evidence is a canonical string, copies returned to tools. Workflow binds run ID, snapshot and epoch. SQLite budget persists across restarts; session state does not.
+
+Focus seeks one of three cutoffs and pauses. Pending analysis names that fixed as-of time. Exit/restart/chapter change increments epoch, cancels work and checks epoch again before commit. Even a cancellation-resistant late result cannot enter a new view. Reuse retains original run/as-of; historical recap cards resolve their own snapshot and score.
+
+SSE: full state on revision changes, 10s comment heartbeat. Reconnect replaces old stream and resynchronizes; no cursor buffer. Eight active sessions, 30-minute idle expiry. Process restart requires reload; no false durable-resume claim. Arbitrary seek, shared model cache and workflow checkpoints are deferred.
+
+## Bounds and cost
+
+- One active workflow/session; two executing process-wide. Queue <=5s, workflow <=25s. No automatic inference during replay.
+- At most three requests/agent, **six/run**; normal tool-using pair uses four. No automatic SDK retry. Failed/cancelled dispatches are not refunded.
+- Fixed official HTTPS endpoint/model, <=48,000-byte JSON request body, <=1,024 output tokens, thinking disabled; enforced before send.
+- SQLite `BEGIN IMMEDIATE` reserves **$0.02/request** before dispatch. Default global caps: **32 requests and $1 reserved**, whichever binds first. Ledger distinguishes dispatch, HTTP receipt and known usage.
+- Peak Flash rates checked Oct 19: miss $0.30/M, hit $0.006/M, output $1.20/M. Conservative 48k input-token bound plus output is <$0.02. Revisit profile when pricing/model changes. Reservation is not an invoice or hosting-spend control.
+- Eight workflows/session; analysis 3/min/session, 6/min/IP, 12/min/global; session creation 10/min/IP, 30/min/global; eight-session capacity. Bound control/stream requests and limiter memory. Duplicate active/completed Focus requests reuse a run; failures can retry within limits.
+
+Six-request worst reservation $0.12/run, eight runs $0.96; actual costs measured separately. Judging needs an operator-funded daily/total allowance and hosting through Nov 10. Restore counters only as an explicit budget decision. One replica and persistent budget volume are required; do not trust arbitrary forwarded-IP headers.
+
+## Failure and observability
+
+| Failure | Behavior |
+| --- | --- |
+| Invalid fixture | Startup rejects; no inference |
+| Malformed/schema/ref/slot/unsupported core | No invalid card; rejection or explicit statistics-only fallback |
+| Verifier withholds | Public reason + facts; no proposed interpretation |
+| Missing key/auth/provider error/timeout | Deterministic fallback; no blind retry; config repair or later bounded healthy run |
+| Budget/concurrency exceeded | Block extra dispatch or bounded queue; evidence remains usable |
+| Focus changes | Cancel, epoch-isolate and retain sanitized operator record |
+| SSE failure | Reconnect full state; preserve visible content/connection status; polling/public-host probe next |
+| Restart | Sessions reload, budget survives if volume persists |
+
+HTTP hooks record dispatch IDs/body bounds, status, returned model/usage and actual tool-result receipt hashes. Local files retain snapshot, raw role outputs, validated draft/handoff, review, selected cards and errors. No secret/headers/internal reasoning. Public trace shows stage/tool/request summaries. OpenTelemetry export is P1.
+
+## Deployment gate
+
+Build static UI/container; configure server secret, persistent budget, one worker/replica and explicit quotas. Test **from deployed host**: actual DeepSeek call, ten-minute stream/reconnect, control latency, cookie/origin boundaries and fresh judge path. Local success cannot establish this. Public host/funding/URL remain release work; README provides local reproduction.

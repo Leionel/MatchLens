@@ -1,0 +1,158 @@
+{
+  "started_at": "2026-10-20T02:53:13.249360+00:00",
+  "origin": "live_provider",
+  "request_cap": 30,
+  "prior_upstream_requests": 18,
+  "versions": {
+    "agent-framework-core": "1.22.0",
+    "agent-framework-openai": "1.17.0",
+    "github-copilot-sdk": "1.0.23",
+    "openai": "3.35.1"
+  },
+  "snapshot": {
+    "snapshot_id": "spike-possession-v1",
+    "synthetic": true,
+    "as_of_seq": 42,
+    "window_seconds": 180,
+    "receipts": [
+      {
+        "id": "r-possession",
+        "previous": 45,
+        "current": 65,
+        "unit": "percent"
+      },
+      {
+        "id": "r-shots",
+        "previous": 2,
+        "current": 1,
+        "unit": "count"
+      },
+      {
+        "id": "r-entries",
+        "previous": 3,
+        "current": 2,
+        "unit": "count"
+      }
+    ],
+    "event_ids": [
+      "e38",
+      "e40",
+      "e42"
+    ]
+  },
+  "snapshot_sha256": "cb454a9cf303f77a40f43ee4fba4f7ce80758b211754a338c4b182f9766d8133",
+  "cases": [
+    {
+      "case": "copilot-corrected",
+      "model": "deepseek-flash",
+      "started_at": "2026-10-20T02:53:14.782044+00:00",
+      "tool_and_handoff_events": [
+        {
+          "agent": "Analyst",
+          "tool": "get_evidence",
+          "snapshot_id": "spike-possession-v1"
+        },
+        {
+          "handoff": "Analyst->Verifier",
+          "snapshot_id": "spike-possession-v1",
+          "claim_id": "C1"
+        },
+        {
+          "agent": "Verifier",
+          "tool": "get_evidence",
+          "snapshot_id": "spike-possession-v1"
+        }
+      ],
+      "output": {
+        "snapshot_id": "spike-possession-v1",
+        "claim_id": "C1",
+        "verdict": "publish",
+        "reason": "All three receipts match the statement exactly within this snapshot window (as_of_seq 42, 180s): possession went from 45 to 65 percent, shots from 2 to 1, and final-third entries from 3 to 2. The claim only reports the observed coincidence of rising possession with falling shot and entry counts, and adds no causal or intent-based assertion.",
+        "evidence_refs": [
+          "r-possession",
+          "r-shots",
+          "r-entries"
+        ]
+      },
+      "verified_tool_receipt_roundtrips": 2,
+      "status": "passed",
+      "duration_ms": 11181.64,
+      "upstream_requests": 4
+    },
+    {
+      "case": "maf-repeat-a",
+      "model": "deepseek-flash",
+      "started_at": "2026-10-20T02:53:25.967078+00:00",
+      "tool_and_handoff_events": [
+        {
+          "agent": "Analyst",
+          "tool": "get_evidence",
+          "snapshot_id": "spike-possession-v1"
+        },
+        {
+          "handoff": "Analyst->Verifier",
+          "snapshot_id": "spike-possession-v1",
+          "claim_id": "C1"
+        },
+        {
+          "agent": "Verifier",
+          "tool": "get_evidence",
+          "snapshot_id": "spike-possession-v1"
+        }
+      ],
+      "output": {
+        "snapshot_id": "spike-possession-v1",
+        "claim_id": "C1",
+        "verdict": "publish",
+        "reason": "All three receipts match the claim exactly: possession rose 45% to 65% (r-possession), shots fell 2 to 1 (r-shots), and final-third entries fell 3 to 2 (r-entries) in the 180-second window. The statement is a factual description of these metrics and their direction, with no inferred coaching intent or causality.",
+        "evidence_refs": [
+          "r-possession",
+          "r-shots",
+          "r-entries"
+        ]
+      },
+      "verified_tool_receipt_roundtrips": 2,
+      "status": "passed",
+      "duration_ms": 7361.61,
+      "upstream_requests": 4
+    },
+    {
+      "case": "maf-repeat-b",
+      "model": "deepseek-flash",
+      "started_at": "2026-10-20T02:53:33.330727+00:00",
+      "tool_and_handoff_events": [
+        {
+          "agent": "Analyst",
+          "tool": "get_evidence",
+          "snapshot_id": "spike-possession-v1"
+        },
+        {
+          "handoff": "Analyst->Verifier",
+          "snapshot_id": "spike-possession-v1",
+          "claim_id": "C1"
+        },
+        {
+          "agent": "Verifier",
+          "tool": "get_evidence",
+          "snapshot_id": "spike-possession-v1"
+        }
+      ],
+      "output": {
+        "snapshot_id": "spike-possession-v1",
+        "claim_id": "C1",
+        "verdict": "publish",
+        "reason": "All three receipts match the claim exactly: possession rose from 45% to 65%, shots dropped from 2 to 1, and final-third entries dropped from 3 to 2 within the 180-second window. The claim is limited to describing co-occurrence in the snapshot and attributes no coaching intent or causality.",
+        "evidence_refs": [
+          "r-possession",
+          "r-shots",
+          "r-entries"
+        ]
+      },
+      "verified_tool_receipt_roundtrips": 2,
+      "status": "passed",
+      "duration_ms": 5992.47,
+      "upstream_requests": 4
+    }
+  ],
+  "upstream_requests": 12
+}

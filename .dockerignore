@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+**/.venv
+**/node_modules
+**/.next
+**/out
+.runtime
+**/__pycache__
+**/.pytest_cache
+spikes
+evidence

@@ -1,0 +1,135 @@
+{
+  "started_at": "2026-10-20T02:50:43.938501+00:00",
+  "origin": "live_provider",
+  "request_cap": 30,
+  "prior_upstream_requests": 7,
+  "versions": {
+    "agent-framework-core": "1.22.0",
+    "agent-framework-openai": "1.17.0",
+    "github-copilot-sdk": "1.0.23",
+    "openai": "3.35.1"
+  },
+  "snapshot": {
+    "snapshot_id": "spike-possession-v1",
+    "synthetic": true,
+    "as_of_seq": 42,
+    "window_seconds": 180,
+    "receipts": [
+      {
+        "id": "r-possession",
+        "previous": 45,
+        "current": 65,
+        "unit": "percent"
+      },
+      {
+        "id": "r-shots",
+        "previous": 2,
+        "current": 1,
+        "unit": "count"
+      },
+      {
+        "id": "r-entries",
+        "previous": 3,
+        "current": 2,
+        "unit": "count"
+      }
+    ],
+    "event_ids": [
+      "e38",
+      "e40",
+      "e42"
+    ]
+  },
+  "snapshot_sha256": "cb454a9cf303f77a40f43ee4fba4f7ce80758b211754a338c4b182f9766d8133",
+  "cases": [
+    {
+      "case": "copilot-flash",
+      "model": "deepseek-flash",
+      "started_at": "2026-10-20T02:50:45.280667+00:00",
+      "tool_and_handoff_events": [
+        {
+          "agent": "Analyst",
+          "tool": "get_evidence",
+          "snapshot_id": "spike-possession-v1"
+        },
+        {
+          "agent": "Analyst",
+          "tool": "get_evidence",
+          "snapshot_id": "spike-possession-v1"
+        },
+        {
+          "handoff": "Analyst->Verifier",
+          "snapshot_id": "spike-possession-v1",
+          "claim_id": "C1"
+        },
+        {
+          "agent": "Verifier",
+          "tool": "get_evidence",
+          "snapshot_id": "spike-possession-v1"
+        }
+      ],
+      "status": "passed",
+      "output": {
+        "snapshot_id": "spike-possession-v1",
+        "claim_id": "C1",
+        "verdict": "withhold",
+        "reason": "The get_evidence call failed, so no metric receipts were available to verify the claim or resolve the comparison among possession, shots, and entries.",
+        "evidence_refs": [
+          "r-possession",
+          "r-shots",
+          "r-entries"
+        ]
+      },
+      "duration_ms": 21742.99,
+      "upstream_requests": 6
+    },
+    {
+      "case": "copilot-typed",
+      "model": "deepseek-flash",
+      "started_at": "2026-10-20T02:51:07.025353+00:00",
+      "tool_and_handoff_events": [],
+      "status": "failed",
+      "error_type": "RuntimeError",
+      "error": "Session error: 400 This response_format type is unavailable now (request_id: 8c6a1c88-406f-4091-a2b1-e157991d0d9c)",
+      "duration_ms": 886.53,
+      "upstream_requests": 1
+    },
+    {
+      "case": "maf-pro",
+      "model": "deepseek-v4-pro",
+      "started_at": "2026-10-20T02:51:07.913430+00:00",
+      "tool_and_handoff_events": [
+        {
+          "agent": "Analyst",
+          "tool": "get_evidence",
+          "snapshot_id": "spike-possession-v1"
+        },
+        {
+          "handoff": "Analyst->Verifier",
+          "snapshot_id": "spike-possession-v1",
+          "claim_id": "C1"
+        },
+        {
+          "agent": "Verifier",
+          "tool": "get_evidence",
+          "snapshot_id": "spike-possession-v1"
+        }
+      ],
+      "status": "passed",
+      "output": {
+        "snapshot_id": "spike-possession-v1",
+        "claim_id": "C1",
+        "verdict": "qualify",
+        "reason": "The quantitative claims are accurate: possession rose from 45% to 65% (+20 points), shots fell from 2 to 1, and final-third entries fell from 3 to 2, all confirmed by the receipts. However, the statement includes interpretive language ('largely sterile', 'did not translate into greater attacking danger') that asserts a causal/conceptual conclusion beyond what the metrics alone establish. The numbers are correct but such qualitative framing cannot be verified from the receipts alone.",
+        "evidence_refs": [
+          "r-possession",
+          "r-shots",
+          "r-entries"
+        ]
+      },
+      "duration_ms": 10738.1,
+      "upstream_requests": 4
+    }
+  ],
+  "upstream_requests": 11
+}

@@ -1,0 +1,260 @@
+{
+  "exported_at_utc": "2026-10-20T04:20:36.280918+00:00",
+  "source_revision": "uncommitted-working-tree",
+  "python_version": "3.13.9",
+  "current_prompt_version": "football-roles-r01-7-flat-wire",
+  "provider": "DeepSeek official HTTPS Chat Completions",
+  "model_requested": "deepseek-flash",
+  "options": {
+    "response_format": "json_object",
+    "thinking": "disabled",
+    "max_tokens": 1024,
+    "sdk_retries": 0
+  },
+  "versions": {
+    "agent-framework-core": "1.22.0",
+    "agent-framework-openai": "1.17.0",
+    "openai": "3.35.1",
+    "fastapi": "0.150.0",
+    "uvicorn": "0.54.0",
+    "pydantic": "2.14.1"
+  },
+  "source_sha256": {
+    "services/api/matchlens/agents.py": "3e83eaac640676bd25c2d41507a3396371f9f6098a98ff1b38c72fd7ecacd19b",
+    "services/api/matchlens/budget.py": "2a7bfe3b1c2b2611ad586e6d85a8a3bc4a411dc869988d9a6e3bca0d8d489b92",
+    "services/api/matchlens/contracts.py": "eca0e7c67c1332e191b7e360888f4627501ae633036102dc64a5c86c53a817e2",
+    "services/api/matchlens/football.py": "38aa1d869dfa32c436ae6e38b9cea356353db23345286e00adf2875c3fa17186",
+    "services/api/matchlens/main.py": "71dcbb75951289f0b30408aec058e3a5dda5a1ab18adfbd9bf93806b51305984",
+    "services/api/matchlens/__init__.py": "366096c0e387f756a1a2b9ea5d7b66891e4ce2e712032851b8b7e2ad65e58100",
+    "apps/web/app/globals.css": "30353d09375d001c7b7697feaf1ae3f038e13ff8233c2de418459431526d14b5",
+    "apps/web/app/layout.tsx": "7b29d5268670067d3b402cb82029c95c9eb9b0a5c8fdb5a0ba6eb0ede4d2f97e",
+    "apps/web/app/page.tsx": "ce552f02b35b908fd1d7baf92d54921ec6f0a426beea08d5eabf270798389c9d",
+    "apps/web/app/tokens.css": "0ee2d2f7a00dcef39375b83a6db7c54305c7b4b797e742c8ac3926de2b4a3b3a",
+    "services/api/uv.lock": "1a389396d60a5f24f289873f14aabae438500e2bbdfd0c4a219c9b4e876360a6",
+    "apps/web/package-lock.json": "1ba1b8c9360c9d98868a98a292be45bc107d364b9f1723698bcedd9f0b655335"
+  },
+  "current_snapshots": [
+    {
+      "chapter": "A",
+      "as_of": 360,
+      "id": "snap-a49c6e92a3532222538d"
+    },
+    {
+      "chapter": "B",
+      "as_of": 540,
+      "id": "snap-1a20bceb5e34da166fe3"
+    },
+    {
+      "chapter": "C",
+      "as_of": 720,
+      "id": "snap-b73efce83f1ae5d3d5b0"
+    }
+  ],
+  "budget": {
+    "requests_reserved": 61,
+    "reserved_usd": 1.22,
+    "max_requests": 64,
+    "max_reserved_usd": 1.5,
+    "usage": {
+      "prompt_tokens": 142126,
+      "completion_tokens": 8358,
+      "prompt_cache_hit_tokens": 73344,
+      "prompt_cache_miss_tokens": 68782
+    },
+    "known_usage_estimate_usd": 0.03110426
+  },
+  "runs": [
+    {
+      "run_id": "run-068b2ecbe71ae70c",
+      "as_of": 540,
+      "snapshot_id": "snap-6f96df64e83dd96f9315",
+      "generator_version": "not-recorded",
+      "prompt_version": "not-recorded",
+      "status": "fallback",
+      "accepted": 0,
+      "duration_ms": 4892,
+      "requests": 2
+    },
+    {
+      "run_id": "run-15c5e37292c97ed7",
+      "as_of": 720,
+      "snapshot_id": "snap-ebf9264b99776d84fc46",
+      "generator_version": "controlled-r01-2",
+      "prompt_version": "football-roles-r01-5-flat-wire",
+      "status": "completed",
+      "accepted": 1,
+      "duration_ms": 10273,
+      "requests": 4
+    },
+    {
+      "run_id": "run-2368fe80d99c572a",
+      "as_of": 540,
+      "snapshot_id": "snap-1a20bceb5e34da166fe3",
+      "generator_version": "controlled-r01-3",
+      "prompt_version": "football-roles-r01-7-flat-wire",
+      "status": "completed",
+      "accepted": 1,
+      "duration_ms": 10935,
+      "requests": 4
+    },
+    {
+      "run_id": "run-2af365d0fe3d1832",
+      "as_of": 360,
+      "snapshot_id": "snap-3246ef3dde7bd2c7fcac",
+      "generator_version": "not-recorded",
+      "prompt_version": "football-roles-r01-1",
+      "status": "completed",
+      "accepted": 0,
+      "duration_ms": 10385,
+      "requests": 4
+    },
+    {
+      "run_id": "run-3d18154d22907fe1",
+      "as_of": 360,
+      "snapshot_id": "snap-3246ef3dde7bd2c7fcac",
+      "generator_version": "not-recorded",
+      "prompt_version": "not-recorded",
+      "status": "fallback",
+      "accepted": 0,
+      "duration_ms": 5410,
+      "requests": 2
+    },
+    {
+      "run_id": "run-459e5d749c3fb447",
+      "as_of": 360,
+      "snapshot_id": "snap-a49c6e92a3532222538d",
+      "generator_version": "controlled-r01-3",
+      "prompt_version": "football-roles-r01-7-flat-wire",
+      "status": "completed",
+      "accepted": 1,
+      "duration_ms": 11494,
+      "requests": 5
+    },
+    {
+      "run_id": "run-6644713291b92bf9",
+      "as_of": 540,
+      "snapshot_id": "snap-484095e0f3dd638a474e",
+      "generator_version": "controlled-r01-2",
+      "prompt_version": "football-roles-r01-5-flat-wire",
+      "status": "completed",
+      "accepted": 1,
+      "duration_ms": 9527,
+      "requests": 4
+    },
+    {
+      "run_id": "run-6a11dba6df6014fd",
+      "as_of": 360,
+      "snapshot_id": "snap-fef7e363151a52fa4fe4",
+      "generator_version": "controlled-r01-2",
+      "prompt_version": "football-roles-r01-6-flat-wire",
+      "status": "completed",
+      "accepted": 1,
+      "duration_ms": 9730,
+      "requests": 4
+    },
+    {
+      "run_id": "run-73eff08fa1d16bc4",
+      "as_of": 540,
+      "snapshot_id": "snap-484095e0f3dd638a474e",
+      "generator_version": "controlled-r01-2",
+      "prompt_version": "football-roles-r01-5-flat-wire",
+      "status": "completed",
+      "accepted": 0,
+      "duration_ms": 10223,
+      "requests": 4
+    },
+    {
+      "run_id": "run-75b1f84d11e3d088",
+      "as_of": 360,
+      "snapshot_id": "snap-3246ef3dde7bd2c7fcac",
+      "generator_version": "not-recorded",
+      "prompt_version": "not-recorded",
+      "status": "fallback",
+      "accepted": 0,
+      "duration_ms": 5111,
+      "requests": 2
+    },
+    {
+      "run_id": "run-892c44c8c2774fe7",
+      "as_of": 540,
+      "snapshot_id": "snap-6f96df64e83dd96f9315",
+      "generator_version": "not-recorded",
+      "prompt_version": "not-recorded",
+      "status": "fallback",
+      "accepted": 0,
+      "duration_ms": 4744,
+      "requests": 2
+    },
+    {
+      "run_id": "run-9b8552816a8fd99a",
+      "as_of": 540,
+      "snapshot_id": "snap-6f96df64e83dd96f9315",
+      "generator_version": "not-recorded",
+      "prompt_version": "not-recorded",
+      "status": "fallback",
+      "accepted": 0,
+      "duration_ms": 13998,
+      "requests": 6
+    },
+    {
+      "run_id": "run-b05f46e3f3aad2d9",
+      "as_of": 540,
+      "snapshot_id": "snap-484095e0f3dd638a474e",
+      "generator_version": "controlled-r01-2",
+      "prompt_version": "not-recorded",
+      "status": "fallback",
+      "accepted": 0,
+      "duration_ms": 13174,
+      "requests": 6
+    },
+    {
+      "run_id": "run-c4e028eaf83c3326",
+      "as_of": 720,
+      "snapshot_id": "snap-d2b855ff8707b0500504",
+      "generator_version": "not-recorded",
+      "prompt_version": "not-recorded",
+      "status": "fallback",
+      "accepted": 0,
+      "duration_ms": 4492,
+      "requests": 2
+    },
+    {
+      "run_id": "run-e30af981e5feced6",
+      "as_of": 360,
+      "snapshot_id": "snap-fef7e363151a52fa4fe4",
+      "generator_version": "controlled-r01-2",
+      "prompt_version": "football-roles-r01-5-flat-wire",
+      "status": "completed",
+      "accepted": 1,
+      "duration_ms": 10296,
+      "requests": 4
+    },
+    {
+      "run_id": "run-f8c1ce4507f17383",
+      "as_of": 360,
+      "snapshot_id": "snap-3246ef3dde7bd2c7fcac",
+      "generator_version": "not-recorded",
+      "prompt_version": "not-recorded",
+      "status": "fallback",
+      "accepted": 0,
+      "duration_ms": 5097,
+      "requests": 2
+    },
+    {
+      "run_id": "run-facf9f24434e427a",
+      "as_of": 720,
+      "snapshot_id": "snap-d2b855ff8707b0500504",
+      "generator_version": "not-recorded",
+      "prompt_version": "not-recorded",
+      "status": "fallback",
+      "accepted": 0,
+      "duration_ms": 4632,
+      "requests": 2
+    }
+  ],
+  "statuses": {
+    "fallback": 9,
+    "completed": 8
+  },
+  "note": "All development attempts retained. HTTP success is not publication/semantic success. Verifier-only challenge is separate. No held-out comparative experiment."
+}

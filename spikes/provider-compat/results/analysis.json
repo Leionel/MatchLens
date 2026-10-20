@@ -1,0 +1,233 @@
+{
+  "upstream_attempts": 30,
+  "http_200": 27,
+  "http_400": 3,
+  "requests_with_usage": 27,
+  "requests_without_usage": 3,
+  "usage_totals": {
+    "prompt_tokens": 18521,
+    "completion_tokens": 3310,
+    "cache_hit_tokens": 11008,
+    "cache_miss_tokens": 7513
+  },
+  "known_usage_cost_usd_at_peak_prices": 0.00901916,
+  "cost_note": "Derived from reported usage and the 2026-10-19 USD price page; not an invoice. Unknown-usage attempts excluded, not assumed free.",
+  "cases": [
+    {
+      "source": "01-foundation\\summary.json",
+      "case": "direct-json",
+      "model": "deepseek-flash",
+      "assessment": "passed",
+      "duration_ms": 2678.14,
+      "upstream_requests": 1,
+      "verified_tool_receipt_roundtrips": 0,
+      "error": null,
+      "output": {
+        "ok": true
+      }
+    },
+    {
+      "source": "01-foundation\\summary.json",
+      "case": "direct-strict",
+      "model": "deepseek-flash",
+      "assessment": "failed",
+      "duration_ms": 1111.37,
+      "upstream_requests": 1,
+      "verified_tool_receipt_roundtrips": 0,
+      "error": "Error code: 400 - {'error': {'message': 'This response_format type is unavailable now (request_id: 6ec1369b-ddba-44c0-a049-f879f5df7d28)', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_request_error'}}",
+      "output": null
+    },
+    {
+      "source": "01-foundation\\summary.json",
+      "case": "maf-flash",
+      "model": "deepseek-flash",
+      "assessment": "passed",
+      "duration_ms": 6244.45,
+      "upstream_requests": 4,
+      "verified_tool_receipt_roundtrips": 2,
+      "error": null,
+      "output": {
+        "snapshot_id": "spike-possession-v1",
+        "claim_id": "C1",
+        "verdict": "publish",
+        "reason": "All three receipts match the statement exactly within this snapshot: possession 45% to 65% (r-possession), shots 2 to 1 (r-shots), final-third entries 3 to 2 (r-entries). The claim is a descriptive comparison of these observed deltas and asserts no coaching intent or causal explanation, so it is supported as stated.",
+        "evidence_refs": [
+          "r-possession",
+          "r-shots",
+          "r-entries"
+        ]
+      }
+    },
+    {
+      "source": "01-foundation\\summary.json",
+      "case": "maf-typed",
+      "model": "deepseek-flash",
+      "assessment": "failed",
+      "duration_ms": 1063.94,
+      "upstream_requests": 1,
+      "verified_tool_receipt_roundtrips": 0,
+      "error": "(\"<class 'agent_framework_openai._chat_completion_client.OpenAIChatCompletionClient'> service failed to complete the prompt: Error code: 400 - {'error': {'message': 'This response_format type is unavailable now (request_id: f7dc20f0-4191-4d05-b499-86ded9accef0)', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_request_error'}}\", BadRequestError(\"Error code: 400 - {'error': {'message': 'This response_format type is unavailable now (request_id: f7dc20f0-4191-4d05-b499-86ded9accef0)', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_request_error'}}\"))",
+      "output": null
+    },
+    {
+      "source": "02-route-comparison\\summary.json",
+      "case": "copilot-flash",
+      "model": "deepseek-flash",
+      "assessment": "harness_failure_tool_result_not_delivered",
+      "duration_ms": 21742.99,
+      "upstream_requests": 6,
+      "verified_tool_receipt_roundtrips": 0,
+      "error": null,
+      "output": {
+        "snapshot_id": "spike-possession-v1",
+        "claim_id": "C1",
+        "verdict": "withhold",
+        "reason": "The get_evidence call failed, so no metric receipts were available to verify the claim or resolve the comparison among possession, shots, and entries.",
+        "evidence_refs": [
+          "r-possession",
+          "r-shots",
+          "r-entries"
+        ]
+      }
+    },
+    {
+      "source": "02-route-comparison\\summary.json",
+      "case": "copilot-typed",
+      "model": "deepseek-flash",
+      "assessment": "failed",
+      "duration_ms": 886.53,
+      "upstream_requests": 1,
+      "verified_tool_receipt_roundtrips": 0,
+      "error": "Session error: 400 This response_format type is unavailable now (request_id: 8c6a1c88-406f-4091-a2b1-e157991d0d9c)",
+      "output": null
+    },
+    {
+      "source": "02-route-comparison\\summary.json",
+      "case": "maf-pro",
+      "model": "deepseek-v4-pro",
+      "assessment": "passed",
+      "duration_ms": 10738.1,
+      "upstream_requests": 4,
+      "verified_tool_receipt_roundtrips": 2,
+      "error": null,
+      "output": {
+        "snapshot_id": "spike-possession-v1",
+        "claim_id": "C1",
+        "verdict": "qualify",
+        "reason": "The quantitative claims are accurate: possession rose from 45% to 65% (+20 points), shots fell from 2 to 1, and final-third entries fell from 3 to 2, all confirmed by the receipts. However, the statement includes interpretive language ('largely sterile', 'did not translate into greater attacking danger') that asserts a causal/conceptual conclusion beyond what the metrics alone establish. The numbers are correct but such qualitative framing cannot be verified from the receipts alone.",
+        "evidence_refs": [
+          "r-possession",
+          "r-shots",
+          "r-entries"
+        ]
+      }
+    },
+    {
+      "source": "03-confirmation\\summary.json",
+      "case": "copilot-corrected",
+      "model": "deepseek-flash",
+      "assessment": "passed",
+      "duration_ms": 11181.64,
+      "upstream_requests": 4,
+      "verified_tool_receipt_roundtrips": 2,
+      "error": null,
+      "output": {
+        "snapshot_id": "spike-possession-v1",
+        "claim_id": "C1",
+        "verdict": "publish",
+        "reason": "All three receipts match the statement exactly within this snapshot window (as_of_seq 42, 180s): possession went from 45 to 65 percent, shots from 2 to 1, and final-third entries from 3 to 2. The claim only reports the observed coincidence of rising possession with falling shot and entry counts, and adds no causal or intent-based assertion.",
+        "evidence_refs": [
+          "r-possession",
+          "r-shots",
+          "r-entries"
+        ]
+      }
+    },
+    {
+      "source": "03-confirmation\\summary.json",
+      "case": "maf-repeat-a",
+      "model": "deepseek-flash",
+      "assessment": "passed",
+      "duration_ms": 7361.61,
+      "upstream_requests": 4,
+      "verified_tool_receipt_roundtrips": 2,
+      "error": null,
+      "output": {
+        "snapshot_id": "spike-possession-v1",
+        "claim_id": "C1",
+        "verdict": "publish",
+        "reason": "All three receipts match the claim exactly: possession rose 45% to 65% (r-possession), shots fell 2 to 1 (r-shots), and final-third entries fell 3 to 2 (r-entries) in the 180-second window. The statement is a factual description of these metrics and their direction, with no inferred coaching intent or causality.",
+        "evidence_refs": [
+          "r-possession",
+          "r-shots",
+          "r-entries"
+        ]
+      }
+    },
+    {
+      "source": "03-confirmation\\summary.json",
+      "case": "maf-repeat-b",
+      "model": "deepseek-flash",
+      "assessment": "passed",
+      "duration_ms": 5992.47,
+      "upstream_requests": 4,
+      "verified_tool_receipt_roundtrips": 2,
+      "error": null,
+      "output": {
+        "snapshot_id": "spike-possession-v1",
+        "claim_id": "C1",
+        "verdict": "publish",
+        "reason": "All three receipts match the claim exactly: possession rose from 45% to 65%, shots dropped from 2 to 1, and final-third entries dropped from 3 to 2 within the 180-second window. The claim is limited to describing co-occurrence in the snapshot and attributes no coaching intent or causality.",
+        "evidence_refs": [
+          "r-possession",
+          "r-shots",
+          "r-entries"
+        ]
+      }
+    },
+    {
+      "source": "summary.json",
+      "case": "direct-json",
+      "model": "deepseek-flash",
+      "assessment": "failed",
+      "duration_ms": 5674.49,
+      "upstream_requests": 0,
+      "verified_tool_receipt_roundtrips": 0,
+      "error": "Error code: 502",
+      "output": null
+    },
+    {
+      "source": "summary.json",
+      "case": "direct-strict",
+      "model": "deepseek-flash",
+      "assessment": "failed",
+      "duration_ms": 3973.59,
+      "upstream_requests": 0,
+      "verified_tool_receipt_roundtrips": 0,
+      "error": "Error code: 502",
+      "output": null
+    },
+    {
+      "source": "summary.json",
+      "case": "maf-flash",
+      "model": "deepseek-flash",
+      "assessment": "failed",
+      "duration_ms": 172.58,
+      "upstream_requests": 0,
+      "verified_tool_receipt_roundtrips": 0,
+      "error": "Handler parameter 'ctx' must be annotated as WorkflowContext, WorkflowContext[T], or WorkflowContext[T, U], got WorkflowContext[str]",
+      "output": null
+    },
+    {
+      "source": "summary.json",
+      "case": "maf-typed",
+      "model": "deepseek-flash",
+      "assessment": "failed",
+      "duration_ms": 3095.94,
+      "upstream_requests": 0,
+      "verified_tool_receipt_roundtrips": 0,
+      "error": "(\"<class 'agent_framework_openai._chat_completion_client.OpenAIChatCompletionClient'> service failed to complete the prompt: Error code: 502\", InternalServerError('Error code: 502'))",
+      "output": null
+    }
+  ]
+}

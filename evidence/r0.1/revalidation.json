@@ -1,0 +1,15 @@
+{
+  "kind": "offline_revalidation_of_genuine_live_receipts_not_new_inference",
+  "checks": [
+    {
+      "run_id": "run-459e5d749c3fb447",
+      "snapshot_id": "snap-a49c6e92a3532222538d",
+      "accepted_unchanged": true
+    },
+    {
+      "run_id": "run-2368fe80d99c572a",
+      "snapshot_id": "snap-1a20bceb5e34da166fe3",
+      "accepted_unchanged": true
+    }
+  ]
+}
