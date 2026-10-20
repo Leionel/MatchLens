@@ -64,9 +64,10 @@ const labels: Record<string, string> = {
 
 const titleFor = (id: string) => {
   const parts = id.split(".");
+  const teamPrefix = parts[0] === "N" ? "Northbridge · " : "Harbor · ";
   const name = labels[parts[1]] || parts[1];
   const windowName = parts[2] ? ` (${parts[2].toUpperCase()})` : "";
-  return `${name}${windowName}`;
+  return `${teamPrefix}${name}${windowName}`;
 };
 
 export function EvidenceDrawer({
@@ -157,7 +158,6 @@ export function EvidenceDrawer({
                 className="receipt-dropdown"
               >
                 {Object.values(evidence.receipts)
-                  .filter((r) => r.id.startsWith("H."))
                   .map((r) => (
                     <option key={r.id} value={r.id}>
                       {titleFor(r.id)}

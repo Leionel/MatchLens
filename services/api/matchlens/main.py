@@ -23,7 +23,21 @@ from typing import Literal
 from .agents import AgentRunner, Run, PROMPT_VERSION
 from .budget import BudgetLedger
 from .contracts import ClaimDraft, VerifierDecision, publication_gate
-from .football import CHAPTERS, PLAYERS, Snapshot, detect_moments, freeze, generate_match, metric_receipts, reduce_match
+from .football import (
+    CHAPTERS,
+    PLAYERS,
+    SCENARIOS,
+    Snapshot,
+    both_team_receipts,
+    build_player_spotlight,
+    build_sequences,
+    build_tactical_explorer,
+    detect_moments,
+    freeze,
+    generate_match,
+    metric_receipts,
+    reduce_match,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 load_dotenv(ROOT / ".env")
@@ -71,6 +85,9 @@ class Session:
     attempts: dict[str, int] = field(default_factory=dict)
     last_auto_at: int = -30
     auto_started: int = 0
+    scenario: str = "default"
+    seed: int = 17
+    focus_team: Literal["H", "N"] = "H"
 
     def tick(self):
         if not self.paused:
@@ -91,15 +108,18 @@ class Session:
 
 class Control(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["focus", "focus_moment", "exit_focus", "play", "pause", "speed", "restart"]
+    action: Literal["focus", "focus_moment", "exit_focus", "play", "pause", "speed", "restart", "set_scenario", "set_team"]
     chapter: Literal["A", "B", "C"] | None = None
     moment_id: str | None = None
     speed: Literal[1, 6, 30] | None = None
+    scenario: str | None = None
+    team: Literal["H", "N"] | None = None
 
 
 class Engine:
     def __init__(self, runtime: Path, key: str | None):
         self.events = generate_match()
+        self.scenario_events = {("default", 17): self.events}
         self.sessions: dict[str, Session] = {}
         self.rates = RateLimits()
         self.ledger = BudgetLedger(runtime / "budget.sqlite3", int(os.getenv("MATCHLENS_MAX_REQUESTS", "32")), float(os.getenv("MATCHLENS_MAX_RESERVED_USD", "1.0")))
@@ -134,6 +154,12 @@ class Engine:
             except Exception:
                 pass
 
+    def events_for(self, s: Session):
+        key = (s.scenario, s.seed)
+        if key not in self.scenario_events:
+            self.scenario_events[key] = generate_match(seed=s.seed, scenario=s.scenario)
+        return self.scenario_events[key]
+
     def cleanup(self):
         for sid, s in list(self.sessions.items()):
             if time.monotonic()-s.touched > 1800:
@@ -142,15 +168,16 @@ class Engine:
 
     def view(self, s: Session) -> dict:
         s.tick()
-        state = reduce_match(self.events, s.at)
+        active_events = self.events_for(s)
+        state = reduce_match(active_events, s.at)
         # Scan newly crossed event boundaries so 30x playback cannot skip a
         # transient detector condition. Each type is latched once per session.
-        times = sorted({e.t for e in self.events if s.observed_at < e.t <= s.at} | ({s.at} if s.at > s.observed_at else set()))
+        times = sorted({e.t for e in active_events if s.observed_at < e.t <= s.at} | ({s.at} if s.at > s.observed_at else set()))
         for at in times:
-            for moment in detect_moments(reduce_match(self.events, at)):
+            for moment in detect_moments(reduce_match(active_events, at)):
                 if moment["id"] not in s.moments:
                     s.moments[moment["id"]] = moment
-                    snap = freeze(self.events, moment["at"])
+                    snap = freeze(active_events, moment["at"], seed=s.seed)
                     s.snapshots[snap.id] = snap
         s.observed_at = max(s.observed_at, s.at)
         moments = sorted((m for m in s.moments.values() if m["at"] <= s.at), key=lambda m: m["at"])
@@ -168,47 +195,53 @@ class Engine:
         if s.focus:
             snapshot = next((snap for snap in s.snapshots.values() if snap.data["as_of"] == s.at), None)
             if not snapshot:
-                snapshot = freeze(self.events, s.at)
+                snapshot = freeze(active_events, s.at, seed=s.seed)
                 s.snapshots[snapshot.id] = snapshot
         elif s.run_info and s.run_info.get("as_of", 721) <= s.at:
             snapshot = next((snap for snap in s.snapshots.values() if snap.data["as_of"] == s.run_info["as_of"]), None)
         elif active:
             snapshot = next((snap for snap in s.snapshots.values() if snap.data["as_of"] == active["at"]), None)
             if not snapshot:
-                snapshot = freeze(self.events, active["at"])
+                snapshot = freeze(active_events, active["at"], seed=s.seed)
                 s.snapshots[snapshot.id] = snapshot
         else:
             snapshot = None
 
         # Result resolution: if actively analysing, result is None until finished
+        is_default_fixture = s.scenario == "default" and s.seed == 17
         pending = s.run_info is not None and s.run_info.get("status") in ("queued", "analysing", "verifying")
         if pending:
             result = None
         else:
             result = s.cache.get(snapshot.id) if snapshot else None
-            if not result and snapshot and snapshot.id in self.saved_runs:
+            if not result and is_default_fixture and snapshot and snapshot.id in self.saved_runs:
                 result = self.saved_runs[snapshot.id]
             if result and "reused" not in result:
                 result = {**result, "reused": s.run_info is None or s.run_info.get("run_id") != result.get("run_id")}
 
         # History resolution
         all_accepted = {}
-        for snap_id, r in self.saved_runs.items():
-            for card in r.get("accepted", []):
-                all_accepted[f"{card['snapshot_id']}-{card['claim_id']}"] = card
+        if is_default_fixture:
+            for snap_id, r in self.saved_runs.items():
+                for card in r.get("accepted", []):
+                    all_accepted[f"{card['snapshot_id']}-{card['claim_id']}"] = card
         for r in s.cache.values():
             if r.get("status") == "completed":
                 for card in r.get("accepted", []):
                     all_accepted[f"{card['snapshot_id']}-{card['claim_id']}"] = card
         accepted_history = [card for card in all_accepted.values() if card.get("as_of", 0) <= s.at]
-        for card in accepted_history:
-            snap_id = card.get("snapshot_id")
-            if snap_id in self.saved_snapshots:
-                s.snapshots[snap_id] = self.saved_snapshots[snap_id]
+        if is_default_fixture:
+            for card in accepted_history:
+                snap_id = card.get("snapshot_id")
+                if snap_id in self.saved_snapshots:
+                    s.snapshots[snap_id] = self.saved_snapshots[snap_id]
 
         return {"revision": s.revision, "epoch": s.epoch, "at": s.at, "paused": s.paused, "speed": s.speed,
+                "scenario": s.scenario, "scenarios": list(SCENARIOS.values()), "focus_team": s.focus_team,
                 "focus": s.focus, "score": state["score"], "owner": state["owner"], "ball": state["ball"],
-                "events": state["events"], "players": PLAYERS, "receipts": metric_receipts(state),
+                "events": state["events"], "players": PLAYERS, "receipts": both_team_receipts(state),
+                "sequences": build_sequences(state), "tactical": build_tactical_explorer(state, s.focus_team),
+                "player_spotlight": build_player_spotlight(state),
                 "chapters": CHAPTERS, "moments": moments, "active_moment": active,
                 "snapshot_id": snapshot.id if snapshot else None,
                 "snapshot_as_of": snapshot.data["as_of"] if snapshot else None,
@@ -390,7 +423,7 @@ async def control(command: Control, request: Request):
         if s.focus != command.chapter:
             s.invalidate()
         s.at, s.paused, s.focus = at, True, command.chapter
-        snap = freeze(eng.events, at)
+        snap = freeze(eng.events_for(s), at, seed=s.seed)
         s.snapshots[snap.id] = snap
     elif command.action == "focus_moment":
         moment = s.moments.get(command.moment_id)
@@ -404,6 +437,21 @@ async def control(command: Control, request: Request):
     elif command.action == "restart":
         s.invalidate()
         s.focus, s.at, s.paused = None, 0, True
+        s.moments.clear()
+        s.observed_at = -1
+    elif command.action == "set_scenario":
+        if not command.scenario or command.scenario not in SCENARIOS:
+            raise HTTPException(422, "invalid_scenario")
+        s.invalidate()
+        s.scenario = command.scenario
+        s.focus, s.at, s.paused = None, 0, True
+        s.moments.clear()
+        s.snapshots.clear()
+        s.observed_at = -1
+    elif command.action == "set_team":
+        if command.team not in ("H", "N"):
+            raise HTTPException(422, "invalid_team")
+        s.focus_team = command.team
     elif command.action == "play":
         if s.focus:
             raise HTTPException(409, "exit_focus_before_play")

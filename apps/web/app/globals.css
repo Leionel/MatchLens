@@ -333,3 +333,23 @@ summary { cursor: pointer; padding: 10px 0; color: #c0d5dc; }
  .candidate-question-banner { padding: 16px 0; }
  .has-insight .candidate-desc { display: none; }
 }
+
+.r1-context-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 18px; margin-bottom: 16px; background: #0b1522; border: 1px solid var(--pitch-border); }
+.r1-scenario-group, .r1-team-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.r1-context-label { font-size: 9px; font-weight: 700; letter-spacing: 1.2px; color: var(--turf-emerald); }
+.r1-scenario-select { width: auto; min-width: 280px; min-height: 36px; font-size: 12px; padding: 6px 10px; }
+.r1-team-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
+.r1-team-btn { min-height: 34px; padding: 5px 12px; font-size: 11px; }
+.tactical-layer-bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 20px 6px; }
+.layer-tab-btn { min-height: 30px; padding: 4px 10px; font-size: 10px; border-color: #27504a; }
+.zone-distribution-strip { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; padding: 8px 20px; background: #091e1b; border-top: 1px solid #27504a; font-size: 10px; color: #b3cbc5; }
+.zone-disclaimer { color: var(--text-secondary); font-style: italic; }
+.sequence-player-card { border: 1px solid var(--pitch-border); padding: 18px 20px; background: #0b1522; }
+.sequence-list, .player-spotlight-list { display: grid; gap: 6px; margin-top: 12px; }
+.sequence-row-btn { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; text-align: left; font-size: 11px; padding: 8px 10px; min-height: 36px; border: 1px solid var(--pitch-border); border-radius: 4px; }
+.seq-id-badge { font-weight: 650; color: var(--text-gold); white-space: nowrap; }
+.seq-meta { flex: 1; color: var(--text-secondary); font-size: 10px; }
+.seq-outcome { font-size: 9px; font-weight: 700; letter-spacing: .6px; color: var(--turf-emerald); white-space: nowrap; }
+.seq-outcome.goal { color: var(--text-gold); }
+.seq-outcome.turnover { color: var(--text-secondary); }
+@media (max-width: 720px) { .r1-scenario-select { min-width: 0; width: 100%; } .sequence-row-btn { flex-wrap: wrap; } }

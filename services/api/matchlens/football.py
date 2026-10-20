@@ -20,6 +20,44 @@ CHAPTERS = [
     {"id": "B", "at": 540, "title": "Recoveries to transition shots", "question": "What followed Harbor's ball recoveries?"},
     {"id": "C", "at": 720, "title": "Goal and match recap", "question": "Which sequence ended with the goal?"},
 ]
+SCENARIOS: dict[str, dict] = {
+    "default": {
+        "id": "default",
+        "label": "Possession Dominance (1–0)",
+        "archetype": "Possession Dominance",
+        "description": "Harbor dominates middle-window possession without penetration, then wins high recoveries and scores late.",
+    },
+    "counterattack": {
+        "id": "counterattack",
+        "label": "Fast Counterattack (0–1)",
+        "archetype": "Fast Counterattacking",
+        "description": "Harbor holds territorial possession, while Northbridge absorbs pressure and strikes via rapid vertical counters.",
+    },
+    "transitions": {
+        "id": "transitions",
+        "label": "High Transition Activity (1–1)",
+        "archetype": "High Transition Activity",
+        "description": "Frequent midfield and high turnovers trigger end-to-end transition shots and goals for both teams.",
+    },
+    "balanced": {
+        "id": "balanced",
+        "label": "Balanced Competitive (1–1)",
+        "archetype": "Balanced Competitive Match",
+        "description": "Evenly matched possession, alternating final-third entries and traded goals across both periods.",
+    },
+    "stalemate": {
+        "id": "stalemate",
+        "label": "Defensive Stalemate (0–0)",
+        "archetype": "Low-Event / Defensive Stalemate",
+        "description": "High middle-third circulation and saved efforts with no breakthrough goal.",
+    },
+    "comeback": {
+        "id": "comeback",
+        "label": "Momentum Comeback (2–1)",
+        "archetype": "Comeback / Momentum Reversal",
+        "description": "Northbridge scores early on the break before Harbor reverses momentum with two second-half goals.",
+    },
+}
 
 
 def other(team: str) -> str:
@@ -46,7 +84,7 @@ class Event(BaseModel):
 
 def generate_match(seed: int = 17, scenario: str = "default") -> tuple[Event, ...]:
     """Controlled possession lengths; seeded pass paths, no AI claims or verdicts."""
-    if scenario not in ("default", "stalemate"):
+    if scenario not in SCENARIOS:
         raise ValueError("unknown_scenario")
     rng = random.Random(seed)
     result: list[Event] = []
@@ -75,34 +113,91 @@ def generate_match(seed: int = 17, scenario: str = "default") -> tuple[Event, ..
             add(t, "pass", owner, holder, (x, round(rng.uniform(17, 51), 1)), receiver)
 
     add(0, "restart", "H", "H6", ball)
-    final_action = "saved" if scenario == "stalemate" else "goal"
-    # (end time, pass profile, ending action). All are one continuous prefix.
-    phases = [
-        (50, "attack", "saved"), (100, "attack", "recover"),
-        (130, "attack", "saved"), (180, "attack", "recover"),
-        (330, "safe", "recover"), (370, "back", "recover"),
-        (378, "attack", "saved"), (400, "back", "recover"),
-        (408, "attack", "saved"), (470, "back", "recover"),
-        (520, "attack", "saved"), (540, "back", "recover"),
-        (580, "safe", "recover"), (630, "back", "recover"),
-        (690, "attack", final_action),
-    ]
-    start = 0
-    for stop, mode, action in phases:
-        passes(start, stop, mode)
-        if action == "recover":
-            gaining = other(owner)
-            add(stop, "recovery", gaining, gaining+"8", ball)
+    if scenario in ("default", "stalemate"):
+        final_action = "saved" if scenario == "stalemate" else "goal"
+        # (end time, pass profile, ending action). All are one continuous prefix.
+        phases = [
+            (50, "attack", "saved"), (100, "attack", "recover"),
+            (130, "attack", "saved"), (180, "attack", "recover"),
+            (330, "safe", "recover"), (370, "back", "recover"),
+            (378, "attack", "saved"), (400, "back", "recover"),
+            (408, "attack", "saved"), (470, "back", "recover"),
+            (520, "attack", "saved"), (540, "back", "recover"),
+            (580, "safe", "recover"), (630, "back", "recover"),
+            (690, "attack", final_action),
+        ]
+        start = 0
+        for stop, mode, action in phases:
+            passes(start, stop, mode)
+            if action == "recover":
+                gaining = other(owner)
+                add(stop, "recovery", gaining, gaining+"8", ball)
+            else:
+                team = owner
+                end_x = (105.0 if team == "H" else 0.0) if action == "goal" else (104.0 if team == "H" else 1.0)
+                add(stop, "shot", team, holder, (end_x, 34.0), outcome=action)
+            start = stop
+        if scenario == "stalemate":
+            passes(690, 720, "safe")
         else:
-            team = owner
-            end_x = (105.0 if team == "H" else 0.0) if action == "goal" else (104.0 if team == "H" else 1.0)
-            add(stop, "shot", team, holder, (end_x, 34.0), outcome=action)
-        start = stop
-    if scenario == "stalemate":
-        passes(690, 720, "safe")
+            add(692, "restart", "N", "N6", (52.5, 34.0))
+            passes(692, 720, "safe")
     else:
-        add(692, "restart", "N", "N6", (52.5, 34.0))
-        passes(692, 720, "safe")
+        scenario_phases: dict[str, list[tuple[int, str, str]]] = {
+            "counterattack": [
+                (90, "safe", "recover"), (125, "attack", "saved"),
+                (175, "safe", "recover"), (180, "back", "recover"),
+                (315, "safe", "recover"), (345, "back", "recover"),
+                (390, "back", "recover"), (398, "attack", "saved"),
+                (445, "back", "recover"), (453, "attack", "saved"),
+                (535, "safe", "recover"), (565, "back", "recover"),
+                (635, "safe", "recover"), (665, "attack", "goal"),
+            ],
+            "transitions": [
+                (45, "attack", "saved"), (75, "back", "recover"),
+                (83, "attack", "saved"), (140, "back", "recover"),
+                (148, "attack", "saved"), (210, "back", "recover"),
+                (218, "attack", "goal"), (310, "back", "recover"),
+                (318, "attack", "saved"), (395, "back", "recover"),
+                (403, "attack", "saved"), (480, "safe", " saved".strip()),
+                (535, "back", "recover"), (543, "attack", "goal"),
+                (640, "safe", "recover"),
+            ],
+            "balanced": [
+                (60, "attack", "saved"), (120, "attack", "saved"),
+                (180, "safe", "recover"), (240, "attack", "goal"),
+                (320, "safe", "recover"), (360, "attack", "saved"),
+                (495, "attack", "goal"), (565, "safe", "recover"),
+                (630, "attack", "saved"),
+            ],
+            "comeback": [
+                (70, "safe", "recover"), (135, "attack", "goal"),
+                (230, "safe", "recover"), (290, "safe", "recover"),
+                (360, "back", "recover"), (368, "attack", "saved"),
+                (415, "back", "recover"), (423, "attack", "saved"),
+                (475, "safe", "recover"), (515, "back", "recover"),
+                (525, "attack", "goal"), (585, "back", "recover"),
+                (660, "attack", "goal"),
+            ],
+        }
+        start = 0
+        for stop, mode, action in scenario_phases[scenario]:
+            passes(start, stop, mode)
+            if action == "recover":
+                gaining = other(owner)
+                add(stop, "recovery", gaining, gaining+"8", ball)
+                start = stop
+            else:
+                team = owner
+                end_x = (105.0 if team == "H" else 0.0) if action == "goal" else (104.0 if team == "H" else 1.0)
+                add(stop, "shot", team, holder, (end_x, 34.0), outcome=action)
+                if action == "goal":
+                    kickoff_team = other(team)
+                    add(stop+2, "restart", kickoff_team, kickoff_team+"6", (52.5, 34.0))
+                    start = stop+2
+                else:
+                    start = stop
+        passes(start, 720, "safe")
     add(720, "end", owner, holder, ball)
     reduce_match(tuple(result), 720)  # Generation and ingestion use the same legality checks.
     return tuple(result)
@@ -184,7 +279,8 @@ def metric_receipts(state: dict) -> dict[str, dict]:
     at, events = state["at"], state["events"]
     receipts: dict[str, dict] = {}
     # End of a controlled possession is the next gain, goal or final whistle.
-    entries, transition, gains, goal_chains = [], [], {}, []
+    entries, transition, gains = [], [], {}
+    goal_chains_by_team: dict[str, list[list[str]]] = {"H": [], "N": []}
     seen_entries: set[tuple[str, int]] = set()
     for idx, e in enumerate(events):
         if e["kind"] == "recovery":
@@ -206,7 +302,7 @@ def metric_receipts(state: dict) -> dict[str, dict]:
                     chain.append(before["id"])
                     if before["kind"] in ("recovery", "restart"):
                         break
-                goal_chains.append(list(reversed(chain)))
+                goal_chains_by_team[e["team"]].append(list(reversed(chain)))
 
     def receipt(key: str, value: float | int, unit: str, sources: list[str], definition: str, **details) -> None:
         receipts[key] = {"id": key, "value": value, "unit": unit, "event_ids": sorted(set(sources)),
@@ -236,9 +332,32 @@ def metric_receipts(state: dict) -> dict[str, dict]:
             receipt(f"{team}.transition_shots.{name}", len(quick), "shots", [e["id"] for s in quick for e in (s["gain"], s["shot"])],
                     "Shot <=10s after a recovery with no intervening loss; a temporal association, not causation.",
                     chains=[{"event_ids": [s["gain"]["id"], s["shot"]["id"]], "seconds": s["seconds"]} for s in quick], start=start, end=end)
+    goal_chains = goal_chains_by_team["H"]
     goal_ids = [x for chain in goal_chains for x in chain]
     receipt("H.goals.match", state["score"]["H"], "goals", goal_ids,
             "Harbor goals and the uninterrupted on-ball event sequence ending in each goal.", chains=goal_chains, start=0, end=at)
+    if state["score"]["N"] > 0:
+        n_chains = goal_chains_by_team["N"]
+        n_goal_ids = [x for chain in n_chains for x in chain]
+        receipt("N.goals.match", state["score"]["N"], "goals", n_goal_ids,
+                "Northbridge goals and the uninterrupted on-ball event sequence ending in each goal.", chains=n_chains, start=0, end=at)
+    return receipts
+
+
+def both_team_receipts(state: dict) -> dict[str, dict]:
+    """Ensure both H.goals.match and N.goals.match are always present for UI inspection."""
+    receipts = dict(metric_receipts(state))
+    if "N.goals.match" not in receipts:
+        receipts["N.goals.match"] = {
+            "id": "N.goals.match",
+            "value": state["score"]["N"],
+            "unit": "goals",
+            "event_ids": [],
+            "definition": "Northbridge goals and the uninterrupted on-ball event sequence ending in each goal.",
+            "chains": [],
+            "start": 0,
+            "end": state["at"],
+        }
     return receipts
 
 
@@ -271,7 +390,8 @@ def freeze(events: tuple[Event, ...], at: int, seed: int = 17) -> Snapshot:
 
 def tool_evidence(snapshot: Snapshot) -> dict:
     data = snapshot.data
-    receipts = {k: v for k, v in data["receipts"].items() if k.startswith("H.")}
+    has_away_goals = "N.goals.match" in data["receipts"]
+    receipts = {k: v for k, v in data["receipts"].items() if k.startswith("H.") or has_away_goals}
     relevant = set()
     for v in receipts.values():
         if "possession" not in v["id"]:
@@ -288,63 +408,264 @@ def detect_moments(state: dict) -> list[dict]:
 
     # Two complete comparison windows are required; timestamps are detection
     # times, never chapter timestamps or an assumed future final whistle.
-    if at >= 360:
-        h_pos_curr = receipts.get("H.possession.current", {}).get("value", 0)
-        h_pos_prev = receipts.get("H.possession.previous", {}).get("value", 0)
-        h_shots_curr = receipts.get("H.shots.current", {}).get("value", 0)
-        h_entries_curr = receipts.get("H.entries.current", {}).get("value", 0)
-        if h_pos_curr > h_pos_prev and h_shots_curr <= 0 and h_entries_curr <= 0:
-            moments.append({
-                "id": "moment-possession",
-                "chapter_id": "A",
-                "at": at,
-                "badge": "TACTICAL DIVERGENCE",
-                "title": "Possession Without Penetration",
-                "question": "Has more of the ball meant more threat?",
-                "assertion": "possession_without_penetration",
-                "summary": f"Controlled possession: {h_pos_prev:g}% → {h_pos_curr:g}%. Current shots and attacking-third entries: zero.",
-                "priority": 3,
-                "metric_keys": ["H.possession.current", "H.possession.previous", "H.shots.current", "H.entries.current"],
-            })
+    for team in ("H", "N"):
+        t_name = TEAMS[team].split()[0]
+        suffix = "" if team == "H" else "-n"
+        if at >= 360:
+            pos_curr = receipts.get(f"{team}.possession.current", {}).get("value", 0)
+            pos_prev = receipts.get(f"{team}.possession.previous", {}).get("value", 0)
+            shots_curr = receipts.get(f"{team}.shots.current", {}).get("value", 0)
+            entries_curr = receipts.get(f"{team}.entries.current", {}).get("value", 0)
+            if pos_curr > pos_prev and shots_curr <= 0 and entries_curr <= 0:
+                moments.append({
+                    "id": f"moment-possession{suffix}",
+                    "team": team,
+                    "chapter_id": "A",
+                    "at": at,
+                    "badge": "TACTICAL DIVERGENCE",
+                    "title": "Possession Without Penetration" if team == "H" else f"{t_name} Possession Without Penetration",
+                    "question": "Has more of the ball meant more threat?" if team == "H" else f"Has {t_name}'s extra possession created threat?",
+                    "assertion": "possession_without_penetration",
+                    "summary": f"Controlled possession: {pos_prev:g}% → {pos_curr:g}%. Current shots and attacking-third entries: zero.",
+                    "priority": 3,
+                    "metric_keys": [f"{team}.possession.current", f"{team}.possession.previous", f"{team}.shots.current", f"{team}.entries.current"],
+                })
 
-    # Association question, not a prescribed answer. Align with gate support.
-    if at >= 180:
-        high_rec = receipts.get("H.high_recoveries.current", {}).get("value", 0)
-        trans_shots = receipts.get("H.transition_shots.current", {}).get("value", 0)
-        if high_rec >= 2 and trans_shots >= 2:
+        # Association question, not a prescribed answer. Align with gate support.
+        if at >= 180:
+            high_rec = receipts.get(f"{team}.high_recoveries.current", {}).get("value", 0)
+            trans_shots = receipts.get(f"{team}.transition_shots.current", {}).get("value", 0)
+            if high_rec >= 2 and trans_shots >= 2 or (team == "N" and trans_shots >= 2):
+                moments.append({
+                    "id": f"moment-transition{suffix}",
+                    "team": team,
+                    "chapter_id": "B",
+                    "at": at,
+                    "badge": "TRANSITION BURST",
+                    "title": "High Recovery to Shot Chains" if team == "H" else f"{t_name} Counterattack Chains",
+                    "question": f"What followed {t_name}'s high recoveries?" if team == "H" else f"What followed {t_name}'s ball recoveries?",
+                    "assertion": "recoveries_followed_by_shots",
+                    "summary": f"{t_name} won {int(high_rec)} high recoveries leading to {int(trans_shots)} quick transition shots.",
+                    "priority": 2,
+                    "metric_keys": [f"{team}.high_recoveries.current", f"{team}.transition_shots.current"],
+                })
+
+        if at >= 360 and receipts[f"{team}.shots.current"]["value"] >= 2 and all(
+            receipts[f"{team}.{metric}.current"]["value"] > receipts[f"{team}.{metric}.previous"]["value"] for metric in ("shots", "entries")
+        ):
             moments.append({
-                "id": "moment-transition",
+                "id": f"moment-activity{suffix}",
+                "team": team,
                 "chapter_id": "B",
                 "at": at,
-                "badge": "TRANSITION BURST",
-                "title": "High Recovery to Shot Chains",
-                "question": "What followed Harbor's high recoveries?",
-                "assertion": "recoveries_followed_by_shots",
-                "summary": f"Harbor won {int(high_rec)} high recoveries leading to {int(trans_shots)} quick transition shots.",
-                "priority": 2,
-                "metric_keys": ["H.high_recoveries.current", "H.transition_shots.current"],
+                "badge": "ATTACKING ACTIVITY",
+                "title": "Attacking activity changed" if team == "H" else f"{t_name} attacking surge",
+                "question": f"What changed in {t_name}'s shot and entry counts?",
+                "summary": "Both shot attempts and attacking-third entries increased against the preceding window.",
+                "priority": 4,
+                "metric_keys": [f"{team}.{metric}.{period}" for metric in ("shots", "entries") for period in ("previous", "current")],
             })
 
-    if at >= 360 and receipts["H.shots.current"]["value"] >= 2 and all(
-        receipts[f"H.{metric}.current"]["value"] > receipts[f"H.{metric}.previous"]["value"] for metric in ("shots", "entries")
-    ):
-        moments.append({"id": "moment-activity", "chapter_id": "B", "at": at, "badge": "ATTACKING ACTIVITY", "title": "Attacking activity changed", "question": "What changed in Harbor's shot and entry counts?", "summary": "Both shot attempts and attacking-third entries increased against the preceding window.", "priority": 4, "metric_keys": [f"H.{metric}.{period}" for metric in ("shots", "entries") for period in ("previous", "current")]})
-
-    # T3: Breakthrough Goal Sequence (evaluated if goal present)
+    # T3: Breakthrough Goal Sequences (evaluated for all recorded goals)
     goals = [e for e in events if e.get("kind") == "shot" and e.get("outcome") == "goal"]
-    if goals:
-        g = goals[0]
+    for g in goals:
+        g_team = g["team"]
         moments.append({
             "id": "moment-goal-" + g["id"],
+            "team": g_team,
             "chapter_id": "C",
             "at": g["t"],
             "badge": "GOAL BREAKTHROUGH",
-            "title": f"{TEAMS[g['team']]} goal · {PLAYERS[g['team']][g['actor']]}",
+            "title": f"{TEAMS[g_team]} goal · {PLAYERS[g_team][g['actor']]}",
             "question": "Which sequence ended with the breakthrough goal?",
             "assertion": "goal_sequence",
             "summary": "A scoring shot is recorded. Inspect the possession chain leading to it.",
             "priority": 1,
-            "metric_keys": ["H.goals.match"],
+            "metric_keys": [f"{g_team}.goals.match"],
         })
 
     return moments
+
+
+def build_sequences(state: dict, team: str | None = None) -> list[dict]:
+    """Organize discrete on-ball events into continuous possession sequences."""
+    events = state["events"]
+    grouped: dict[int, list[dict]] = {}
+    for e in events:
+        if e["kind"] == "end":
+            continue
+        # A saved shot's possession_id was incremented to the keeper's new possession;
+        # attach the shot to the attacking sequence that produced it.
+        pid = e["possession_id"] - (1 if e["kind"] == "shot" and e["outcome"] == "saved" else 0)
+        grouped.setdefault(pid, []).append(e)
+
+    sequences: list[dict] = []
+    for pid, seq_events in sorted(grouped.items()):
+        if not seq_events:
+            continue
+        seq_team = seq_events[0]["team"]
+        if team in ("H", "N") and seq_team != team:
+            continue
+        same_team_events = [e for e in seq_events if e["team"] == seq_team]
+        if not same_team_events:
+            continue
+        passes = [e for e in same_team_events if e["kind"] == "pass"]
+        prog_dist = sum(
+            max(0.0, attack_x(seq_team, e["end"][0]) - attack_x(seq_team, e["start"][0]))
+            for e in passes
+        )
+        entered_final_third = any(
+            attack_x(seq_team, e["start"][0]) <= 70 < attack_x(seq_team, e["end"][0])
+            for e in passes
+        )
+        last_ev = same_team_events[-1]
+        outcome = (
+            "goal"
+            if last_ev["kind"] == "shot" and last_ev["outcome"] == "goal"
+            else "shot_saved"
+            if last_ev["kind"] == "shot"
+            else "in_play"
+            if last_ev is events[-1]
+            else "turnover"
+        )
+        players_involved = []
+        for e in same_team_events:
+            for p in (e["actor"], e.get("receiver")):
+                if p and p not in players_involved:
+                    players_involved.append(p)
+        sequences.append({
+            "sequence_id": f"SEQ-{pid:03d}",
+            "possession_id": pid,
+            "team": seq_team,
+            "start_t": same_team_events[0]["t"],
+            "end_t": last_ev["t"],
+            "duration": max(0, last_ev["t"] - same_team_events[0]["t"]),
+            "origin_kind": same_team_events[0]["kind"],
+            "pass_count": len(passes),
+            "progressive_distance": round(prog_dist, 1),
+            "entered_final_third": entered_final_third,
+            "outcome": outcome,
+            "players": players_involved,
+            "event_ids": [e["id"] for e in same_team_events],
+        })
+    return sequences
+
+
+def build_tactical_explorer(state: dict, team: str = "H") -> dict:
+    """Compute event-grounded passing network, progressive passes, recoveries and zones."""
+    team = "N" if team == "N" else "H"
+    events = [e for e in state["events"] if e["team"] == team and e["kind"] != "end"]
+    node_touches: dict[str, list[tuple[float, float]]] = {p: [] for p in PLAYERS[team]}
+    edges_map: dict[tuple[str, str], dict] = {}
+    progressive_passes: list[dict] = []
+    recoveries: list[dict] = []
+    zone_counts = {"defensive_third": 0, "middle_third": 0, "attacking_third": 0}
+
+    for e in events:
+        ax_start = attack_x(team, e["start"][0])
+        if ax_start < 35:
+            zone_counts["defensive_third"] += 1
+        elif ax_start <= 70:
+            zone_counts["middle_third"] += 1
+        else:
+            zone_counts["attacking_third"] += 1
+
+        if e["actor"] in node_touches:
+            node_touches[e["actor"]].append(tuple(e["start"]))
+        if e["kind"] == "pass" and e["receiver"] in node_touches:
+            node_touches[e["receiver"]].append(tuple(e["end"]))
+            pair = (e["actor"], e["receiver"])
+            edge = edges_map.setdefault(pair, {"from": pair[0], "to": pair[1], "count": 0, "event_ids": []})
+            edge["count"] += 1
+            edge["event_ids"].append(e["id"])
+            gain_m = round(attack_x(team, e["end"][0]) - ax_start, 1)
+            is_entry = ax_start <= 70 < attack_x(team, e["end"][0])
+            if gain_m >= 12.0 or is_entry:
+                progressive_passes.append({
+                    "id": e["id"],
+                    "t": e["t"],
+                    "actor": e["actor"],
+                    "receiver": e["receiver"],
+                    "start": e["start"],
+                    "end": e["end"],
+                    "gain_m": gain_m,
+                    "is_entry": is_entry,
+                })
+        elif e["kind"] == "recovery":
+            recoveries.append({
+                "id": e["id"],
+                "t": e["t"],
+                "actor": e["actor"],
+                "location": e["start"],
+                "attack_x": round(ax_start, 1),
+                "is_high": ax_start >= 70,
+            })
+
+    nodes = []
+    for pid, name in PLAYERS[team].items():
+        pts = node_touches[pid]
+        avg_x = round(sum(p[0] for p in pts) / len(pts), 1) if pts else (30.0 if team == "H" else 75.0)
+        avg_y = round(sum(p[1] for p in pts) / len(pts), 1) if pts else 34.0
+        nodes.append({"player_id": pid, "name": name, "touches": len(pts), "avg_x": avg_x, "avg_y": avg_y})
+
+    total_ev = max(1, len(events))
+    zones = {k: round(100.0 * v / total_ev, 1) for k, v in zone_counts.items()}
+    return {
+        "team": team,
+        "team_name": TEAMS[team],
+        "attack_direction": "right" if team == "H" else "left",
+        "nodes": nodes,
+        "edges": list(edges_map.values()),
+        "progressive_passes": progressive_passes,
+        "recoveries": recoveries,
+        "zones": zones,
+        "disclaimer": "Derived strictly from recorded on-ball events; does not represent off-ball formation or pitch control.",
+    }
+
+
+def build_player_spotlight(state: dict, team: str | None = None) -> list[dict]:
+    """Observable on-ball player contributions with no subjective rating formulas."""
+    sequences = build_sequences(state)
+    seq_by_player: dict[str, list[str]] = {}
+    for seq in sequences:
+        for pid in seq["players"]:
+            seq_by_player.setdefault(pid, []).append(seq["sequence_id"])
+
+    spotlight = []
+    teams = [team] if team in ("H", "N") else ["H", "N"]
+    for t_code in teams:
+        for pid, name in PLAYERS[t_code].items():
+            actor_events = [e for e in state["events"] if e["team"] == t_code and e["actor"] == pid and e["kind"] != "end"]
+            passes = [e for e in actor_events if e["kind"] == "pass"]
+            prog_passes = [
+                e for e in passes
+                if (attack_x(t_code, e["end"][0]) - attack_x(t_code, e["start"][0])) >= 12.0
+                or (attack_x(t_code, e["start"][0]) <= 70 < attack_x(t_code, e["end"][0]))
+            ]
+            entries = [
+                e for e in passes
+                if attack_x(t_code, e["start"][0]) <= 70 < attack_x(t_code, e["end"][0])
+            ]
+            prog_dist = sum(
+                max(0.0, attack_x(t_code, e["end"][0]) - attack_x(t_code, e["start"][0]))
+                for e in passes
+            )
+            recs = [e for e in actor_events if e["kind"] == "recovery"]
+            shots = [e for e in actor_events if e["kind"] == "shot"]
+            goals = [e for e in shots if e["outcome"] == "goal"]
+            spotlight.append({
+                "player_id": pid,
+                "name": name,
+                "team": t_code,
+                "team_name": TEAMS[t_code],
+                "passes": len(passes),
+                "progressive_passes": len(prog_passes),
+                "progressive_distance": round(prog_dist, 1),
+                "final_third_entries": len(entries),
+                "recoveries": len(recs),
+                "shots": len(shots),
+                "goals": len(goals),
+                "sequences_involved": len(seq_by_player.get(pid, [])),
+                "event_ids": [e["id"] for e in actor_events],
+            })
+    return spotlight

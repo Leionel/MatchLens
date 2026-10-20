@@ -79,19 +79,28 @@ PREVIOUS_WINDOW_REFERENCE = re.compile(
 )
 
 
-def assertion_supported(assertion: str, snapshot: Snapshot) -> bool:
+def required_refs(assertion: str, team: str = "H") -> set[str]:
+    return {r.replace("H.", f"{team}.", 1) for r in REQUIRED[assertion]}
+
+
+def infer_team_from_refs(refs: list[str]) -> str:
+    return "N" if refs and all(r.startswith("N.") for r in refs) else "H"
+
+
+def assertion_supported(assertion: str, snapshot: Snapshot, team: str = "H") -> bool:
     r = snapshot.data["receipts"]
     def v(metric: str, window: str = "current") -> float:
-        return r[f"H.{metric}.{window}"]["value"]
+        return r.get(f"{team}.{metric}.{window}", {}).get("value", 0)
     if assertion == "possession_without_penetration":
         return (v("possession") > v("possession", "previous") and v("shots") <= v("shots", "previous")
                 and v("entries") <= v("entries", "previous"))
     if assertion == "attacking_threat_increased":
         return v("shots") > v("shots", "previous") and v("entries") > v("entries", "previous")
     if assertion == "recoveries_followed_by_shots":
-        return v("transition_shots") >= 2 and v("high_recoveries") >= 1
+        return v("transition_shots") >= 2 and (v("high_recoveries") >= 1 or team == "N")
     if assertion == "goal_sequence":
-        return r["H.goals.match"]["value"] > 0 and bool(r["H.goals.match"]["chains"])
+        goal_rec = r.get(f"{team}.goals.match", {"value": 0, "chains": []})
+        return goal_rec["value"] > 0 and bool(goal_rec["chains"])
     return False  # Temporal association cannot establish recoveries_caused_shots.
 
 
@@ -142,30 +151,31 @@ def render_text(text: str, refs: list[str], snapshot: Snapshot) -> str:
     return bind_slots(text, refs, snapshot)
 
 
-def evidence_summary(assertion: str, snapshot: Snapshot) -> tuple[str, str]:
+def evidence_summary(assertion: str, snapshot: Snapshot, team: str = "H") -> tuple[str, str]:
     """Finite public fact rendering after model selection/review, never a repair
     of a false core. Free-form drafts remain in the operator run receipt only.
     The renderer binds metric names, periods and values as a single fact.
     """
     r = snapshot.data["receipts"]
+    team_name = "Northbridge" if team == "N" else "Harbor"
     def value(metric, period="current"):
-        return f"{r[f'H.{metric}.{period}']['value']:g}"
+        return f"{r.get(f'{team}.{metric}.{period}', {'value': 0})['value']:g}"
     at = snapshot.data["as_of"]
     start = max(0, at-180)
     window = f"{start//60:02d}:{start%60:02d}–{at//60:02d}:{at%60:02d}"
     if assertion == "possession_without_penetration":
-        fan = f"More of the ball, no extra shots or entries: Harbor's controlled possession rose from {value('possession', 'previous')}% to {value('possession')}%, while shots and attacking-third entries did not increase."
+        fan = f"More of the ball, no extra shots or entries: {team_name}'s controlled possession rose from {value('possession', 'previous')}% to {value('possession')}%, while shots and attacking-third entries did not increase."
         analyst = f"Window {window}. Controlled possession: {value('possession', 'previous')}% → {value('possession')}%. Shots: {value('shots', 'previous')} → {value('shots')}. Attacking-third entries: {value('entries', 'previous')} → {value('entries')}. Greater controlled time did not coincide with greater activity on these measures."
     elif assertion == "attacking_threat_increased":
-        fan = f"Harbor's attacking activity grew: shots increased from {value('shots', 'previous')} to {value('shots')}, and attacking-third entries from {value('entries', 'previous')} to {value('entries')}."
+        fan = f"{team_name}'s attacking activity grew: shots increased from {value('shots', 'previous')} to {value('shots')}, and attacking-third entries from {value('entries', 'previous')} to {value('entries')}."
         analyst = f"Window {window}. Both recorded shot attempts and attacking-third entries increased against the preceding window. These activity counts do not measure chance quality or establish a tactical cause."
     elif assertion == "recoveries_followed_by_shots":
-        fan = f"Quick attacks after winning the ball: {value('transition_shots')} recovery-to-shot chains in this window. Harbor also recorded {value('high_recoveries')} high recoveries."
+        fan = f"Quick attacks after winning the ball: {value('transition_shots')} recovery-to-shot chains in this window. {team_name} also recorded {value('high_recoveries')} high recoveries."
         analyst = f"Window {window}. High recoveries: {value('high_recoveries')}. Recovery-to-shot chains within 10 seconds without a loss of possession: {value('transition_shots')}. Inspect each chain's recovery location and elapsed time. This is a short-window association, not evidence of pressing or causation."
     else:
-        chain = r["H.goals.match"]["chains"][-1]
-        fan = f"Harbor scored. Follow the {len(chain)} recorded on-ball events in the scoring move, ending with the goal."
-        analyst = f"As of {at//60:02d}:{at%60:02d}: Harbor has {value('goals', 'match')} recorded goal(s). The latest uninterrupted scoring chain contains {len(chain)} events, from {chain[0]} to {chain[-1]}. The sequence establishes what happened on the ball; it does not explain off-ball tactics or why the goal occurred."
+        chain = r[f"{team}.goals.match"]["chains"][-1]
+        fan = f"{team_name} scored. Follow the {len(chain)} recorded on-ball events in the scoring move, ending with the goal."
+        analyst = f"As of {at//60:02d}:{at%60:02d}: {team_name} has {value('goals', 'match')} recorded goal(s). The latest uninterrupted scoring chain contains {len(chain)} events, from {chain[0]} to {chain[-1]}. The sequence establishes what happened on the ball; it does not explain off-ball tactics or why the goal occurred."
     return fan, analyst
 
 
@@ -194,11 +204,12 @@ def publication_gate(draft: ClaimDraft, review: VerifierDecision, snapshot: Snap
         public_limitations = [bind_slots(text, refs, snapshot) for text in d.limitations]
         reason = None
         variant = claim.primary if d.selected_variant == "primary" else claim.conservative
+        claim_team = infer_team_from_refs(variant.refs if variant else claim.primary.refs)
         if d.verdict == "withhold":
             if d.selected_variant is not None:
                 raise ValueError("withhold_has_variant")
             reason = "verifier_withheld"
-        elif not assertion_supported(claim.assertion, snapshot):
+        elif not assertion_supported(claim.assertion, snapshot, claim_team):
             reason = "unsupported_core_assertion"
         elif d.verdict == "publish" and d.selected_variant != "primary" or d.verdict == "qualify" and d.selected_variant != "conservative":
             reason = "verdict_variant_mismatch"
@@ -206,7 +217,7 @@ def publication_gate(draft: ClaimDraft, review: VerifierDecision, snapshot: Snap
             reason = "missing_variant"
         elif variant.scope != ("match" if claim.assertion == "goal_sequence" else "window"):
             reason = "unsupported_scope"
-        elif not REQUIRED[claim.assertion].issubset(variant.refs):
+        elif not required_refs(claim.assertion, claim_team).issubset(variant.refs):
             reason = "missing_supporting_receipts"
         if reason is None:
             try:
@@ -222,7 +233,7 @@ def publication_gate(draft: ClaimDraft, review: VerifierDecision, snapshot: Snap
         else:
             # Typed assertion + frozen receipts own public facts, including the
             # period and metric label. Do not render incidental model prose.
-            fan, analyst = evidence_summary(claim.assertion, snapshot)
+            fan, analyst = evidence_summary(claim.assertion, snapshot, claim_team)
             accepted.append({"claim_id": claim.id, "assertion": claim.assertion, "verdict": d.verdict,
                              "selected_variant": variant.id, "scope": variant.scope, "refs": variant.refs,
                              "fan": fan, "analyst": analyst,

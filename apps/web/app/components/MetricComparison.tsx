@@ -10,6 +10,7 @@ type MetricComparisonProps = {
   receipts: Record<string, Receipt>;
   at: number;
   snapshotId: string | null;
+  focusTeam?: "H" | "N";
   onInspect: (receiptId: string) => void;
 };
 
@@ -28,12 +29,14 @@ export function MetricComparison({
   receipts,
   at,
   snapshotId,
+  focusTeam = "H",
   onInspect,
 }: MetricComparisonProps) {
   const prevStart = Math.max(0, at - 360);
   const prevEnd = Math.max(0, at - 180);
   const currStart = prevEnd;
   const currEnd = at;
+  const teamLabel = focusTeam === "N" ? "Northbridge Utd" : "Harbor FC";
 
   const metrics = [
     "possession",
@@ -47,8 +50,8 @@ export function MetricComparison({
     <section className="metric-comparison-card" aria-label="Window Metric Delta Comparison">
       <div className="comparison-header">
         <div className="header-title-wrap">
-          <span className="comparison-tag">TACTICAL METRICS DELTA</span>
-          <h3 className="comparison-title">3-Minute Window Comparison</h3>
+          <span className="comparison-tag">TACTICAL METRICS DELTA · {teamLabel.toUpperCase()}</span>
+          <h3 className="comparison-title">3-Minute Window Comparison ({teamLabel})</h3>
         </div>
         <div className="comparison-windows">
           <span className="window-pill prev">{clock(prevStart)}–{clock(prevEnd)}</span>
@@ -66,8 +69,8 @@ export function MetricComparison({
         </div>
 
         {metrics.map((m) => {
-          const prev = receipts[`H.${m}.previous`];
-          const curr = receipts[`H.${m}.current`];
+          const prev = receipts[`${focusTeam}.${m}.previous`];
+          const curr = receipts[`${focusTeam}.${m}.current`];
           if (!prev || !curr) return null;
 
           const maxVal = m === "possession" ? 100 : Math.max(4, prev.value, curr.value);

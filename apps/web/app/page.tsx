@@ -95,6 +95,7 @@ type Evidence = {
 
 type Moment = {
   id: string;
+  team?: "H" | "N";
   chapter_id?: string;
   at: number;
   badge: string;
@@ -105,10 +106,52 @@ type Moment = {
   priority: number;
 };
 
+type ScenarioMeta = {
+  id: string;
+  label: string;
+  archetype: string;
+  description: string;
+};
+
+type PossessionSequence = {
+  sequence_id: string;
+  possession_id: number;
+  team: "H" | "N";
+  start_t: number;
+  end_t: number;
+  duration: number;
+  origin_kind: string;
+  pass_count: number;
+  progressive_distance: number;
+  entered_final_third: boolean;
+  outcome: string;
+  players: string[];
+  event_ids: string[];
+};
+
+type PlayerSpotlight = {
+  player_id: string;
+  name: string;
+  team: "H" | "N";
+  team_name: string;
+  passes: number;
+  progressive_passes: number;
+  progressive_distance: number;
+  final_third_entries: number;
+  recoveries: number;
+  shots: number;
+  goals: number;
+  sequences_involved: number;
+  event_ids: string[];
+};
+
 type State = {
   revision: number;
   epoch: number;
   at: number;
+  scenario?: string;
+  scenarios?: ScenarioMeta[];
+  focus_team?: "H" | "N";
   score: { H: number; N: number };
   paused: boolean;
   speed: number;
@@ -116,6 +159,9 @@ type State = {
   ball: [number, number];
   events: FootballEvent[];
   receipts: Record<string, Receipt>;
+  sequences?: PossessionSequence[];
+  tactical?: any;
+  player_spotlight?: PlayerSpotlight[];
   players: Record<string, Record<string, string>>;
   chapters: { id: string; at: number; title: string; question: string }[];
   moments?: Moment[];
@@ -161,6 +207,8 @@ export default function MatchLens() {
   const [evidence, setEvidence] = useState<Evidence | null>(null);
   const [receiptId, setReceiptId] = useState("");
   const [selectedId, setSelectedId] = useState("");
+  const [selectedSeqId, setSelectedSeqId] = useState("");
+  const [explorerTab, setExplorerTab] = useState<"sequences" | "players">("sequences");
   const [showAllEvents, setShowAllEvents] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
   const [showTrace, setShowTrace] = useState(false);
@@ -172,6 +220,7 @@ export default function MatchLens() {
     inspectionRequest.current += 1;
     setEvidence(null);
     setSelectedId("");
+    setSelectedSeqId("");
     setIsDrawerOpen(false);
     setShowOverlay(false);
     setShowTrace(false);
@@ -378,6 +427,52 @@ export default function MatchLens() {
               onSpeedChange={(speed) => control({ action: "speed", speed })}
             />
 
+            {/* 2.5 R1 Scenario & Both-Team Intelligence Context Bar */}
+            <section className="r1-context-bar" aria-label="Scenario and team intelligence context">
+              <div className="r1-scenario-group">
+                <label htmlFor="scenario-select" className="r1-context-label">
+                  MATCH ARCHETYPE
+                </label>
+                <select
+                  id="scenario-select"
+                  value={state.scenario || "default"}
+                  disabled={busy}
+                  onChange={(e) => control({ action: "set_scenario", scenario: e.target.value })}
+                  className="r1-scenario-select"
+                >
+                  {(state.scenarios || []).map((sc) => (
+                    <option key={sc.id} value={sc.id}>
+                      {sc.label} — {sc.archetype}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="r1-team-group" role="group" aria-label="Focus Team Selection">
+                <span className="r1-context-label">TEAM LENS</span>
+                <div className="r1-team-buttons">
+                  <button
+                    type="button"
+                    className={`r1-team-btn ${(state.focus_team || "H") === "H" ? "active" : ""}`}
+                    aria-pressed={(state.focus_team || "H") === "H"}
+                    disabled={busy}
+                    onClick={() => control({ action: "set_team", team: "H" })}
+                  >
+                    <span className="team-h-dot">●</span> Harbor FC (Home)
+                  </button>
+                  <button
+                    type="button"
+                    className={`r1-team-btn ${state.focus_team === "N" ? "active" : ""}`}
+                    aria-pressed={state.focus_team === "N"}
+                    disabled={busy}
+                    onClick={() => control({ action: "set_team", team: "N" })}
+                  >
+                    <span style={{ color: "#60a5fa" }}>●</span> Northbridge Utd (Away)
+                  </button>
+                </div>
+              </div>
+            </section>
+
             {/* 3. Match Timeline with Key Moments */}
             <MatchTimeline
               currentSeconds={state.at}
@@ -397,18 +492,109 @@ export default function MatchLens() {
                 <MatchStage
                   events={state.events}
                   selectedEvent={selectedEvent}
+                  selectedSequenceIds={
+                    state.sequences?.find((sq) => sq.sequence_id === selectedSeqId)?.event_ids || []
+                  }
                   ball={state.ball}
                   players={state.players}
                   clockText={clockText}
-                  onSelectEvent={(id) => setSelectedId(id)}
+                  focusTeam={state.focus_team || "H"}
+                  tactical={state.tactical}
+                  onSelectEvent={(id) => {
+                    setSelectedSeqId("");
+                    setSelectedId(id);
+                  }}
                 />
 
-              {mode === "analyst" && <MetricComparison
-                  receipts={state.analysis_receipts || state.receipts}
-                  at={state.snapshot_as_of ?? state.at}
-                  snapshotId={state.snapshot_id}
-                  onInspect={(id) => inspect(id)}
-                />}
+                {mode === "analyst" && (
+                  <MetricComparison
+                    receipts={state.analysis_receipts || state.receipts}
+                    at={state.snapshot_as_of ?? state.at}
+                    snapshotId={state.snapshot_id}
+                    focusTeam={state.focus_team || "H"}
+                    onInspect={(id) => inspect(id)}
+                  />
+                )}
+
+                {/* Possession Sequence & Player Spotlight Explorer */}
+                <section className="sequence-player-card" aria-label="Possession sequences and player spotlight">
+                  <div className="comparison-header">
+                    <div>
+                      <span className="comparison-tag">EVENT-GROUNDED EXPLORER</span>
+                      <h3 className="comparison-title">
+                        {explorerTab === "sequences" ? "Possession Sequences" : "Player Spotlight"}
+                      </h3>
+                    </div>
+                    <div className="r1-team-buttons">
+                      <button
+                        type="button"
+                        className={`feed-filter-btn ${explorerTab === "sequences" ? "active" : ""}`}
+                        onClick={() => setExplorerTab("sequences")}
+                      >
+                        Sequences ({(state.sequences || []).filter((sq) => sq.team === (state.focus_team || "H")).length})
+                      </button>
+                      <button
+                        type="button"
+                        className={`feed-filter-btn ${explorerTab === "players" ? "active" : ""}`}
+                        onClick={() => setExplorerTab("players")}
+                      >
+                        Players ({(state.player_spotlight || []).filter((p) => p.team === (state.focus_team || "H")).length})
+                      </button>
+                    </div>
+                  </div>
+
+                  {explorerTab === "sequences" ? (
+                    <div className="sequence-list">
+                      {(state.sequences || [])
+                        .filter((sq) => sq.team === (state.focus_team || "H"))
+                        .slice(-6)
+                        .reverse()
+                        .map((sq) => (
+                          <button
+                            key={sq.sequence_id}
+                            type="button"
+                            className={`sequence-row-btn ${selectedSeqId === sq.sequence_id ? "active" : ""}`}
+                            onClick={() => {
+                              setSelectedSeqId(selectedSeqId === sq.sequence_id ? "" : sq.sequence_id);
+                              setSelectedId(sq.event_ids.at(-1) || "");
+                            }}
+                          >
+                            <span className="seq-id-badge">{sq.sequence_id}</span>
+                            <span className="seq-meta">
+                              {clock(sq.start_t)}–{clock(sq.end_t)} ({sq.duration}s) · {sq.pass_count} passes · +{sq.progressive_distance}m
+                            </span>
+                            <span className={`seq-outcome ${sq.outcome}`}>
+                              {sq.outcome.replace("_", " ").toUpperCase()}
+                            </span>
+                          </button>
+                        ))}
+                      {(state.sequences || []).filter((sq) => sq.team === (state.focus_team || "H")).length === 0 && (
+                        <p className="comparison-footer">Play or focus the match to inspect possession sequences.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="player-spotlight-list">
+                      {(state.player_spotlight || [])
+                        .filter((p) => p.team === (state.focus_team || "H"))
+                        .map((p) => (
+                          <button
+                            key={p.player_id}
+                            type="button"
+                            className="sequence-row-btn"
+                            onClick={() => p.event_ids.at(-1) && setSelectedId(p.event_ids.at(-1)!)}
+                          >
+                            <span className="seq-id-badge">{p.player_id} · {p.name}</span>
+                            <span className="seq-meta">
+                              {p.passes} passes ({p.progressive_passes} prog, +{p.progressive_distance}m) · {p.recoveries} rec · {p.shots} shots
+                            </span>
+                            <span className="seq-outcome">
+                              {p.goals > 0 ? `⚽ ${p.goals} GOAL` : `${p.sequences_involved} seqs`}
+                            </span>
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </section>
               </div>
 
               {/* Right Column: AI Spotlight & Live Event Stream */}

@@ -165,3 +165,21 @@ def test_detected_goal_focus_preserves_actual_event_time(client):
     assert evidence["as_of"] == 690 and max(e["t"] for e in evidence["events"]) == 690
     assert evidence["snapshot_id"] == focused["snapshot_id"]
     assert client.post("/api/control", json={"action": "focus_moment", "moment_id": "not-detected"}).status_code == 409
+
+
+def test_r1_scenario_and_team_context_switching(client):
+    init = client.post("/api/sessions").json()
+    assert init["scenario"] == "default" and init["focus_team"] == "H"
+    assert len(init["scenarios"]) == 6
+
+    switched = client.post("/api/control", json={"action": "set_scenario", "scenario": "counterattack"}).json()
+    assert switched["scenario"] == "counterattack" and switched["at"] == 0
+    team_n = client.post("/api/control", json={"action": "set_team", "team": "N"}).json()
+    assert team_n["focus_team"] == "N"
+    assert team_n["tactical"]["team"] == "N" and team_n["tactical"]["attack_direction"] == "left"
+
+    full = client.post("/api/control", json={"action": "focus", "chapter": "C"}).json()
+    assert full["score"] == {"H": 0, "N": 1}
+    assert len(full["sequences"]) > 0
+    assert len(full["player_spotlight"]) == 8
+    assert client.post("/api/control", json={"action": "set_scenario", "scenario": "invalid"}).status_code == 422

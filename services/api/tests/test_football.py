@@ -88,3 +88,56 @@ def test_auto_moment_detection_invariants():
     assert any(m["assertion"] == "recoveries_followed_by_shots" for m in m_540)
     m_720 = detect_moments(reduce_match(events, 720))
     assert any(m["assertion"] == "goal_sequence" for m in m_720)
+
+
+def test_r1_all_six_scenarios_and_both_team_intelligence():
+    from matchlens.contracts import assertion_supported, evidence_summary
+    from matchlens.football import (
+        SCENARIOS,
+        both_team_receipts,
+        build_player_spotlight,
+        build_sequences,
+        build_tactical_explorer,
+        detect_moments,
+    )
+
+    expected_scores = {
+        "default": {"H": 1, "N": 0},
+        "stalemate": {"H": 0, "N": 0},
+        "counterattack": {"H": 0, "N": 1},
+        "transitions": {"H": 1, "N": 1},
+        "balanced": {"H": 1, "N": 1},
+        "comeback": {"H": 2, "N": 1},
+    }
+    assert set(SCENARIOS) == set(expected_scores)
+    for sc, exp_score in expected_scores.items():
+        events = generate_match(seed=17, scenario=sc)
+        state = reduce_match(events, 720)
+        assert state["ended"] is True
+        assert state["score"] == exp_score
+        receipts = both_team_receipts(state)
+        assert receipts["H.goals.match"]["value"] == exp_score["H"]
+        assert receipts["N.goals.match"]["value"] == exp_score["N"]
+
+    # Counterattack scenario: Northbridge scores and has N.goals.match supported
+    ca_events = generate_match(seed=17, scenario="counterattack")
+    ca_snap = freeze(ca_events, 720)
+    assert assertion_supported("goal_sequence", ca_snap, team="N")
+    assert not assertion_supported("goal_sequence", ca_snap, team="H")
+    fan_n, analyst_n = evidence_summary("goal_sequence", ca_snap, team="N")
+    assert "Northbridge scored" in fan_n and "Northbridge has 1 recorded goal" in analyst_n
+    ca_moments = detect_moments(reduce_match(ca_events, 720))
+    assert any(m["team"] == "N" and m["assertion"] == "goal_sequence" for m in ca_moments)
+
+    # Possession sequences, tactical explorer, and player spotlight
+    default_state = reduce_match(generate_match(17, "default"), 720)
+    seqs = build_sequences(default_state)
+    assert len(seqs) >= 10
+    assert any(s["outcome"] == "goal" and s["team"] == "H" for s in seqs)
+    tac_h = build_tactical_explorer(default_state, "H")
+    tac_n = build_tactical_explorer(default_state, "N")
+    assert tac_h["attack_direction"] == "right" and tac_n["attack_direction"] == "left"
+    assert len(tac_h["nodes"]) == 4 and len(tac_n["nodes"]) == 4
+    players = build_player_spotlight(default_state)
+    assert len(players) == 8
+    assert sum(p["goals"] for p in players) == 1
