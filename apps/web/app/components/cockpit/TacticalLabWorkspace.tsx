@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { CockpitState, PerspectiveId, InspectorPayload, PossessionSequence } from "./types";
+import { Locale, getTranslation } from "../../lib/i18n";
 import { MatchStage } from "../MatchStage";
 import { ActionDensityDifferential } from "../ActionDensityDifferential";
 import { QuickRecoveryAnalysis } from "../QuickRecoveryAnalysis";
@@ -14,6 +15,7 @@ export interface TacticalLabWorkspaceProps {
   selectedSeqId: string;
   selectedPlayerId: string | null;
   selectedZoneId: string | null;
+  locale?: Locale;
   onSelectEvent: (id: string) => void;
   onSelectSequence: (seqId: string) => void;
   onSelectPlayer: (pid: string | null) => void;
@@ -37,6 +39,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
   selectedSeqId,
   selectedPlayerId,
   selectedZoneId,
+  locale = "zh",
   onSelectEvent,
   onSelectSequence,
   onSelectPlayer,
@@ -45,6 +48,8 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
   onInspectReceipt,
   onOpenInspector,
 }) => {
+  const t = getTranslation(locale);
+  const isZh = locale === "zh";
   const [explorerTab, setExplorerTab] = useState<"sequences" | "players">("sequences");
   const [sequenceFilter, setSequenceFilter] = useState<
     "all" | "final_third" | "shots" | "progression" | "turnover"
@@ -589,6 +594,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
             data={state.density_differential}
             homeTeamName="Harbor FC"
             awayTeamName="Northbridge United"
+            locale={locale}
             onSelectZone={(zid) => {
               onSelectZone(zid);
               if (zid) {
@@ -608,6 +614,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
           <QuickRecoveryAnalysis
             data={state.quick_recoveries}
             focusTeam={state.focus_team || "H"}
+            locale={locale}
             onWindowChange={onWindowChange}
             onSelectEvent={(id) => onSelectEvent(id)}
           />

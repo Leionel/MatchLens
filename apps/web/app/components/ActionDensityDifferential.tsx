@@ -1,5 +1,8 @@
 "use client";
 
+import React from "react";
+import { Locale, getTranslation } from "../lib/i18n";
+
 export type DifferentialZoneCell = {
   cell_id: string;
   name: string;
@@ -32,144 +35,230 @@ interface ActionDensityDifferentialProps {
   awayTeamName?: string;
   onSelectZone?: (cellId: string) => void;
   selectedZoneId?: string | null;
+  locale?: Locale;
 }
 
-export function ActionDensityDifferential({
+export const ActionDensityDifferential: React.FC<ActionDensityDifferentialProps> = ({
   data,
   homeTeamName = "Harbor FC",
   awayTeamName = "Northbridge United",
   onSelectZone,
   selectedZoneId,
-}: ActionDensityDifferentialProps) {
+  locale = "zh",
+}) => {
+  const t = getTranslation(locale);
+  const isZh = locale === "zh";
+
   if (!data || !data.zones || data.zones.length === 0) {
     return (
-      <div className="bg-[#151e2e] border border-[rgba(255,255,255,0.09)] rounded-xl p-5 text-slate-400">
-        正在计算球队行动密度差分...
+      <div
+        style={{
+          background: "rgba(15, 23, 42, 0.7)",
+          border: "1px solid var(--glass-border)",
+          borderRadius: "14px",
+          padding: "20px",
+          color: "var(--text-tertiary)",
+          fontSize: "13px",
+          textAlign: "center",
+        }}
+      >
+        {isZh ? "正在计算球队场区行动密度差分 ΔD(z)..." : "Computing team action density differential ΔD(z)..."}
       </div>
     );
   }
 
   return (
-    <div className="bg-[#151e2e] border border-[rgba(255,255,255,0.09)] rounded-xl p-5 shadow-lg space-y-4">
+    <div
+      style={{
+        background: "rgba(15, 23, 42, 0.75)",
+        border: "1px solid var(--glass-border)",
+        borderRadius: "14px",
+        padding: "18px 20px",
+        boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5)",
+        backdropFilter: "blur(12px)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "14px",
+      }}
+    >
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgba(255,255,255,0.08)] pb-3">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
         <div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded bg-[#00b074]/20 text-[#00b074] border border-[#00b074]/30">
-              BL-04 · 行动密度差分
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 800,
+                padding: "2px 6px",
+                borderRadius: 4,
+                background: "rgba(16, 185, 129, 0.15)",
+                color: "var(--turf-emerald)",
+                border: "1px solid rgba(16, 185, 129, 0.3)",
+              }}
+            >
+              BL-04 · DENSITY ΔD(z)
             </span>
-            <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
-              Level 1 观察统计
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 800,
+                padding: "2px 6px",
+                borderRadius: 4,
+                background: "rgba(56, 189, 248, 0.15)",
+                color: "var(--tech-cyan)",
+                border: "1px solid rgba(56, 189, 248, 0.3)",
+              }}
+            >
+              LEVEL 1 OBSERVED
             </span>
-            <h3 className="text-base font-bold text-white tracking-wide">
-              Team Action Density Differential (场区行动占比差分)
+            <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>
+              {t.densityTitle}
             </h3>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
-            计算公式：ΔD(z) = n_home(z)/N_home - n_away(z)/N_away。标注高密度重叠区域。
+          <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 4 }}>
+            {t.densitySubtitle}
           </p>
         </div>
 
         {/* Legend */}
-        <div className="flex items-center gap-3 text-xs">
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded bg-[#00b074]" />
-            <span className="text-slate-300 font-medium">{homeTeamName} 占优 (+)</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded bg-[#f59e0b]" />
-            <span className="text-slate-300 font-medium">{awayTeamName} 占优 (-)</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs bg-rose-500/30 text-rose-300 border border-rose-500/50 px-1 rounded font-mono font-bold">
-              OVERLAP
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--turf-emerald)", fontWeight: 700 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--turf-emerald)" }} />
+            {homeTeamName} (+)
+          </span>
+          <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--tech-cyan)", fontWeight: 700 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--tech-cyan)" }} />
+            {awayTeamName} (-)
+          </span>
+          {data.overlap_zones_count > 0 && (
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                background: "rgba(245, 158, 11, 0.15)",
+                color: "var(--amber-gold)",
+                padding: "2px 6px",
+                borderRadius: 4,
+                border: "1px solid rgba(245, 158, 11, 0.3)",
+              }}
+            >
+              {data.overlap_zones_count} {t.overlapZonesCount}
             </span>
-            <span className="text-slate-400">重叠区域 ({data.overlap_zones_count}个)</span>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* 9-Zone Grid Matrix */}
-      <div className="grid grid-cols-3 gap-2.5">
-        {data.zones.map((cell) => {
-          const isSelected = selectedZoneId === cell.cell_id;
-          const isHome = cell.advantage === "home";
-          const isAway = cell.advantage === "away";
+      {/* 3x3 Tactical Pitch Zones Matrix */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "8px",
+          background: "rgba(5, 10, 20, 0.6)",
+          padding: "10px",
+          borderRadius: "12px",
+          border: "1px solid rgba(255, 255, 255, 0.06)",
+        }}
+      >
+        {data.zones.map((zone) => {
+          const isSelected = selectedZoneId === zone.cell_id;
+          const isHomeAdv = zone.advantage === "home";
+          const isAwayAdv = zone.advantage === "away";
+          const diffPct = zone.delta_density_pct;
 
-          let borderStyle = "border-[rgba(255,255,255,0.08)]";
-          let bgStyle = "bg-[#0e1420]";
+          let cellBorder = "rgba(255, 255, 255, 0.06)";
+          let cellBg = "rgba(15, 23, 42, 0.5)";
+          let accentColor = "var(--text-tertiary)";
 
-          if (isHome) {
-            borderStyle = "border-[#00b074]/40";
-            bgStyle = "bg-emerald-950/20";
-          } else if (isAway) {
-            borderStyle = "border-amber-500/40";
-            bgStyle = "bg-amber-950/20";
+          if (isHomeAdv) {
+            cellBg = "rgba(16, 185, 129, 0.08)";
+            cellBorder = "rgba(16, 185, 129, 0.25)";
+            accentColor = "var(--turf-emerald)";
+          } else if (isAwayAdv) {
+            cellBg = "rgba(56, 189, 248, 0.08)";
+            cellBorder = "rgba(56, 189, 248, 0.25)";
+            accentColor = "var(--tech-cyan)";
           }
 
           if (isSelected) {
-            borderStyle = "border-2 border-[#00e599] shadow-md shadow-[#00b074]/20 ring-1 ring-[#00e599]";
+            cellBorder = "var(--turf-emerald)";
+            cellBg = "rgba(16, 185, 129, 0.16)";
           }
+
+          const homeShare = Math.round(zone.home_action_share * 100);
+          const awayShare = Math.round(zone.away_action_share * 100);
 
           return (
             <div
-              key={cell.cell_id}
-              onClick={() => onSelectZone?.(cell.cell_id)}
-              className={`p-3 rounded-lg border ${borderStyle} ${bgStyle} cursor-pointer hover:border-[#00b074] transition-all relative flex flex-col justify-between`}
+              key={zone.cell_id}
+              onClick={() => onSelectZone?.(zone.cell_id)}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                gap: 6,
+                padding: "10px",
+                borderRadius: "8px",
+                cursor: "pointer",
+                background: cellBg,
+                border: `1px solid ${cellBorder}`,
+                boxShadow: isSelected ? "0 0 12px rgba(16, 185, 129, 0.3)" : "none",
+                transition: "all 0.15s ease",
+              }}
             >
-              <div className="flex items-start justify-between">
-                <span className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider">
-                  {cell.name}
+              {/* Zone Top: Name & Overlap Badge */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>
+                  {zone.name}
                 </span>
-                {cell.is_high_density_overlap && (
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse">
+
+                {zone.is_high_density_overlap && (
+                  <span
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 800,
+                      color: "var(--amber-gold)",
+                      background: "rgba(245, 158, 11, 0.2)",
+                      padding: "1px 4px",
+                      borderRadius: 3,
+                    }}
+                    title="Both teams contested high action volume here"
+                  >
                     OVERLAP
                   </span>
                 )}
               </div>
 
-              <div className="my-2 text-center">
-                <div
-                  className={`text-xl font-mono font-extrabold ${
-                    cell.delta_density_pct > 0
-                      ? "text-[#00e599]"
-                      : cell.delta_density_pct < 0
-                      ? "text-amber-400"
-                      : "text-slate-400"
-                  }`}
+              {/* Delta Density Value */}
+              <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>ΔD:</span>
+                <span
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 850,
+                    fontFamily: "monospace",
+                    color: accentColor,
+                  }}
                 >
-                  {cell.delta_density_pct > 0 ? `+${cell.delta_density_pct}%` : `${cell.delta_density_pct}%`}
-                </div>
-                <div className="text-[10px] text-slate-400 uppercase mt-0.5">
-                  ΔD 净差分
-                </div>
+                  {diffPct > 0 ? `+${diffPct.toFixed(1)}%` : `${diffPct.toFixed(1)}%`}
+                </span>
               </div>
 
-              {/* Home vs Away Share Breakdown */}
-              <div className="border-t border-[rgba(255,255,255,0.06)] pt-2 grid grid-cols-2 text-[10px]">
-                <div>
-                  <span className="text-slate-500">主: </span>
-                  <span className="font-mono font-bold text-emerald-400">{cell.home_action_share}%</span>
-                  <span className="text-slate-500 text-[9px]"> ({cell.home_actions_count})</span>
+              {/* Share Compare Bar */}
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--text-tertiary)", marginBottom: 2 }}>
+                  <span>HAR {homeShare}% ({zone.home_actions_count})</span>
+                  <span>NOR {awayShare}% ({zone.away_actions_count})</span>
                 </div>
-                <div className="text-right">
-                  <span className="text-slate-500">客: </span>
-                  <span className="font-mono font-bold text-amber-400">{cell.away_action_share}%</span>
-                  <span className="text-slate-500 text-[9px]"> ({cell.away_actions_count})</span>
+                <div style={{ width: "100%", height: 4, background: "rgba(255, 255, 255, 0.08)", borderRadius: 2, display: "flex", overflow: "hidden" }}>
+                  <div style={{ width: `${homeShare}%`, height: "100%", background: "var(--turf-emerald)" }} />
+                  <div style={{ width: `${awayShare}%`, height: "100%", background: "var(--tech-cyan)" }} />
                 </div>
               </div>
             </div>
           );
         })}
       </div>
-
-      {/* Strict Disclaimer */}
-      <div className="p-2.5 rounded bg-blue-950/20 border border-blue-500/30 text-[11px] text-blue-300/90 flex items-center gap-2">
-        <span>ℹ️</span>
-        <span>
-          <b>口径约束 (BL-04)</b>：两队在球场各区域的行动占比差分；不标记真实争夺或物理对抗强度，严禁表述为 Pitch Control (控场能力)。
-        </span>
-      </div>
     </div>
   );
-}
+};

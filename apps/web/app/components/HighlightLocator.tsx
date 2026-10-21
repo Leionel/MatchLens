@@ -1,5 +1,8 @@
 "use client";
 
+import React from "react";
+import { Locale, getTranslation } from "../lib/i18n";
+
 export type HighlightCandidate = {
   highlight_id: string;
   title: string;
@@ -21,47 +24,118 @@ interface HighlightLocatorProps {
   selectedHighlightId?: string | null;
   homeTeamName?: string;
   awayTeamName?: string;
+  locale?: Locale;
 }
 
-export function HighlightLocator({
+export const HighlightLocator: React.FC<HighlightLocatorProps> = ({
   highlights,
   onSelectHighlight,
   selectedHighlightId,
   homeTeamName = "Harbor FC",
   awayTeamName = "Northbridge United",
-}: HighlightLocatorProps) {
+  locale = "zh",
+}) => {
+  const t = getTranslation(locale);
+  const isZh = locale === "zh";
+
   if (!highlights || highlights.length === 0) {
     return (
-      <div className="bg-[#151e2e] border border-[rgba(255,255,255,0.09)] rounded-xl p-5 text-slate-400">
-        正在基于 OAAI 变化点及 S2 序列扫描核心攻防高光波次...
+      <div
+        style={{
+          background: "rgba(15, 23, 42, 0.7)",
+          border: "1px solid var(--glass-border)",
+          borderRadius: "14px",
+          padding: "20px",
+          color: "var(--text-tertiary)",
+          fontSize: "13px",
+          textAlign: "center",
+        }}
+      >
+        {isZh ? "正在基于 OAAI 变化点及 S2 序列扫描核心攻防高光波次..." : "Scanning tactical highlights based on OAAI change-points and S2 sequences..."}
       </div>
     );
   }
 
   return (
-    <div className="bg-[#151e2e] border border-[rgba(255,255,255,0.09)] rounded-xl p-5 shadow-lg space-y-4">
+    <div
+      style={{
+        background: "rgba(15, 23, 42, 0.75)",
+        border: "1px solid var(--glass-border)",
+        borderRadius: "14px",
+        padding: "18px 20px",
+        boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5)",
+        backdropFilter: "blur(12px)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "14px",
+      }}
+    >
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgba(255,255,255,0.08)] pb-3">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
         <div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded bg-[#00b074]/20 text-[#00b074] border border-[#00b074]/30">
-              BL-12 · Highlight Locator
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 800,
+                padding: "2px 6px",
+                borderRadius: 4,
+                background: "rgba(16, 185, 129, 0.15)",
+                color: "var(--turf-emerald)",
+                border: "1px solid rgba(16, 185, 129, 0.3)",
+              }}
+            >
+              BL-12 · HIGHLIGHT LOCATOR
             </span>
-            <span className="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
-              波次联动索引
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 800,
+                padding: "2px 6px",
+                borderRadius: 4,
+                background: "rgba(168, 85, 247, 0.15)",
+                color: "#c084fc",
+                border: "1px solid rgba(168, 85, 247, 0.3)",
+              }}
+            >
+              WAVE INDEX
             </span>
-            <h3 className="text-base font-bold text-white tracking-wide">
-              Highlight Locator (核心攻防波次定位)
+            <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>
+              {t.highlightLocatorTitle}
             </h3>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
-            与 OAAI 变化点检测及 S2 控球序列联动，自动定位比赛关键攻防高光与胜负波次。
+          <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 4 }}>
+            {t.highlightLocatorSubtitle}
           </p>
         </div>
+
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            fontFamily: "monospace",
+            color: "var(--text-secondary)",
+            background: "rgba(255, 255, 255, 0.05)",
+            padding: "3px 8px",
+            borderRadius: 6,
+            border: "1px solid rgba(255, 255, 255, 0.08)",
+          }}
+        >
+          {highlights.length} {isZh ? "个波次" : "surges detected"}
+        </span>
       </div>
 
-      {/* Highlights List */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {/* Highlights Grid of Cards */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: "12px",
+          maxHeight: "360px",
+          overflowY: "auto",
+          paddingRight: 4,
+        }}
+      >
         {highlights.map((hl) => {
           const isSelected = selectedHighlightId === hl.highlight_id;
           const isGoal = hl.category === "goal";
@@ -69,48 +143,140 @@ export function HighlightLocator({
           const isHome = hl.team === "H";
           const teamLabel = isHome ? homeTeamName : awayTeamName;
 
-          let badgeColor = "bg-blue-500/20 text-blue-300 border-blue-500/40";
-          if (isGoal) badgeColor = "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
-          if (isShot) badgeColor = "bg-amber-500/20 text-amber-300 border-amber-500/40";
+          let badgeBg = "rgba(56, 189, 248, 0.15)";
+          let badgeColor = "var(--tech-cyan)";
+          let badgeBorder = "rgba(56, 189, 248, 0.3)";
+          let catLabel = t.waveCategorySurge;
+
+          if (isGoal) {
+            badgeBg = "rgba(16, 185, 129, 0.2)";
+            badgeColor = "var(--turf-emerald)";
+            badgeBorder = "rgba(16, 185, 129, 0.4)";
+            catLabel = t.waveCategoryGoal;
+          } else if (isShot) {
+            badgeBg = "rgba(245, 158, 11, 0.2)";
+            badgeColor = "var(--amber-gold)";
+            badgeBorder = "rgba(245, 158, 11, 0.4)";
+            catLabel = t.waveCategoryShot;
+          }
+
+          const startMin = Math.floor(hl.start_t / 60);
+          const endMin = Math.floor(hl.end_t / 60);
 
           return (
             <div
               key={hl.highlight_id}
               onClick={() => onSelectHighlight?.(hl)}
-              className={`p-3.5 rounded-xl border ${
-                isSelected
-                  ? "border-[#00e599] bg-[#091f1a] ring-1 ring-[#00e599]"
-                  : "border-[rgba(255,255,255,0.08)] bg-[#0e1420] hover:border-[#00b074]/60"
-              } cursor-pointer transition-all space-y-2.5 flex flex-col justify-between`}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                gap: 10,
+                padding: "14px",
+                borderRadius: "12px",
+                cursor: "pointer",
+                background: isSelected
+                  ? "rgba(16, 185, 129, 0.12)"
+                  : "rgba(11, 15, 25, 0.7)",
+                border: isSelected
+                  ? "1px solid var(--turf-emerald)"
+                  : "1px solid rgba(255, 255, 255, 0.08)",
+                boxShadow: isSelected ? "0 0 16px rgba(16, 185, 129, 0.25)" : "none",
+                transition: "all 0.2s ease",
+              }}
             >
-              <div>
-                <div className="flex items-center justify-between gap-1">
-                  <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${badgeColor}`}>
-                    {hl.category.toUpperCase()}
+              {/* Row 1: Category Badge, Time span & Impact Score */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      padding: "2px 6px",
+                      borderRadius: 4,
+                      background: badgeBg,
+                      color: badgeColor,
+                      border: `1px solid ${badgeBorder}`,
+                      letterSpacing: "0.3px",
+                    }}
+                  >
+                    {catLabel}
                   </span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-slate-400 font-mono">
-                      {Math.floor(hl.start_t / 60)}' - {Math.floor(hl.end_t / 60)}'
-                    </span>
-                    <span className="text-[10px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded font-bold">
-                      ★ {hl.impact_score.toFixed(1)}
-                    </span>
-                  </div>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontFamily: "monospace",
+                      color: "var(--text-secondary)",
+                      background: "rgba(255, 255, 255, 0.04)",
+                      padding: "2px 6px",
+                      borderRadius: 4,
+                    }}
+                  >
+                    {startMin}' - {endMin}'
+                  </span>
                 </div>
 
-                <h4 className="text-sm font-bold text-white mt-1 line-clamp-1">{hl.title}</h4>
-                <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-                  {hl.description}
-                </p>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 800,
+                    color: "var(--amber-gold)",
+                    background: "rgba(245, 158, 11, 0.15)",
+                    padding: "2px 7px",
+                    borderRadius: 5,
+                    border: "1px solid rgba(245, 158, 11, 0.3)",
+                  }}
+                >
+                  ★ {hl.impact_score.toFixed(1)}
+                </span>
               </div>
 
-              <div className="border-t border-[rgba(255,255,255,0.06)] pt-2 flex items-center justify-between text-xs">
-                <span className="text-slate-400">
-                  主导: <b className={isHome ? "text-[#00e599]" : "text-amber-400"}>{teamLabel}</b>
+              {/* Row 2: Title & Narrative */}
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginBottom: 3 }}>
+                  {hl.title}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text-tertiary)", lineHeight: 1.5 }}>
+                  {hl.description}
+                </div>
+              </div>
+
+              {/* Row 3: Dominant Team & Action Button */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  paddingTop: 8,
+                  borderTop: "1px solid rgba(255, 255, 255, 0.06)",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: isHome ? "var(--turf-emerald)" : "var(--tech-cyan)",
+                  }}
+                >
+                  {t.dominantTeam}: {teamLabel}
                 </span>
-                <span className="text-[10px] text-[#00b074] hover:underline flex items-center gap-0.5 font-semibold">
-                  定位波次 →
-                </span>
+
+                <button
+                  type="button"
+                  style={{
+                    minHeight: "auto",
+                    padding: "3px 10px",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    borderRadius: 6,
+                    background: isSelected ? "var(--turf-emerald)" : "rgba(56, 189, 248, 0.15)",
+                    color: isSelected ? "#052e16" : "var(--tech-cyan)",
+                    border: isSelected ? "none" : "1px solid rgba(56, 189, 248, 0.3)",
+                    cursor: "pointer",
+                  }}
+                >
+                  {t.jumpToReplay}
+                </button>
               </div>
             </div>
           );
@@ -118,4 +284,4 @@ export function HighlightLocator({
       </div>
     </div>
   );
-}
+};
