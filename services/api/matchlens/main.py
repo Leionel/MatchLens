@@ -46,6 +46,14 @@ from .football import (
     metric_receipts,
     reduce_match,
 )
+from .oaai import compute_oaai, OAAIConfig
+from .exploration import (
+    analyze_quick_recoveries,
+    analyze_action_density_differential,
+    analyze_attacking_channels,
+    build_spatial_sequence_drilldown,
+    locate_highlights,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 load_dotenv(ROOT / ".env")
@@ -245,12 +253,24 @@ class Engine:
                 if snap_id in self.saved_snapshots:
                     s.snapshots[snap_id] = self.saved_snapshots[snap_id]
 
+        sequences = build_sequences(state)
+        tactical = build_tactical_explorer(state, s.focus_team)
+        oaai_data = compute_oaai(state["events"], dead_intervals=state.get("intervals"))
+        quick_rec = analyze_quick_recoveries(state["events"], window_seconds=6.0, target_team=s.focus_team)
+        density_diff = analyze_action_density_differential(state["events"])
+        channels = analyze_attacking_channels(state["events"], sequences=sequences, team=s.focus_team)
+        drilldown = build_spatial_sequence_drilldown(sequences, tactical.get("zone_cells"))
+        highlights = locate_highlights(state["events"], sequences, oaai_data=oaai_data)
+
         return {"revision": s.revision, "epoch": s.epoch, "at": s.at, "paused": s.paused, "speed": s.speed,
                 "scenario": s.scenario, "scenarios": list(SCENARIOS.values()), "focus_team": s.focus_team,
                 "focus": s.focus, "score": state["score"], "owner": state["owner"], "ball": state["ball"],
                 "events": state["events"], "players": PLAYERS, "receipts": both_team_receipts(state),
-                "sequences": build_sequences(state), "tactical": build_tactical_explorer(state, s.focus_team),
+                "sequences": sequences, "tactical": tactical,
                 "player_spotlight": build_player_spotlight(state),
+                "oaai": oaai_data, "quick_recoveries": quick_rec,
+                "density_differential": density_diff, "attacking_channels": channels,
+                "spatial_drilldown": drilldown, "highlights": highlights,
                 "chapters": CHAPTERS, "moments": moments, "active_moment": active,
                 "snapshot_id": snapshot.id if snapshot else None,
                 "snapshot_as_of": snapshot.data["as_of"] if snapshot else None,
@@ -611,6 +631,82 @@ async def get_xt_model_info(resolution: str = "16x12"):
         raise HTTPException(400, "invalid_resolution")
     model = ExpectedThreatModel.load_default(resolution)
     return model.metadata
+
+
+@app.get("/api/models/xt/compare")
+async def get_xt_model_comparison(resolution: str = "16x12", match_id: str = "sb_wc2022_final"):
+    from .models.xt import ExpectedThreatModel, compare_xt_grids, fit_xt_model
+    from .catalog import MatchCatalog
+    try:
+        events = MatchCatalog.load_normalized_events(match_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "match_not_found")
+
+    nx, ny = (16, 12) if resolution == "16x12" else (12, 8)
+    baseline = ExpectedThreatModel.load_default(resolution)
+    fitted = fit_xt_model(events, nx=nx, ny=ny)
+    comparison = compare_xt_grids(fitted, baseline)
+    return {
+        "resolution": resolution,
+        "match_id": match_id,
+        "comparison": comparison,
+    }
+
+
+@app.get("/api/exploration/recoveries")
+async def get_exploration_recoveries(request: Request, window_seconds: float = 6.0):
+    s, eng = session(request), engine(request)
+    raw_events = eng.events_for(s)
+    state = reduce_match(raw_events, s.at)
+    return analyze_quick_recoveries(state["events"], window_seconds=window_seconds, target_team=s.focus_team)
+
+
+@app.get("/api/exploration/oaai")
+async def get_exploration_oaai(request: Request, smoothing_mode: Literal["causal", "bilateral"] = "causal"):
+    s, eng = session(request), engine(request)
+    raw_events = eng.events_for(s)
+    state = reduce_match(raw_events, s.at)
+    return compute_oaai(state["events"], smoothing_mode=smoothing_mode, dead_intervals=state.get("intervals"))
+
+
+@app.get("/api/matches/{match_id}/exploration")
+async def get_match_exploration(match_id: str, smoothing_mode: Literal["causal", "bilateral"] = "causal", window_seconds: float = 6.0):
+    from .catalog import MatchCatalog
+    try:
+        events = MatchCatalog.load_normalized_events(match_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "match_not_found")
+
+    oaai_res = compute_oaai(events, smoothing_mode=smoothing_mode)
+    recoveries_res = analyze_quick_recoveries(events, window_seconds=window_seconds)
+    diff_res = analyze_action_density_differential(events)
+    channels_h = analyze_attacking_channels(events, team="H")
+    channels_n = analyze_attacking_channels(events, team="N")
+
+    # If synthetic match, we can also extract rich sequences
+    if match_id.startswith("syn_"):
+        scenario_key = match_id.replace("syn_", "", 1)
+        raw_events = generate_match(scenario=scenario_key)
+        state = reduce_match(raw_events, 720)
+        sequences = build_sequences(state)
+        tactical = build_tactical_explorer(state, "H")
+        drilldown = build_spatial_sequence_drilldown(sequences, tactical.get("zone_cells"))
+        highlights = locate_highlights(raw_events, sequences, oaai_data=oaai_res)
+    else:
+        sequences = []
+        drilldown = {"zone_to_sequences": {}, "sequence_to_zones": {}}
+        highlights = locate_highlights(events, sequences, oaai_data=oaai_res)
+
+    return {
+        "match_id": match_id,
+        "oaai": oaai_res,
+        "quick_recoveries": recoveries_res,
+        "density_differential": diff_res,
+        "attacking_channels": {"H": channels_h, "N": channels_n},
+        "sequences": sequences,
+        "spatial_drilldown": drilldown,
+        "highlights": highlights,
+    }
 
 
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
