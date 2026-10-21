@@ -2,18 +2,24 @@
 
 import React from "react";
 import { CockpitState, WorkspaceId } from "./types";
+import { Locale, getTranslation } from "../../lib/i18n";
 
 interface WorkspaceTabsProps {
   activeWorkspace: WorkspaceId;
   onSelectWorkspace: (id: WorkspaceId) => void;
   state: CockpitState;
+  locale?: Locale;
 }
 
 export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
   activeWorkspace,
   onSelectWorkspace,
   state,
+  locale = "zh",
 }) => {
+  const t = getTranslation(locale);
+  const isZh = locale === "zh";
+
   const eventCount = state.events?.length || 0;
   const sequenceCount = state.sequences?.length || 0;
   const claimsCount = state.result?.accepted?.length || (state.history?.length || 0);
@@ -21,25 +27,25 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
   const tabs: { id: WorkspaceId; label: string; icon: string; countBadge: string | number }[] = [
     {
       id: "match_center",
-      label: "Match Center (比赛中心)",
+      label: t.workspaceMatchCenter,
       icon: "🏟️",
       countBadge: `${state.score.H}-${state.score.N} (${eventCount})`,
     },
     {
       id: "tactical_lab",
-      label: "Tactical Lab (战术与空间实验室)",
+      label: t.workspaceTacticalLab,
       icon: "🧭",
       countBadge: `${sequenceCount} S2`,
     },
     {
       id: "story_agent",
-      label: "Story & Agent Workbench (研报智能体)",
+      label: t.workspaceStoryAgent,
       icon: "🤖",
       countBadge: `${claimsCount} Gate`,
     },
     {
       id: "validation_lab",
-      label: "Validation Lab (科研与模型审计)",
+      label: t.workspaceValidationLab,
       icon: "📊",
       countBadge: "xT & A/B/C",
     },

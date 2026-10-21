@@ -17,7 +17,9 @@ import { TacticalLabWorkspace } from "./components/cockpit/TacticalLabWorkspace"
 import { StoryAgentWorkbench } from "./components/cockpit/StoryAgentWorkbench";
 import { ValidationLabWorkspace } from "./components/cockpit/ValidationLabWorkspace";
 import { InspectorDrawer } from "./components/cockpit/InspectorDrawer";
+import { TacticalGuideModal } from "./components/cockpit/TacticalGuideModal";
 import { MatchRecap } from "./components/MatchRecap";
+import { Locale, getTranslation } from "./lib/i18n";
 
 async function api<T>(path: string, body?: object): Promise<T> {
   const response = await fetch(`/api/${path}`, {
@@ -66,15 +68,25 @@ export default function MatchLensCockpit() {
   const [evidence, setEvidence] = useState<Evidence | null>(null);
   const inspectionRequest = useRef(0);
 
-  // Theme Initialization & Sync
+  // Theme & Language Initialization & Sync
+  const [locale, setLocale] = useState<Locale>("zh");
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("matchlens-theme");
-      if (saved === "light" || saved === "dark") {
-        setTheme(saved);
-        document.documentElement.setAttribute("data-theme", saved);
+      const savedTheme = localStorage.getItem("matchlens-theme");
+      if (savedTheme === "light" || savedTheme === "dark") {
+        setTheme(savedTheme);
+        document.documentElement.setAttribute("data-theme", savedTheme);
       } else {
         document.documentElement.setAttribute("data-theme", "dark");
+      }
+    } catch {}
+
+    try {
+      const savedLocale = localStorage.getItem("matchlens-locale");
+      if (savedLocale === "zh" || savedLocale === "en") {
+        setLocale(savedLocale);
       }
     } catch {}
   }, []);
@@ -85,6 +97,14 @@ export default function MatchLensCockpit() {
     document.documentElement.setAttribute("data-theme", next);
     try {
       localStorage.setItem("matchlens-theme", next);
+    } catch {}
+  };
+
+  const toggleLocale = () => {
+    const next = locale === "zh" ? "en" : "zh";
+    setLocale(next);
+    try {
+      localStorage.setItem("matchlens-locale", next);
     } catch {}
   };
 
@@ -288,8 +308,11 @@ export default function MatchLensCockpit() {
           connection={connection}
           theme={theme}
           isDrawerOpen={isDrawerOpen}
+          locale={locale}
           onToggleDrawer={() => setIsDrawerOpen(!isDrawerOpen)}
           onToggleTheme={toggleTheme}
+          onToggleLocale={toggleLocale}
+          onOpenGuide={() => setIsGuideOpen(true)}
           onSelectPerspective={(p) => setPerspective(p)}
           onControl={control}
         />
@@ -301,6 +324,7 @@ export default function MatchLensCockpit() {
           activeWorkspace={activeWorkspace}
           onSelectWorkspace={(ws) => setActiveWorkspace(ws)}
           state={state}
+          locale={locale}
         />
       )}
 
@@ -367,6 +391,7 @@ export default function MatchLensCockpit() {
                 selectedHighlightId={selectedHighlightId}
                 selectedChannel={selectedChannel}
                 activeSmoothingMode={activeSmoothingMode}
+                locale={locale}
                 onSeek={(t) => control({ action: "seek", at: t })}
                 onSelectEvent={(id) => setSelectedEventId(id)}
                 onSelectSequence={(seqId) => setSelectedSeqId(seqId)}
@@ -388,6 +413,7 @@ export default function MatchLensCockpit() {
                 selectedSeqId={selectedSeqId}
                 selectedPlayerId={selectedPlayerId}
                 selectedZoneId={selectedZoneId}
+                locale={locale}
                 onSelectEvent={(id: string) => setSelectedEventId(id)}
                 onSelectSequence={(seqId: string) => setSelectedSeqId(seqId)}
                 onSelectPlayer={(pid: string | null) => setSelectedPlayerId(pid)}
@@ -445,6 +471,13 @@ export default function MatchLensCockpit() {
           onSelectEvent={(id) => setSelectedEventId(id)}
           onSelectSequence={(seqId) => setSelectedSeqId(seqId)}
           onInspectReceipt={(id) => inspect(id)}
+        />
+
+        {/* 5. Tactical Indicators & Glossary Guide Modal */}
+        <TacticalGuideModal
+          isOpen={isGuideOpen}
+          onClose={() => setIsGuideOpen(false)}
+          locale={locale}
         />
 
         {/* Cockpit Footer */}

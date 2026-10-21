@@ -2,6 +2,7 @@
 
 import React from "react";
 import { CockpitState, PerspectiveId } from "./types";
+import { Locale, getTranslation } from "../../lib/i18n";
 
 interface TacticalHeaderProps {
   state: CockpitState;
@@ -10,8 +11,11 @@ interface TacticalHeaderProps {
   connection: string;
   theme: "dark" | "light";
   isDrawerOpen: boolean;
+  locale?: Locale;
   onToggleDrawer: () => void;
   onToggleTheme: () => void;
+  onToggleLocale?: () => void;
+  onOpenGuide?: () => void;
   onSelectPerspective: (p: PerspectiveId) => void;
   onControl: (body: object) => void;
 }
@@ -30,11 +34,17 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
   connection,
   theme,
   isDrawerOpen,
+  locale = "zh",
   onToggleDrawer,
   onToggleTheme,
+  onToggleLocale,
+  onOpenGuide,
   onSelectPerspective,
   onControl,
 }) => {
+  const t = getTranslation(locale);
+  const isZh = locale === "zh";
+
   const currentSeconds = state.at || 0;
   const totalSeconds = 720; // 12-minute match simulation window
   const activeMoment = state.active_moment;
@@ -62,7 +72,7 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
             </svg>
             <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
               <span style={{ fontSize: 18, fontWeight: 900, letterSpacing: -0.5, color: "var(--text-primary)" }}>
-                MATCHLENS
+                {t.brandTitle}
               </span>
               <span style={{ fontSize: 12, fontWeight: 900, color: "var(--turf-emerald)" }}>AI</span>
             </div>
@@ -70,14 +80,14 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
 
           <span className="cockpit-brand-badge" title="Obsidian Tactical Multi-Pane Cockpit Engine">
             <span className="pulse-indicator" />
-            <span>COCKPIT 4.0</span>
+            <span>{t.cockpitVersion}</span>
           </span>
         </div>
 
         {/* Match Switcher Dropdown */}
         <div className="match-selector-wrap" title="Select Match Archetype or Real Scenario">
           <label htmlFor="cockpit-match-select" style={{ fontSize: 11, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase" }}>
-            Match
+            {t.matchLabel}
           </label>
           <select
             id="cockpit-match-select"
@@ -110,7 +120,7 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
             className="header-play-btn"
             disabled={busy || state.ended}
             onClick={() => onControl({ action: state.paused ? "play" : "pause" })}
-            title={state.paused ? "Play match (Space)" : "Pause match (Space)"}
+            title={state.paused ? `${t.playMatch} (Space)` : `${t.pauseMatch} (Space)`}
           >
             {state.paused ? "▶" : "⏸"}
           </button>
@@ -128,7 +138,7 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
             }}
             disabled={busy}
             onClick={() => onControl({ action: "restart" })}
-            title="Restart replay from kickoff"
+            title={t.restartKickoff}
           >
             ↺
           </button>
@@ -155,7 +165,7 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
                 className={`header-speed-pill ${state.speed === spd ? "active" : ""}`}
                 disabled={busy}
                 onClick={() => onControl({ action: "speed", speed: spd })}
-                title={`Playback speed ${spd}x`}
+                title={`${t.playbackSpeed} ${spd}x`}
               >
                 {spd}×
               </button>
@@ -185,43 +195,85 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
             type="button"
             className={`perspective-btn perspective-coach ${perspective === "coach" ? "active" : ""}`}
             onClick={() => onSelectPerspective("coach")}
-            title="Coach & Tactical Analyst: High-density channels, 6s recoveries, and ΔD(z)"
+            title={t.perspectiveCoachDesc}
           >
             <span>👔</span>
-            <span>Coach/Tactics</span>
+            <span>{isZh ? "教练视角" : "Coach"}</span>
           </button>
 
           <button
             type="button"
             className={`perspective-btn perspective-media ${perspective === "media" ? "active" : ""}`}
             onClick={() => onSelectPerspective("media")}
-            title="Broadcast & Media: Momentum tidal waves, turning point chapters, and automated narrative"
+            title={t.perspectiveMediaDesc}
           >
             <span>🎙️</span>
-            <span>Broadcast/Media</span>
+            <span>{isZh ? "转播视角" : "Media"}</span>
           </button>
 
           <button
             type="button"
             className={`perspective-btn perspective-fan ${perspective === "fan" ? "active" : ""}`}
             onClick={() => onSelectPerspective("fan")}
-            title="Deep Fan: Star player tracking, key shots, and exciting team sequences"
+            title={t.perspectiveFanDesc}
           >
             <span>⚽</span>
-            <span>Deep Fan</span>
+            <span>{isZh ? "球迷视角" : "Deep Fan"}</span>
           </button>
         </div>
 
-        {/* Right Tools: Connection, Theme, Inspector Drawer Toggle */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span
-            className={`connection-pill ${connection === "Connected" ? "connected" : ""}`}
-            style={{ fontSize: 11, padding: "3px 8px" }}
-          >
-            <i className="status-dot" />
-            <span>{connection}</span>
-          </span>
+        {/* Right Tools: Guide Modal Button, Language Switcher, Theme, Inspector Drawer Toggle */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* Tactical Guide / Help Docs Button */}
+          {onOpenGuide && (
+            <button
+              type="button"
+              onClick={onOpenGuide}
+              style={{
+                minHeight: 32,
+                padding: "4px 10px",
+                fontSize: 12,
+                fontWeight: 700,
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                borderRadius: 6,
+                background: "rgba(245, 158, 11, 0.12)",
+                border: "1px solid rgba(245, 158, 11, 0.3)",
+                color: "var(--amber-gold)",
+                cursor: "pointer",
+              }}
+              title={isZh ? "打开指标与战术指南释义字典" : "Open Tactical Indicator Documentation"}
+            >
+              <span>📖</span>
+              <span>{isZh ? "指标释义" : "Guide"}</span>
+            </button>
+          )}
 
+          {/* Language Switcher Button (中 / EN) */}
+          {onToggleLocale && (
+            <button
+              type="button"
+              onClick={onToggleLocale}
+              style={{
+                minHeight: 32,
+                padding: "4px 9px",
+                fontSize: 11,
+                fontWeight: 800,
+                borderRadius: 6,
+                background: "rgba(56, 189, 248, 0.12)",
+                border: "1px solid rgba(56, 189, 248, 0.3)",
+                color: "var(--tech-cyan)",
+                cursor: "pointer",
+                letterSpacing: "0.5px",
+              }}
+              title={isZh ? "Switch to English" : "切换为中文"}
+            >
+              {isZh ? "🇬🇧 EN" : "🇨🇳 中文"}
+            </button>
+          )}
+
+          {/* Theme Toggle */}
           <button
             type="button"
             onClick={onToggleTheme}
@@ -235,11 +287,12 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
               color: "var(--text-secondary)",
               cursor: "pointer",
             }}
-            title={`Toggle ${theme === "dark" ? "Light" : "Dark"} mode`}
+            title={theme === "dark" ? t.themeLight : t.themeDark}
           >
             {theme === "dark" ? "☀️" : "🌙"}
           </button>
 
+          {/* Inspector Drawer Toggle */}
           <button
             type="button"
             onClick={onToggleDrawer}
@@ -257,10 +310,10 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
               color: isDrawerOpen ? "var(--tech-cyan)" : "var(--text-primary)",
               cursor: "pointer",
             }}
-            title="Toggle Non-blocking Tactical Inspector Drawer"
+            title={t.inspectorDrawer}
           >
             <span>🔍</span>
-            <span>Inspector</span>
+            <span>{t.inspectorDrawer}</span>
             {isDrawerOpen && <span style={{ fontSize: 10 }}>●</span>}
           </button>
         </div>
