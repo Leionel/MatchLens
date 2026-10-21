@@ -1,114 +1,146 @@
 :root,
 [data-theme="dark"] {
-  /* Surfaces - SofaScore Dark Studio Palette */
-  --pitch-bg: #0e1420;
-  --pitch-surface: #151e2e;
-  --pitch-card: #1c2638;
-  --pitch-card-hover: #222f46;
-  --pitch-card-subtle: #121a28;
-  --pitch-well: #101724;
+  /* Obsidian Tactical Dark Palette */
+  --pitch-bg: #0b0f19;
+  --pitch-surface: #111827;
+  --pitch-card: #162032;
+  --pitch-card-hover: #1e2c45;
+  --pitch-card-subtle: #0f172a;
+  --pitch-well: #070c14;
+
+  /* Glassmorphic Surfaces */
+  --glass-bg: rgba(15, 23, 42, 0.75);
+  --glass-bg-subtle: rgba(15, 23, 42, 0.55);
+  --glass-border: rgba(51, 65, 85, 0.6);
+  --glass-border-bright: rgba(148, 163, 184, 0.25);
+  --glass-blur: blur(12px);
 
   /* Borders & Dividers */
-  --pitch-border: rgba(255, 255, 255, 0.09);
+  --pitch-border: rgba(255, 255, 255, 0.08);
   --pitch-border-bright: rgba(255, 255, 255, 0.16);
-  --pitch-border-active: #00b074;
+  --pitch-border-active: #10b981;
 
   /* Elevation Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 10px 28px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+  --shadow-glow-emerald: 0 0 20px rgba(16, 185, 129, 0.25);
+  --shadow-glow-cyan: 0 0 20px rgba(56, 189, 248, 0.25);
 
   /* Accents & Brand */
-  --sofa-blue: #2c65e8;
-  --sofa-blue-glow: rgba(44, 101, 232, 0.2);
-  --turf-emerald: #00b074;
-  --turf-emerald-glow: rgba(0, 176, 116, 0.2);
-  --turf-dark: #07231c;
-  --turf-line: rgba(0, 176, 116, 0.35);
+  --turf-emerald: #10b981;
+  --turf-emerald-glow: rgba(16, 185, 129, 0.25);
+  --turf-dark: #061a15;
+  --turf-line: rgba(16, 185, 129, 0.35);
+
+  --tech-cyan: #38bdf8;
+  --tech-cyan-glow: rgba(56, 189, 248, 0.2);
+  --sofa-blue: #38bdf8;
+  --sofa-blue-glow: rgba(56, 189, 248, 0.2);
+  --ice-blue: #38bdf8;
 
   --electric-gold: #f59e0b;
-  --ice-blue: #3b82f6;
-  --crimson-warn: #ef4444;
-  --crimson-warn-bg: rgba(239, 68, 68, 0.12);
+  --amber-gold: #f59e0b;
+  --crimson-warn: #f43f5e;
+  --crimson-warn-bg: rgba(244, 63, 94, 0.12);
+  --agent-violet: #a855f7;
+  --agent-violet-glow: rgba(168, 85, 247, 0.25);
 
   /* Typography / Inks */
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --text-tertiary: #64748b;
-  --text-emerald: #00b074;
+  --text-emerald: #10b981;
+  --text-cyan: #38bdf8;
   --text-gold: #fbbf24;
 
   /* Gate Status */
-  --gate-published: #00b074;
+  --gate-published: #10b981;
   --gate-qualified: #f59e0b;
-  --gate-withheld: #f87171;
+  --gate-withheld: #f43f5e;
 
   /* Tactical Pitch Variables */
-  --masthead-bg: #111927;
-  --stage-bg: #0d2822;
-  --stage-border: #16433a;
-  --turf-svg-bg: #0f3029;
-  --turf-field-line: #427c6f;
-  --turf-entry-line: #356b5f;
-  --zone-strip-bg: #0a1f1b;
-  --input-bg: #151e2e;
-  --input-border: #27354d;
+  --masthead-bg: #0b0f19;
+  --stage-bg: #091c17;
+  --stage-border: #134e40;
+  --turf-svg-bg: #0a231d;
+  --turf-field-line: #10b981;
+  --turf-entry-line: #059669;
+  --zone-strip-bg: #061612;
+  --input-bg: #111827;
+  --input-border: #1e293b;
   --input-text: #f8fafc;
 }
 
 [data-theme="light"] {
-  /* Surfaces - SofaScore Light Editorial Palette */
-  --pitch-bg: #f0f2f5;
+  /* Clean Tactical Light Palette */
+  --pitch-bg: #f1f5f9;
   --pitch-surface: #ffffff;
   --pitch-card: #f8fafc;
   --pitch-card-hover: #edf2f7;
-  --pitch-card-subtle: #f8fafc;
-  --pitch-well: #eef2f6;
+  --pitch-card-subtle: #f1f5f9;
+  --pitch-well: #e2e8f0;
+
+  /* Glassmorphic Surfaces */
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.65);
+  --glass-border: rgba(203, 213, 225, 0.8);
+  --glass-border-bright: rgba(148, 163, 184, 0.5);
+  --glass-blur: blur(12px);
 
   /* Borders & Dividers */
   --pitch-border: #e2e8f0;
   --pitch-border-bright: #cbd5e1;
-  --pitch-border-active: #00875a;
+  --pitch-border-active: #059669;
 
   /* Elevation Shadows */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.07);
   --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1);
+  --shadow-glow-emerald: 0 0 20px rgba(5, 150, 105, 0.15);
+  --shadow-glow-cyan: 0 0 20px rgba(2, 132, 199, 0.15);
 
   /* Accents & Brand */
-  --sofa-blue: #1e52db;
-  --sofa-blue-glow: rgba(30, 82, 219, 0.15);
-  --turf-emerald: #00875a;
-  --turf-emerald-glow: rgba(0, 135, 90, 0.15);
-  --turf-dark: #e8f5f0;
-  --turf-line: rgba(0, 135, 90, 0.3);
+  --turf-emerald: #059669;
+  --turf-emerald-glow: rgba(5, 150, 105, 0.15);
+  --turf-dark: #ecfdf5;
+  --turf-line: rgba(5, 150, 105, 0.3);
+
+  --tech-cyan: #0284c7;
+  --tech-cyan-glow: rgba(2, 132, 199, 0.15);
+  --sofa-blue: #0284c7;
+  --sofa-blue-glow: rgba(2, 132, 199, 0.15);
+  --ice-blue: #0284c7;
 
   --electric-gold: #d97706;
-  --ice-blue: #2563eb;
-  --crimson-warn: #dc2626;
-  --crimson-warn-bg: rgba(220, 38, 38, 0.08);
+  --amber-gold: #d97706;
+  --crimson-warn: #e11d48;
+  --crimson-warn-bg: rgba(225, 29, 72, 0.08);
+  --agent-violet: #9333ea;
+  --agent-violet-glow: rgba(147, 51, 234, 0.15);
 
   /* Typography / Inks */
-  --text-primary: #111827;
-  --text-secondary: #4b5563;
-  --text-tertiary: #6b7280;
-  --text-emerald: #00875a;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #64748b;
+  --text-emerald: #059669;
+  --text-cyan: #0284c7;
   --text-gold: #b45309;
 
   /* Gate Status */
-  --gate-published: #00875a;
+  --gate-published: #059669;
   --gate-qualified: #d97706;
-  --gate-withheld: #dc2626;
+  --gate-withheld: #e11d48;
 
   /* Tactical Pitch Variables */
   --masthead-bg: #ffffff;
-  --stage-bg: #143e34;
-  --stage-border: #1f5649;
-  --turf-svg-bg: #17483d;
-  --turf-field-line: #528f80;
-  --turf-entry-line: #427c6f;
-  --zone-strip-bg: #0f2e27;
+  --stage-bg: #0f3d32;
+  --stage-border: #145344;
+  --turf-svg-bg: #124639;
+  --turf-field-line: #10b981;
+  --turf-entry-line: #059669;
+  --zone-strip-bg: #0b2e26;
   --input-bg: #ffffff;
   --input-border: #cbd5e1;
-  --input-text: #111827;
+  --input-text: #0f172a;
 }

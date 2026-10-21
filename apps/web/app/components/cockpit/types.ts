@@ -1,0 +1,219 @@
+export type WorkspaceId = "match_center" | "tactical_lab" | "story_agent" | "validation_lab";
+
+export type PerspectiveId = "coach" | "media" | "fan";
+
+export type FootballEvent = {
+  id: string;
+  seq: number;
+  t: number;
+  kind: string;
+  team: "H" | "N";
+  actor: string;
+  receiver: string | null;
+  start: [number, number];
+  end: [number, number];
+  outcome: string;
+  possession_id: number;
+};
+
+export type Receipt = {
+  id: string;
+  value: number;
+  unit: string;
+  event_ids: string[];
+  definition: string;
+  start: number;
+  end: number;
+  numerator?: number;
+  denominator?: number;
+  chains?: { event_ids: string[]; seconds: number }[] | string[][];
+};
+
+export type Card = {
+  claim_id: string;
+  assertion: string;
+  verdict: string;
+  fan: string;
+  analyst: string;
+  refs: string[];
+  scope: string;
+  reason: string;
+  limitations: string[];
+  snapshot_id: string;
+  as_of: number;
+  claim_level?: number;
+  assumptions?: string[];
+  verification_method?: string;
+  counterevidence_checked?: boolean;
+};
+
+export type Audit = {
+  type: string;
+  role?: string;
+  name?: string;
+  from?: string;
+  to?: string;
+  status?: number;
+  request_id?: number;
+  usage?: { prompt_tokens: number; completion_tokens: number };
+  [key: string]: unknown;
+};
+
+export type Result = {
+  status: string;
+  origin: string;
+  accepted: Card[];
+  rejected: {
+    claim_id: string;
+    reason: string;
+    gate: string;
+    verdict: string;
+  }[];
+  error?: string;
+  duration_ms?: number;
+  requests: number;
+  audit: Audit[];
+  snapshot_id: string;
+  as_of: number;
+  run_id: string;
+  reused?: boolean;
+};
+
+export type Evidence = {
+  snapshot_id: string;
+  as_of: number;
+  events: FootballEvent[];
+  receipts: Record<string, Receipt>;
+  limitations: string[];
+};
+
+export type Moment = {
+  id: string;
+  team?: "H" | "N";
+  chapter_id?: string;
+  at: number;
+  badge: string;
+  title: string;
+  question: string;
+  assertion: string;
+  summary: string;
+  priority: number;
+};
+
+export type ScenarioMeta = {
+  id: string;
+  label: string;
+  archetype: string;
+  description: string;
+};
+
+export type PossessionSequence = {
+  sequence_id: string;
+  possession_id: number;
+  team: "H" | "N";
+  start_t: number;
+  end_t: number;
+  duration: number;
+  origin_kind: string;
+  pass_count: number;
+  progressive_distance: number;
+  territory_gained?: number;
+  start_coords?: [number, number];
+  end_coords?: [number, number];
+  entered_final_third: boolean;
+  outcome: string;
+  players: string[];
+  event_ids: string[];
+  events_detail?: {
+    seq_step: number;
+    id: string;
+    kind: string;
+    team: "H" | "N";
+    actor: string;
+    actor_name?: string;
+    receiver?: string | null;
+    receiver_name?: string | null;
+    start: [number, number];
+    end: [number, number];
+    outcome: string;
+    t: number;
+    gain_m: number;
+    channel?: string;
+  }[];
+};
+
+export type PlayerSpotlight = {
+  player_id: string;
+  name: string;
+  team: "H" | "N";
+  team_name: string;
+  passes: number;
+  progressive_passes: number;
+  progressive_distance: number;
+  final_third_entries: number;
+  recoveries: number;
+  shots: number;
+  goals: number;
+  sequences_involved: number;
+  touch_points?: [number, number][];
+  progressive_pass_ids?: string[];
+  recovery_ids?: string[];
+  event_ids: string[];
+};
+
+export type CockpitState = {
+  revision: number;
+  epoch: number;
+  at: number;
+  scenario?: string;
+  scenarios?: ScenarioMeta[];
+  focus_team?: "H" | "N";
+  score: { H: number; N: number };
+  paused: boolean;
+  speed: number;
+  focus: string | null;
+  ball: [number, number];
+  events: FootballEvent[];
+  receipts: Record<string, Receipt>;
+  sequences?: PossessionSequence[];
+  tactical?: any;
+  player_spotlight?: PlayerSpotlight[];
+  players: Record<string, Record<string, string>>;
+  chapters: { id: string; at: number; title: string; question: string }[];
+  moments?: Moment[];
+  active_moment?: Moment | null;
+  snapshot_id: string | null;
+  snapshot_as_of: number | null;
+  analysis_receipts: Record<string, Receipt> | null;
+  auto_status: string;
+  analysis: { status: string; as_of: number; run_id: string } | null;
+  result: Result | null;
+  history: Card[];
+  revisions?: any[];
+  hypotheses_matrix?: any;
+  oaai?: any;
+  quick_recoveries?: any;
+  density_differential?: any;
+  attacking_channels?: any;
+  spatial_drilldown?: {
+    zone_to_sequences?: Record<string, string[]>;
+    sequence_to_zones?: Record<string, string[]>;
+  };
+  highlights?: any[];
+  model_configured: boolean;
+  ended: boolean;
+  session_analyses_remaining: number;
+};
+
+export type InspectorPayload = {
+  type: "sequence" | "receipt" | "claim" | "zone" | "attribution" | "sufficiency";
+  title?: string;
+  sequence?: PossessionSequence | null;
+  receipt?: Receipt | null;
+  receiptId?: string;
+  claim?: Card | null;
+  zoneId?: string | null;
+  zoneName?: string | null;
+  attribution?: any;
+  sufficiencyNotice?: string;
+};

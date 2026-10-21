@@ -709,6 +709,174 @@ async def get_match_exploration(match_id: str, smoothing_mode: Literal["causal",
     }
 
 
+@app.get("/api/matches/{match_id}/story")
+async def get_match_story(
+    match_id: str,
+    perspective: Literal["coach", "media", "fan"] = "media",
+):
+    from .catalog import MatchCatalog
+    from .stories import MatchStoryEngine
+    try:
+        events = MatchCatalog.load_normalized_events(match_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "match_not_found")
+
+    story = MatchStoryEngine.generate_story(match_id, events, perspective=perspective)
+    return story
+
+
+@app.get("/api/matches/{match_id}/perspectives")
+async def get_match_perspectives(
+    match_id: str,
+    perspective: Literal["coach", "media", "fan"] = "media",
+):
+    from .stories import PerspectiveManager
+    return PerspectiveManager.get_perspective_view(perspective, match_id)
+
+
+@app.get("/api/matches/{match_id}/attribution")
+async def get_match_attribution(
+    match_id: str,
+    window_start: float = 0.0,
+    window_end: float = 1200.0,
+    team: str = "H",
+):
+    from .catalog import MatchCatalog
+    from .attribution import EventAttributionSpecialist
+    try:
+        events = MatchCatalog.load_normalized_events(match_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "match_not_found")
+
+    decomp = EventAttributionSpecialist.temporal_window_decomposition(
+        events, window_start_s=window_start, window_end_s=window_end, team=team
+    )
+    alt = EventAttributionSpecialist.alternative_hypothesis_assessment(
+        events, primary_hypothesis=decomp.summary, window_start_s=window_start, window_end_s=window_end, team=team
+    )
+    return {
+        "match_id": match_id,
+        "window_decomposition": decomp,
+        "alternative_hypotheses": alt,
+    }
+
+
+@app.get("/api/matches/{match_id}/validation")
+async def get_match_validation(
+    match_id: str,
+    iterations: int = 50,
+):
+    from .catalog import MatchCatalog
+    from .validation import ScientificValidationEngine
+    try:
+        events = MatchCatalog.load_normalized_events(match_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "match_not_found")
+
+    return ScientificValidationEngine.run_bootstrap_validation(match_id, events, iterations=iterations)
+
+
+@app.post("/api/matches/{match_id}/whatif")
+async def post_match_whatif(
+    match_id: str,
+    req: dict,
+):
+    from .catalog import MatchCatalog
+    from .validation import WhatIfSimulationEngine, WhatIfScenarioRequest
+    try:
+        events = MatchCatalog.load_normalized_events(match_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "match_not_found")
+
+    request_obj = WhatIfScenarioRequest.model_validate(req)
+    return WhatIfSimulationEngine.simulate(events, request_obj)
+
+
+@app.get("/api/benchmark/agents")
+async def get_agent_benchmark(match_id: str = "syn_default"):
+    from .attribution import run_agent_benchmark_harness
+    return run_agent_benchmark_harness(match_id=match_id)
+
+
+@app.get("/api/attribution/window")
+async def get_attribution_window(
+    match_id: str = "syn_default",
+    window_start: float = 0.0,
+    window_end: float = 600.0,
+    team: str = "H",
+    top_k: int = 5,
+):
+    from .catalog import MatchCatalog
+    from .attribution import EventAttributionSpecialist
+    try:
+        events = MatchCatalog.load_normalized_events(match_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "match_not_found")
+    return EventAttributionSpecialist.temporal_window_decomposition(
+        events, window_start=window_start, window_end=window_end, team=team, top_k=top_k, match_id=match_id
+    )
+
+
+@app.get("/api/attribution/chain")
+async def get_attribution_chain(
+    match_id: str = "syn_default",
+    target_event_id: str = "",
+    lookback_seconds: float = 30.0,
+):
+    from .catalog import MatchCatalog
+    from .attribution import EventAttributionSpecialist
+    try:
+        events = MatchCatalog.load_normalized_events(match_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "match_not_found")
+    if not target_event_id and events:
+        target_event_id = events[-1].event_id
+    return EventAttributionSpecialist.causal_chain_query(
+        events, target_event_id=target_event_id, lookback_seconds=lookback_seconds
+    )
+
+
+@app.get("/api/attribution/alternatives")
+async def get_attribution_alternatives(
+    match_id: str = "syn_default",
+    window_start: float = 0.0,
+    window_end: float = 600.0,
+    team: str = "H",
+    primary_hypothesis: str = "High pressing forced turnover and chance",
+):
+    from .catalog import MatchCatalog
+    from .attribution import EventAttributionSpecialist
+    try:
+        events = MatchCatalog.load_normalized_events(match_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "match_not_found")
+    return EventAttributionSpecialist.alternative_hypothesis_assessment(
+        events, primary_hypothesis=primary_hypothesis, window_start=window_start, window_end=window_end, team=team
+    )
+
+
+@app.get("/api/sufficiency/{match_id}")
+async def get_data_sufficiency(
+    match_id: str,
+    coverage_level: str = "C0",
+):
+    from .catalog import MatchCatalog
+    from .sufficiency import assess_data_sufficiency
+    try:
+        events = MatchCatalog.load_normalized_events(match_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "match_not_found")
+    return assess_data_sufficiency(events, coverage_level=coverage_level)
+
+
+@app.get("/api/benchmark/abc")
+async def get_benchmark_abc(
+    match_id: str = "syn_default",
+):
+    from .benchmark import run_agent_benchmark_harness
+    return run_agent_benchmark_harness(match_id=match_id)
+
+
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
 async def missing_api(path: str):
     raise HTTPException(404, "api_not_found")
