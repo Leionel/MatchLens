@@ -31,7 +31,12 @@ from matchlens.schema import (
     VerifiedClaim,
 )
 from matchlens.adapters.statsbomb import StatsBombAdapter
-from matchlens.models.xt import ExpectedThreatModel
+from matchlens.models.xt import (
+    ExpectedThreatModel,
+    ExpectedThreatFitter,
+    compare_xt_grids,
+    fit_xt_model,
+)
 from matchlens.catalog import MatchCatalog, MatchMetadata
 
 
@@ -345,3 +350,391 @@ def test_api_track_a_endpoints():
     assert xt_data["model_name"] == "matchlens_xt_grid"
     assert xt_data["grid_resolution"] == {"nx": 16, "ny": 12}
     assert "license_and_attribution" in xt_data
+
+    # 5. GET /api/models/xt/compare
+    res_comp = client.get("/api/models/xt/compare?resolution=16x12&match_id=sb_wc2022_final")
+    assert res_comp.status_code == 200
+    comp_data = res_comp.json()
+    assert "comparison" in comp_data
+    assert comp_data["comparison"]["is_consistent"] is True
+
+
+def test_statsbomb_own_goal_handling():
+    """Verify BL-01 own goal parsing from type and shot outcomes."""
+    adapter = StatsBombAdapter(match_id="test_og")
+    raw_events = [
+        # 1. Type: Own Goal Against
+        {
+            "id": "og_1",
+            "index": 1,
+            "period": 1,
+            "minute": 15,
+            "second": 0,
+            "type": {"id": 25, "name": "Own Goal Against"},
+            "team": {"id": 1, "name": "Team A"},
+            "player": {"id": 101, "name": "Defender Smith"},
+            "location": [10.0, 40.0],
+        },
+        # 2. Shot with type: Own Goal
+        {
+            "id": "og_2",
+            "index": 2,
+            "period": 2,
+            "minute": 60,
+            "second": 30,
+            "type": {"id": 16, "name": "Shot"},
+            "team": {"id": 2, "name": "Team B"},
+            "player": {"id": 102, "name": "Defender Jones"},
+            "location": [15.0, 38.0],
+            "shot": {
+                "type": {"id": 25, "name": "Own Goal"},
+                "outcome": {"id": 97, "name": "Goal"},
+            },
+        },
+    ]
+
+    events = adapter.load_events(raw_events)
+    assert len(events) == 2
+    assert events[0].outcome == "own_goal"
+    assert events[0].is_own_goal is True
+    assert events[0].action_type == ActionType.OWN_GOAL
+
+    assert events[1].outcome == "own_goal"
+    assert events[1].is_own_goal is True
+    assert len(adapter.own_goals) == 2
+
+
+def test_statsbomb_red_yellow_cards_and_player_deficit():
+    """Verify card extraction, player expulsion tracking and team man advantage state."""
+    adapter = StatsBombAdapter(match_id="test_cards")
+    raw_events = [
+        # Normal event initializes team player count to 11
+        {
+            "id": "c_0",
+            "index": 1,
+            "period": 1,
+            "minute": 5,
+            "second": 0,
+            "type": {"id": 30, "name": "Pass"},
+            "team": {"id": 1, "name": "Team Alpha"},
+            "location": [60.0, 40.0],
+        },
+        {
+            "id": "c_1",
+            "index": 2,
+            "period": 1,
+            "minute": 12,
+            "second": 0,
+            "type": {"id": 30, "name": "Pass"},
+            "team": {"id": 2, "name": "Team Beta"},
+            "location": [60.0, 40.0],
+        },
+        # Yellow card on Team Alpha
+        {
+            "id": "c_2",
+            "index": 3,
+            "period": 1,
+            "minute": 20,
+            "second": 0,
+            "type": {"id": 22, "name": "Foul Committed"},
+            "team": {"id": 1, "name": "Team Alpha"},
+            "player": {"id": 4, "name": "Alpha Player 4"},
+            "foul_committed": {
+                "card": {"id": 7, "name": "Yellow Card"},
+            },
+        },
+        # Direct red card on Team Alpha
+        {
+            "id": "c_3",
+            "index": 4,
+            "period": 1,
+            "minute": 35,
+            "second": 0,
+            "type": {"id": 22, "name": "Foul Committed"},
+            "team": {"id": 1, "name": "Team Alpha"},
+            "player": {"id": 5, "name": "Alpha Player 5"},
+            "foul_committed": {
+                "card": {"id": 6, "name": "Red Card"},
+            },
+        },
+        # Second yellow card on Team Beta via bad behaviour
+        {
+            "id": "c_4",
+            "index": 5,
+            "period": 2,
+            "minute": 70,
+            "second": 0,
+            "type": {"id": 24, "name": "Bad Behaviour"},
+            "team": {"id": 2, "name": "Team Beta"},
+            "player": {"id": 8, "name": "Beta Player 8"},
+            "bad_behaviour": {
+                "card": {"id": 8, "name": "Second Yellow"},
+            },
+        },
+    ]
+
+    events = adapter.load_events(raw_events)
+    assert events[2].card == "yellow_card"
+    assert events[3].card == "red_card"
+    assert events[4].card == "second_yellow"
+
+    summary = adapter.get_discipline_summary()
+    assert summary["yellow_cards_count"] == 1
+    assert summary["red_cards_count"] == 2
+    assert summary["team_player_counts"]["Team Alpha"] == 10
+    assert summary["team_player_counts"]["Team Beta"] == 10
+    assert len(summary["expulsions"]) == 2
+
+
+def test_statsbomb_non_standard_penalty_shootout():
+    """Verify shootout clock handling, period >= 5 parsing and sudden death detection."""
+    adapter = StatsBombAdapter(match_id="test_shootout")
+    raw_events = []
+    # Generate 12 shootout kicks (regular 10 kicks + 2 sudden death kicks)
+    for k in range(1, 13):
+        team = "ARG" if k % 2 == 1 else "FRA"
+        raw_events.append({
+            "id": f"pk_{k}",
+            "index": k,
+            "period": 5 if k <= 10 else 6,
+            "minute": 120 + (k // 2),
+            "second": (k % 2) * 30,
+            "type": {"id": 16, "name": "Shot"},
+            "team": {"id": 1 if team == "ARG" else 2, "name": team},
+            "player": {"id": 100 + k, "name": f"Kicker {k}"},
+            "location": [108.0, 40.0],
+            "shot": {
+                "type": {"id": 25, "name": "Penalty Shootout"},
+                "outcome": {"id": 97, "name": "Goal" if k % 3 != 0 else "Saved"},
+            },
+        })
+
+    events = adapter.load_events(raw_events)
+    assert len(events) == 12
+    for ev in events:
+        assert 7200.0 <= ev.clock_seconds <= 7600.0
+
+    shootout_summary = adapter.get_shootout_summary()
+    assert shootout_summary["is_shootout"] is True
+    assert shootout_summary["total_kicks"] == 12
+    assert shootout_summary["sudden_death_reached"] is True
+    assert "ARG" in shootout_summary["team_shootout_goals"]
+    assert "FRA" in shootout_summary["team_shootout_goals"]
+
+
+def test_statsbomb_missing_and_corrupt_coordinates_resilience():
+    """Verify graceful handling of None, empty, out-of-bounds, NaN/Inf, and string coords."""
+    import math
+
+    # 1. Transform coordinates edge cases
+    assert StatsBombAdapter.transform_coordinates(None, 40.0) == (None, None)
+    assert StatsBombAdapter.transform_coordinates(60.0, None) == (None, None)
+    assert StatsBombAdapter.transform_coordinates("invalid", 40.0) == (None, None)
+    assert StatsBombAdapter.transform_coordinates(float("nan"), 40.0) == (None, None)
+    assert StatsBombAdapter.transform_coordinates(float("inf"), 40.0) == (None, None)
+
+    # Clamping extreme values
+    x_clamped, y_clamped = StatsBombAdapter.transform_coordinates(-50.0, 200.0)
+    assert x_clamped == 0.0
+    assert y_clamped == 68.0
+
+    # String numeric input
+    xs, ys = StatsBombAdapter.transform_coordinates("60.0", "40.0")
+    assert xs == 52.5
+    assert ys == 34.0
+
+    # 2. Extract location edge cases
+    assert StatsBombAdapter.extract_location(None) == (None, None)
+    assert StatsBombAdapter.extract_location([]) == (None, None)
+    assert StatsBombAdapter.extract_location([50.0]) == (None, None)
+    # 3D location
+    x3d, y3d = StatsBombAdapter.extract_location([120.0, 40.0, 1.2])
+    assert x3d == 105.0
+    assert y3d == 34.0
+
+    # 3. NormalizedEvent with missing coords evaluated by xT model
+    adapter = StatsBombAdapter(match_id="test_missing")
+    raw = [
+        {
+            "id": "ev_no_loc",
+            "index": 1,
+            "period": 1,
+            "minute": 1,
+            "second": 0,
+            "type": {"id": 30, "name": "Pass"},
+            "team": {"name": "Team A"},
+            "location": None,
+            "pass": {"end_location": None},
+        }
+    ]
+    evs = adapter.load_events(raw)
+    assert evs[0].x is None
+    assert evs[0].y is None
+    assert evs[0].end_x is None
+    assert evs[0].end_y is None
+
+    xt_model = ExpectedThreatModel.load_default("16x12")
+    metric = xt_model.evaluate_action(evs[0])
+    assert metric.status == "missing_input"
+    assert metric.value is None
+
+
+def test_statsbomb_and_catalog_multi_match_batch_loading():
+    """Verify batch ingestion of multiple matches across synthetic and real catalogs."""
+    # 1. StatsBombAdapter.load_multiple_matches
+    batch_raw = [
+        {
+            "metadata": {"match_id": "m_1"},
+            "events": [
+                {
+                    "id": "m1_e1",
+                    "index": 1,
+                    "period": 1,
+                    "minute": 1,
+                    "second": 0,
+                    "type": {"name": "Pass"},
+                    "team": {"name": "T1"},
+                    "location": [60.0, 40.0],
+                }
+            ],
+        },
+        {
+            "metadata": {"match_id": "m_2"},
+            "events": [
+                {
+                    "id": "m2_e1",
+                    "index": 1,
+                    "period": 1,
+                    "minute": 2,
+                    "second": 0,
+                    "type": {"name": "Shot"},
+                    "team": {"name": "T2"},
+                    "location": [108.0, 40.0],
+                    "shot": {"outcome": {"name": "Goal"}},
+                }
+            ],
+        },
+        {"metadata": {"match_id": "m_corrupted"}, "events": "not_a_list"},
+    ]
+
+    loaded_batch = StatsBombAdapter.load_multiple_matches(batch_raw)
+    assert "m_1" in loaded_batch and len(loaded_batch["m_1"]) == 1
+    assert "m_2" in loaded_batch and len(loaded_batch["m_2"]) == 1
+    assert "m_corrupted" in loaded_batch or "error_match_2" in loaded_batch
+
+    # 2. MatchCatalog.load_multiple_matches & get_batch_summary
+    cat_matches = ["syn_default", "syn_counterattack", "sb_wc2022_final"]
+    loaded_cat = MatchCatalog.load_multiple_matches(cat_matches)
+    assert len(loaded_cat) == 3
+    for mid in cat_matches:
+        assert len(loaded_cat[mid]) > 0
+
+    batch_summary = MatchCatalog.get_batch_summary(cat_matches)
+    assert batch_summary["total_matches"] == 3
+    assert batch_summary["total_events"] > 200
+    assert batch_summary["passes_count"] > 100
+    assert batch_summary["shots_count"] > 10
+
+
+def test_xt_model_dirichlet_shrinkage_fitting():
+    """Verify ExpectedThreatFitter on multi-match event stream with Dirichlet shrinkage."""
+    import math
+
+    # Load multi-match event sequence
+    batch_events = MatchCatalog.load_multiple_matches(["syn_default", "syn_transitions", "sb_wc2022_final"])
+    all_events = []
+    for ev_list in batch_events.values():
+        all_events.extend(ev_list)
+
+    assert len(all_events) > 250
+
+    # Fit custom model with Dirichlet shrinkage
+    fitter = ExpectedThreatFitter(
+        nx=16,
+        ny=12,
+        horizon_steps=5,
+        alpha_g=5.0,
+        alpha_T=10.0,
+        alpha_s=5.0,
+        spatial_smooth=True,
+    )
+    fitted_model = fitter.fit(
+        all_events,
+        match_ids=["syn_default", "syn_transitions", "sb_wc2022_final"],
+        competitions=["Simulation League", "FIFA World Cup 2022"],
+    )
+
+    # 1. Verify metadata adhering to XT_MODELING_SPEC.md Section 5
+    meta = fitted_model.metadata
+    assert meta["model_name"] == "matchlens_xt_grid_fitted"
+    assert meta["model_version"] == "1.1.0"
+    assert meta["grid_resolution"] == {"nx": 16, "ny": 12}
+    assert meta["horizon_steps"] == 5
+    assert "dirichlet_eb_shrinkage" in meta["smoothing_method"]
+    assert meta["training_corpus"]["num_matches"] == 3
+    assert meta["training_corpus"]["num_move_events"] > 100
+    assert meta["training_corpus"]["num_shot_events"] > 10
+
+    # 2. Values sanity checks
+    for r in fitted_model.values:
+        for val in r:
+            assert isinstance(val, float)
+            assert not math.isnan(val)
+            assert 0.001 <= val <= 0.35
+
+    # Threat in attacking box is significantly higher than defensive third
+    v_def = fitted_model.value_at(15.0, 34.0)
+    v_box = fitted_model.value_at(96.0, 34.0)
+    assert v_box > v_def
+
+
+def test_xt_grid_comparison_and_validation():
+    """Verify compare_xt_grids against precomputed benchmark grid."""
+    baseline = ExpectedThreatModel.load_default("16x12")
+
+    events = MatchCatalog.load_normalized_events("syn_default") + MatchCatalog.load_normalized_events("syn_balanced")
+    fitted = fit_xt_model(events, nx=16, ny=12, alpha_g=5.0, alpha_T=10.0)
+
+    comp = compare_xt_grids(fitted, baseline)
+    assert "mae" in comp
+    assert "rmse" in comp
+    assert "correlation" in comp
+    assert "zone_mae" in comp
+    assert "monotonicity_scores" in comp
+    assert "is_consistent" in comp
+
+    # Fitted model with empirical Bayes shrinkage strongly correlates with benchmark
+    assert comp["correlation"] > 0.80
+    assert comp["mae"] < 0.05
+    assert comp["rmse"] < 0.06
+    assert comp["is_consistent"] is True
+
+    # Check instance method convenience
+    direct_comp = fitted.compare_with(baseline)
+    assert direct_comp["correlation"] == comp["correlation"]
+
+
+def test_xt_spatial_smoothing_removes_discontinuities():
+    """Verify 2D Gaussian smoothing eliminates step artifacts while preserving trends."""
+    events = MatchCatalog.load_normalized_events("syn_comeback")
+
+    fitter_smooth = ExpectedThreatFitter(nx=16, ny=12, spatial_smooth=True, smooth_sigma=0.8)
+    fitter_raw = ExpectedThreatFitter(nx=16, ny=12, spatial_smooth=False)
+
+    m_smooth = fitter_smooth.fit(events)
+    m_raw = fitter_raw.fit(events)
+
+    def max_adjacent_delta(values):
+        max_d = 0.0
+        ny, nx = len(values), len(values[0])
+        for iy in range(ny):
+            for ix in range(nx - 1):
+                max_d = max(max_d, abs(values[iy][ix + 1] - values[iy][ix]))
+        return max_d
+
+    delta_smooth = max_adjacent_delta(m_smooth.values)
+    delta_raw = max_adjacent_delta(m_raw.values)
+
+    assert delta_smooth <= delta_raw + 1e-4
+    assert m_smooth.value_at(95.0, 34.0) > m_smooth.value_at(20.0, 34.0)
+

@@ -36,6 +36,8 @@ class ActionType(str, Enum):
     DUEL = "Duel"
     GOALKEEPER = "Goal Keeper"
     RESTART = "Restart"
+    BAD_BEHAVIOUR = "Bad Behaviour"
+    OWN_GOAL = "Own Goal"
     OTHER = "Other"
 
 
@@ -72,7 +74,9 @@ class NormalizedEvent(BaseModel):
     player_name: Optional[str] = None
     jersey_number: Optional[int] = None
     action_type: ActionType
-    outcome: Optional[str] = None  # e.g. "complete", "incomplete", "goal", "saved", "blocked"
+    outcome: Optional[str] = None  # e.g. "complete", "incomplete", "goal", "saved", "blocked", "own_goal"
+    card: Optional[str] = None  # e.g. "yellow_card", "second_yellow", "red_card"
+    is_own_goal: Optional[bool] = None
     x: Optional[float] = Field(default=None, ge=0.0, le=105.0)
     y: Optional[float] = Field(default=None, ge=0.0, le=68.0)
     end_x: Optional[float] = Field(default=None, ge=0.0, le=105.0)

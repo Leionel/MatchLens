@@ -113,6 +113,52 @@ class MatchCatalog:
         return adapter.load_events(raw_events)
 
     @classmethod
+    def load_multiple_matches(
+        cls, match_ids: list[str]
+    ) -> dict[str, list[NormalizedEvent]]:
+        """Batch load multiple matches by ID across synthetic and real catalogs."""
+        results: dict[str, list[NormalizedEvent]] = {}
+        for m_id in match_ids:
+            try:
+                events = cls.load_normalized_events(m_id)
+                results[m_id] = events
+            except Exception:
+                results[m_id] = []
+        return results
+
+    @classmethod
+    def get_batch_summary(cls, match_ids: list[str]) -> dict[str, Any]:
+        """Return aggregated cross-match event statistics."""
+        batch_events = cls.load_multiple_matches(match_ids)
+        total_matches = len(batch_events)
+        total_events = sum(len(evs) for evs in batch_events.values())
+        passes = 0
+        shots = 0
+        goals = 0
+        carries = 0
+
+        for evs in batch_events.values():
+            for ev in evs:
+                if ev.action_type == ActionType.PASS:
+                    passes += 1
+                elif ev.action_type == ActionType.CARRY:
+                    carries += 1
+                elif ev.action_type == ActionType.SHOT:
+                    shots += 1
+                    if ev.outcome == "goal":
+                        goals += 1
+
+        return {
+            "match_ids": match_ids,
+            "total_matches": total_matches,
+            "total_events": total_events,
+            "passes_count": passes,
+            "carries_count": carries,
+            "shots_count": shots,
+            "goals_count": goals,
+        }
+
+    @classmethod
     def _convert_synthetic_events(cls, events: tuple, match_id: str) -> list[NormalizedEvent]:
         """Normalize internal synthetic events into the unified NormalizedEvent model."""
         normalized: list[NormalizedEvent] = []
