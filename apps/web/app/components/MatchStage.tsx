@@ -144,9 +144,12 @@ type MatchStageProps = {
   tactical?: TacticalData | null;
   selectedPlayerId?: string | null;
   playerSpotlight?: any[];
+  selectedZoneId?: string | null;
+  sequenceTraversedZones?: string[];
   onSelectEvent?: (eventId: string) => void;
   onClearSequence?: () => void;
   onSelectPlayer?: (playerId: string | null) => void;
+  onSelectZone?: (cellId: string | null) => void;
 };
 
 export function MatchStage({
@@ -160,9 +163,12 @@ export function MatchStage({
   tactical,
   selectedPlayerId,
   playerSpotlight,
+  selectedZoneId,
+  sequenceTraversedZones = [],
   onSelectEvent,
   onClearSequence,
   onSelectPlayer,
+  onSelectZone,
 }: MatchStageProps) {
   const [layer, setLayer] = useState<"live" | "network" | "progression" | "recoveries" | "zones">("live");
   const [stepIndex, setStepIndex] = useState<number | null>(null);
@@ -209,6 +215,17 @@ export function MatchStage({
           </h2>
         </div>
         <div className="stage-direction">
+          {selectedZoneId && (
+            <button
+              type="button"
+              className="feed-filter-btn"
+              style={{ marginRight: 8, padding: "2px 8px", fontSize: 11, backgroundColor: "#00b074", color: "#ffffff" }}
+              onClick={() => onSelectZone?.(null)}
+              title="清除九宫格下钻过滤"
+            >
+              Zone Filter: {tactical?.zone_cells?.find(c => c.cell_id === selectedZoneId)?.name || selectedZoneId} ✕
+            </button>
+          )}
           {selectedSequence && (
             <button
               type="button"
@@ -623,6 +640,26 @@ export function MatchStage({
                 const maxPct = Math.max(...tactical.zone_cells!.map((c) => c.percentage), 1.0);
                 const opacity = Math.max(0.12, Math.min(0.70, (cell.percentage / maxPct) * 0.72));
                 const isCellSelected = cell.event_ids.some((id) => selectedEvent?.id === id);
+                const isZoneFiltered = selectedZoneId === cell.cell_id;
+                const isTraversedBySeq = sequenceTraversedZones.includes(cell.cell_id);
+
+                let strokeColor = "rgba(255, 255, 255, 0.28)";
+                let strokeW = 0.4;
+                let strokeDash: string | undefined = "1.5 1";
+
+                if (isZoneFiltered) {
+                  strokeColor = "#00e599";
+                  strokeW = 1.6;
+                  strokeDash = undefined;
+                } else if (isTraversedBySeq) {
+                  strokeColor = "#38bdf8";
+                  strokeW = 1.4;
+                  strokeDash = "2 1";
+                } else if (isCellSelected) {
+                  strokeColor = "var(--turf-emerald)";
+                  strokeW = 1.0;
+                  strokeDash = undefined;
+                }
 
                 return (
                   <g
@@ -630,6 +667,7 @@ export function MatchStage({
                     className="zone-cell-group"
                     style={{ cursor: "pointer" }}
                     onClick={() => {
+                      onSelectZone?.(selectedZoneId === cell.cell_id ? null : cell.cell_id);
                       if (cell.event_ids.length > 0) {
                         onSelectEvent?.(cell.event_ids.at(-1)!);
                       }
@@ -640,12 +678,57 @@ export function MatchStage({
                       y={cell.y_min}
                       width={width}
                       height={height}
-                      fill={teamColor}
-                      fillOpacity={opacity}
-                      stroke={isCellSelected ? "var(--turf-emerald)" : "rgba(255, 255, 255, 0.28)"}
-                      strokeWidth={isCellSelected ? 1.0 : 0.4}
-                      strokeDasharray={isCellSelected ? undefined : "1.5 1"}
+                      fill={isZoneFiltered ? "#00e599" : isTraversedBySeq ? "#0284c7" : teamColor}
+                      fillOpacity={isZoneFiltered ? 0.42 : isTraversedBySeq ? 0.38 : opacity}
+                      stroke={strokeColor}
+                      strokeWidth={strokeW}
+                      strokeDasharray={strokeDash}
                     />
+                    {isTraversedBySeq && (
+                      <g>
+                        <rect
+                          x={cell.x_min + 1.2}
+                          y={cell.y_min + 1.2}
+                          width="9.5"
+                          height="2.8"
+                          rx="0.4"
+                          fill="#0284c7"
+                          fillOpacity="0.9"
+                        />
+                        <text
+                          x={cell.x_min + 5.9}
+                          y={cell.y_min + 3.1}
+                          textAnchor="middle"
+                          fill="#ffffff"
+                          fontSize="1.5"
+                          fontWeight="800"
+                        >
+                          TRAVERSED
+                        </text>
+                      </g>
+                    )}
+                    {isZoneFiltered && (
+                      <g>
+                        <rect
+                          x={cell.x_max - 10.7}
+                          y={cell.y_min + 1.2}
+                          width="9.5"
+                          height="2.8"
+                          rx="0.4"
+                          fill="#00b074"
+                        />
+                        <text
+                          x={cell.x_max - 5.9}
+                          y={cell.y_min + 3.1}
+                          textAnchor="middle"
+                          fill="#ffffff"
+                          fontSize="1.5"
+                          fontWeight="800"
+                        >
+                          FILTERED
+                        </text>
+                      </g>
+                    )}
                     <text
                       x={cell.x_min + width / 2}
                       y={cell.y_min + height / 2 - 2.5}

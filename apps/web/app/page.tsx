@@ -11,6 +11,11 @@ import { EvidenceDrawer } from "./components/EvidenceDrawer";
 import { BroadcastOverlay } from "./components/BroadcastOverlay";
 import { EventFeed } from "./components/EventFeed";
 import { MatchRecap } from "./components/MatchRecap";
+import { OAAITimeline } from "./components/OAAITimeline";
+import { QuickRecoveryAnalysis } from "./components/QuickRecoveryAnalysis";
+import { ActionDensityDifferential } from "./components/ActionDensityDifferential";
+import { AttackingChannelAnalysis } from "./components/AttackingChannelAnalysis";
+import { HighlightLocator, HighlightCandidate } from "./components/HighlightLocator";
 
 type FootballEvent = {
   id: string;
@@ -197,6 +202,15 @@ type State = {
   history: Card[];
   revisions?: any[];
   hypotheses_matrix?: any;
+  oaai?: any;
+  quick_recoveries?: any;
+  density_differential?: any;
+  attacking_channels?: any;
+  spatial_drilldown?: {
+    zone_to_sequences?: Record<string, string[]>;
+    sequence_to_zones?: Record<string, string[]>;
+  };
+  highlights?: HighlightCandidate[];
   model_configured: boolean;
   ended: boolean;
   session_analyses_remaining: number;
@@ -233,6 +247,11 @@ export default function MatchLens() {
   const [selectedId, setSelectedId] = useState("");
   const [selectedSeqId, setSelectedSeqId] = useState("");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  const [activeSmoothingMode, setActiveSmoothingMode] = useState<"causal" | "bilateral">("causal");
+  const [activeViewMode, setActiveViewMode] = useState<"studio" | "exploration">("studio");
+  const [selectedHighlightId, setSelectedHighlightId] = useState<string | null>(null);
+  const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
   const [sequenceFilter, setSequenceFilter] = useState<"all" | "final_third" | "shots" | "progression" | "turnover">("all");
   const [explorerTab, setExplorerTab] = useState<"sequences" | "players">("sequences");
   const [showAllEvents, setShowAllEvents] = useState(false);
@@ -264,11 +283,32 @@ export default function MatchLens() {
     } catch {}
   };
 
+  const handleToggleSmoothingMode = async (mode: "causal" | "bilateral") => {
+    setActiveSmoothingMode(mode);
+    try {
+      const updated = await api<any>(`exploration/oaai?smoothing_mode=${mode}`);
+      if (updated) {
+        setState((prev) => (prev ? { ...prev, oaai: updated } : prev));
+      }
+    } catch {}
+  };
+
+  const handleWindowChange = async (newWindow: number) => {
+    try {
+      const updated = await api<any>(`exploration/recoveries?window_seconds=${newWindow}`);
+      if (updated) {
+        setState((prev) => (prev ? { ...prev, quick_recoveries: updated } : prev));
+      }
+    } catch {}
+  };
+
   useEffect(() => {
     inspectionRequest.current += 1;
     setEvidence(null);
     setSelectedId("");
     setSelectedSeqId("");
+    setSelectedZoneId(null);
+    setSelectedHighlightId(null);
     setIsDrawerOpen(false);
     setShowOverlay(false);
     setShowTrace(false);
@@ -542,6 +582,50 @@ export default function MatchLens() {
               onFocusMoment={(id) => control({ action: "focus_moment", moment_id: id })}
             />
 
+            {/* View Mode Bar: Live Match Center vs Interactive Exploration */}
+            <div className="flex items-center justify-between bg-[#151e2e] border border-[rgba(255,255,255,0.09)] px-4 py-2.5 rounded-xl">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">VIEW MODE:</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveViewMode("studio")}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                    activeViewMode === "studio"
+                      ? "bg-[#00b074] text-white shadow-md shadow-[#00b074]/20"
+                      : "text-slate-400 hover:text-white bg-[#0e1420]"
+                  }`}
+                >
+                  🏟️ 比赛直播中心 (Match Center)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveViewMode("exploration")}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                    activeViewMode === "exploration"
+                      ? "bg-[#2c65e8] text-white shadow-md shadow-blue-500/20"
+                      : "text-slate-400 hover:text-white bg-[#0e1420]"
+                  }`}
+                >
+                  🔬 战术交互探索 (Track B Exploration)
+                </button>
+              </div>
+              <div className="text-xs text-slate-400 hidden sm:block">
+                {activeViewMode === "exploration" ? "双向空间下钻 · 6s快速恢复 · 密度差分 · 进攻通道" : "实时事件流 · 控球序列 · 论断查证"}
+              </div>
+            </div>
+
+            {/* OAAI Momentum Wave Chart (BL-02) */}
+            <OAAITimeline
+              data={state.oaai}
+              currentTime={state.at}
+              homeTeamName="Harbor FC"
+              awayTeamName="Northbridge United"
+              onSeek={(t) => control({ action: "seek", at: Math.round(t) })}
+              onSelectEvent={(eventId) => setSelectedId(eventId)}
+              onToggleSmoothingMode={handleToggleSmoothingMode}
+              activeSmoothingMode={activeSmoothingMode}
+            />
+
             {/* 4. Core Tactical Grid */}
             <div className="tactical-main-grid">
               {/* Left Column: Tactical Pitch Stage & Metric Delta */}
@@ -559,11 +643,18 @@ export default function MatchLens() {
                   tactical={state.tactical}
                   selectedPlayerId={selectedPlayerId}
                   playerSpotlight={state.player_spotlight}
+                  selectedZoneId={selectedZoneId}
+                  sequenceTraversedZones={
+                    selectedSeqId && state.spatial_drilldown?.sequence_to_zones
+                      ? state.spatial_drilldown.sequence_to_zones[selectedSeqId] || []
+                      : []
+                  }
                   onSelectEvent={(id) => {
                     setSelectedId(id);
                   }}
                   onClearSequence={() => setSelectedSeqId("")}
                   onSelectPlayer={(pid) => setSelectedPlayerId(pid)}
+                  onSelectZone={(zid) => setSelectedZoneId(zid)}
                 />
 
                 {mode === "analyst" && (
@@ -617,7 +708,13 @@ export default function MatchLens() {
                           ? allTeamSeqs.filter((sq) => sq.players.includes(selectedPlayerId))
                           : allTeamSeqs;
 
-                        const filtered = playerFiltered.filter((sq) => {
+                        const zoneFiltered = selectedZoneId && state.spatial_drilldown?.zone_to_sequences
+                          ? playerFiltered.filter((sq) =>
+                              state.spatial_drilldown?.zone_to_sequences?.[selectedZoneId]?.includes(sq.sequence_id)
+                            )
+                          : playerFiltered;
+
+                        const filtered = zoneFiltered.filter((sq) => {
                           if (sequenceFilter === "final_third") return sq.entered_final_third;
                           if (sequenceFilter === "shots") return sq.outcome === "shot" || sq.outcome === "goal" || sq.outcome === "saved";
                           if (sequenceFilter === "progression") return (sq.territory_gained ?? sq.progressive_distance) >= 15;
@@ -663,11 +760,11 @@ export default function MatchLens() {
                             <div className="sequence-filter-bar" style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "6px 0 10px" }}>
                               {(
                                 [
-                                  ["all", `All (${playerFiltered.length})`],
-                                  ["final_third", `Final 3rd (${playerFiltered.filter((s) => s.entered_final_third).length})`],
-                                  ["shots", `Shots/Goals (${playerFiltered.filter((s) => s.outcome === "shot" || s.outcome === "goal" || s.outcome === "saved").length})`],
-                                  ["progression", `Prog ≥15m (${playerFiltered.filter((s) => (s.territory_gained ?? s.progressive_distance) >= 15).length})`],
-                                  ["turnover", `Turnover (${playerFiltered.filter((s) => s.outcome === "turnover").length})`],
+                                  ["all", `All (${zoneFiltered.length})`],
+                                  ["final_third", `Final 3rd (${zoneFiltered.filter((s) => s.entered_final_third).length})`],
+                                  ["shots", `Shots/Goals (${zoneFiltered.filter((s) => s.outcome === "shot" || s.outcome === "goal" || s.outcome === "saved").length})`],
+                                  ["progression", `Prog ≥15m (${zoneFiltered.filter((s) => (s.territory_gained ?? s.progressive_distance) >= 15).length})`],
+                                  ["turnover", `Turnover (${zoneFiltered.filter((s) => s.outcome === "turnover").length})`],
                                 ] as const
                               ).map(([key, label]) => (
                                 <button
@@ -680,6 +777,23 @@ export default function MatchLens() {
                                   {label}
                                 </button>
                               ))}
+                              {selectedZoneId && (
+                                <button
+                                  type="button"
+                                  className="feed-filter-btn"
+                                  style={{
+                                    fontSize: 11,
+                                    padding: "2px 8px",
+                                    backgroundColor: "#00b074",
+                                    color: "#ffffff",
+                                    fontWeight: 700,
+                                  }}
+                                  onClick={() => setSelectedZoneId(null)}
+                                  title="清除九宫格下钻过滤"
+                                >
+                                  📍 穿透场区: {state.tactical?.zone_cells?.find((c: any) => c.cell_id === selectedZoneId)?.name || selectedZoneId} ({filtered.length}条) ✕
+                                </button>
+                              )}
                               {selectedPlayerId && (
                                 <button
                                   type="button"
@@ -704,7 +818,25 @@ export default function MatchLens() {
                               }}
                             >
                               {filtered.length === 0 ? (
-                                <p className="comparison-footer">No sequences match the selected filter criteria.</p>
+                                <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-secondary)" }}>
+                                  <div style={{ fontSize: 24, marginBottom: 6 }}>📍</div>
+                                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>
+                                    {selectedZoneId ? "此九宫格场区当前无穿透控球序列" : "无符合条件的控球序列"}
+                                  </div>
+                                  <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 4 }}>
+                                    {selectedZoneId ? "点击球场其他九宫格或清除场区过滤" : "请尝试更换或重置过滤条件"}
+                                  </div>
+                                  {selectedZoneId && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedZoneId(null)}
+                                      className="feed-filter-btn active"
+                                      style={{ marginTop: 10, fontSize: 11, padding: "4px 10px" }}
+                                    >
+                                      清除场区过滤
+                                    </button>
+                                  )}
+                                </div>
                               ) : (
                                 filtered
                                   .slice()
@@ -853,6 +985,52 @@ export default function MatchLens() {
                 />
               </div>
             </div>
+
+            {/* 5. Track B Analytical Exploration Suite (BL-03, BL-04, BL-08, BL-12) */}
+            {activeViewMode === "exploration" && (
+              <section className="space-y-4 my-6" aria-label="Interactive Tactical Exploration Suite">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* BL-03: Quick Recovery Analysis */}
+                  <QuickRecoveryAnalysis
+                    data={state.quick_recoveries}
+                    focusTeam={state.focus_team || "H"}
+                    onWindowChange={handleWindowChange}
+                    onSelectEvent={(id) => setSelectedId(id)}
+                  />
+
+                  {/* BL-04: Team Action Density Differential */}
+                  <ActionDensityDifferential
+                    data={state.density_differential}
+                    homeTeamName="Harbor FC"
+                    awayTeamName="Northbridge United"
+                    onSelectZone={(zid) => setSelectedZoneId(zid)}
+                    selectedZoneId={selectedZoneId}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* BL-08: Attacking Channels Analysis */}
+                  <AttackingChannelAnalysis
+                    data={state.attacking_channels}
+                    onSelectChannel={(ch) => setSelectedChannel(ch)}
+                    selectedChannel={selectedChannel}
+                  />
+
+                  {/* BL-12: Highlight Locator */}
+                  <HighlightLocator
+                    highlights={state.highlights}
+                    onSelectHighlight={(hl) => {
+                      control({ action: "seek", at: Math.round(hl.peak_t) });
+                      if (hl.associated_sequence_ids[0]) setSelectedSeqId(hl.associated_sequence_ids[0]);
+                      setSelectedHighlightId(hl.highlight_id);
+                    }}
+                    selectedHighlightId={selectedHighlightId}
+                    homeTeamName="Harbor FC"
+                    awayTeamName="Northbridge United"
+                  />
+                </div>
+              </section>
+            )}
 
             {/* 5. Full-time Dossier (Shown when match finishes) */}
             {state.ended && (
