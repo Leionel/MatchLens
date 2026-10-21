@@ -575,6 +575,44 @@ async def ask(body: AskQuery, request: Request):
     return ans
 
 
+@app.get("/api/matches")
+async def list_matches(request: Request):
+    from .catalog import MatchCatalog
+    return {"matches": [m.model_dump() for m in MatchCatalog.list_matches()]}
+
+
+@app.get("/api/matches/{match_id}")
+async def get_match_detail(match_id: str, request: Request):
+    from .catalog import MatchCatalog
+    meta = MatchCatalog.get_match(match_id)
+    if not meta:
+        raise HTTPException(404, "match_not_found")
+    return {"match": meta.model_dump()}
+
+
+@app.get("/api/matches/{match_id}/events")
+async def get_match_events(match_id: str, request: Request):
+    from .catalog import MatchCatalog
+    try:
+        events = MatchCatalog.load_normalized_events(match_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "match_not_found")
+    return {
+        "match_id": match_id,
+        "count": len(events),
+        "events": [e.model_dump() for e in events],
+    }
+
+
+@app.get("/api/models/xt")
+async def get_xt_model_info(resolution: str = "16x12"):
+    from .models.xt import ExpectedThreatModel
+    if resolution not in ("16x12", "12x8"):
+        raise HTTPException(400, "invalid_resolution")
+    model = ExpectedThreatModel.load_default(resolution)
+    return model.metadata
+
+
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
 async def missing_api(path: str):
     raise HTTPException(404, "api_not_found")

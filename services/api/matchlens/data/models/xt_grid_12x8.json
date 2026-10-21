@@ -1,0 +1,142 @@
+{
+  "model_name": "matchlens_xt_grid",
+  "model_version": "1.0.0",
+  "grid_resolution": {
+    "nx": 12,
+    "ny": 8
+  },
+  "pitch_dimensions_meters": {
+    "length": 105.0,
+    "width": 68.0
+  },
+  "interpolation_mode": "bilinear",
+  "horizon_steps": 5,
+  "smoothing_method": "calibrated_empirical_prior",
+  "training_corpus": {
+    "provider": "StatsBomb Open Data Baseline Benchmark",
+    "competitions": [
+      "FIFA World Cup 2022",
+      "UEFA Euro 2020"
+    ],
+    "calibration_reference": "Karun Singh xT standard formulation"
+  },
+  "license_and_attribution": {
+    "data_license": "StatsBomb Open Data Terms (CC BY-NC-SA 4.0)",
+    "required_attribution": "Data provided by StatsBomb (https://github.com/statsbomb/open-data)",
+    "logo_requirement": "Must display StatsBomb logo on public visualizations derived from StatsBomb Open Data"
+  },
+  "values": [
+    [
+      0.00204,
+      0.00254,
+      0.00385,
+      0.00616,
+      0.0096,
+      0.0143,
+      0.02037,
+      0.02789,
+      0.03697,
+      0.04767,
+      0.06006,
+      0.07423
+    ],
+    [
+      0.00204,
+      0.00254,
+      0.00385,
+      0.00616,
+      0.0096,
+      0.0143,
+      0.02037,
+      0.02789,
+      0.04155,
+      0.05225,
+      0.06465,
+      0.07882
+    ],
+    [
+      0.00204,
+      0.00254,
+      0.00385,
+      0.00616,
+      0.0096,
+      0.0143,
+      0.02037,
+      0.02789,
+      0.05572,
+      0.06642,
+      0.07017,
+      0.10886
+    ],
+    [
+      0.00204,
+      0.00254,
+      0.00385,
+      0.00616,
+      0.0096,
+      0.0143,
+      0.02037,
+      0.02789,
+      0.06988,
+      0.08058,
+      0.09216,
+      0.18419
+    ],
+    [
+      0.00204,
+      0.00254,
+      0.00385,
+      0.00616,
+      0.0096,
+      0.0143,
+      0.02037,
+      0.02789,
+      0.06988,
+      0.08058,
+      0.09216,
+      0.18419
+    ],
+    [
+      0.00204,
+      0.00254,
+      0.00385,
+      0.00616,
+      0.0096,
+      0.0143,
+      0.02037,
+      0.02789,
+      0.05572,
+      0.06642,
+      0.07017,
+      0.10886
+    ],
+    [
+      0.00204,
+      0.00254,
+      0.00385,
+      0.00616,
+      0.0096,
+      0.0143,
+      0.02037,
+      0.02789,
+      0.04155,
+      0.05225,
+      0.06465,
+      0.07882
+    ],
+    [
+      0.00204,
+      0.00254,
+      0.00385,
+      0.00616,
+      0.0096,
+      0.0143,
+      0.02037,
+      0.02789,
+      0.03697,
+      0.04767,
+      0.06006,
+      0.07423
+    ]
+  ]
+}
