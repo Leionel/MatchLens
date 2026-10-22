@@ -234,11 +234,18 @@ def publication_gate_2_0(
         else:
             rule_violations.append(f"Referenced event ID '{eid}' does not exist in match events.")
 
-    # 4. Metric ID verification
+    # 4. Metric ID verification (P0.7: prevent arbitrary namespace bypass)
     verified_metric_ids: list[str] = []
     for mid in metric_ids:
-        clean_mid = mid.split(".")[-1] if "." in mid else mid
-        if mid in valid_metrics or clean_mid in valid_metrics:
+        is_valid_metric = False
+        if mid in valid_metrics:
+            is_valid_metric = True
+        elif "." in mid:
+            parts = mid.split(".")
+            if len(parts) in (2, 3) and parts[0] in ("H", "N") and parts[1] in valid_metrics:
+                if len(parts) == 2 or parts[2] in ("previous", "current", "match"):
+                    is_valid_metric = True
+        if is_valid_metric:
             verified_metric_ids.append(mid)
         else:
             rule_violations.append(f"Referenced metric ID '{mid}' is not in catalog metrics.")
@@ -312,8 +319,17 @@ def publication_gate_2(
     for claim in draft.claims:
         d = decisions[claim.id]
         level_raw = claim_levels.get(claim.id, "level_1_observed")
-        level_str = str(level_raw)
-        level_num = 1 if "1" in level_str else (2 if "2" in level_str else (3 if "3" in level_str else 4))
+        level_str = str(level_raw).strip().lower()
+        if level_str in ("1", "level_1", "level_1_observed", "level_1_observation"):
+            level_num = 1
+        elif level_str in ("2", "level_2", "level_2_attribution"):
+            level_num = 2
+        elif level_str in ("3", "level_3", "level_3_association"):
+            level_num = 3
+        elif level_str in ("4", "level_4", "level_4_causal"):
+            level_num = 4
+        else:
+            level_num = 1
         assumptions = assumptions_map.get(claim.id, [])
         verification_methods = verification_methods_map.get(claim.id, [])
         counterevidence = counterevidence_map.get(claim.id, [])
@@ -354,8 +370,12 @@ def publication_gate_2(
             status = "rejected"
             audit_notes.append("Verifier withheld publication.")
         elif d.verdict == "qualify":
-            status = "contested"
-            audit_notes.append("Verifier qualified publication.")
+            if d.selected_variant == "conservative" and claim.conservative:
+                status = "passed"
+                audit_notes.append("Verifier qualified publication with conservative variant.")
+            else:
+                status = "contested"
+                audit_notes.append("Verifier qualified publication.")
 
         published_text = bind_slots(variant.analyst, variant.refs, snapshot)
         data_sufficiency = DataSufficiencyAdvisor.inspect(published_text)

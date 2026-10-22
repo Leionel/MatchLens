@@ -9,11 +9,15 @@ export type FootballEvent = {
   kind: string;
   team: "H" | "N";
   actor: string;
+  actor_name?: string;
   receiver: string | null;
+  receiver_name?: string | null;
   start: [number, number];
   end: [number, number];
   outcome: string;
   possession_id: number;
+  gain_m?: number;
+  xt_value?: number;
 };
 
 export type Receipt = {
@@ -138,6 +142,7 @@ export type PossessionSequence = {
     outcome: string;
     t: number;
     gain_m: number;
+    xt_value?: number;
     channel?: string;
   }[];
 };
@@ -168,6 +173,8 @@ export type CockpitState = {
   scenario?: string;
   scenarios?: ScenarioMeta[];
   focus_team?: "H" | "N";
+  teams?: { H?: string; N?: string };
+  match_context?: any;
   score: { H: number; N: number };
   paused: boolean;
   speed: number;

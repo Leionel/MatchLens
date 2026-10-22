@@ -10,6 +10,7 @@ Provides:
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -68,6 +69,25 @@ class ExportPackage(BaseModel):
     signature: str
 
 
+def _event_time(ev: Any) -> float:
+    for attr in ("clock_seconds", "timestamp_seconds", "t", "second"):
+        val = getattr(ev, attr, None) if not isinstance(ev, dict) else ev.get(attr)
+        if val is not None:
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                pass
+    return 0.0
+
+
+def _event_id(ev: Any, fallback: str = "") -> str:
+    for attr in ("event_id", "id", "index"):
+        val = getattr(ev, attr, None) if not isinstance(ev, dict) else ev.get(attr)
+        if val is not None:
+            return str(val)
+    return fallback
+
+
 # ---------------------------------------------------------------------------
 # BL-06 Match Story Generator
 # ---------------------------------------------------------------------------
@@ -80,29 +100,25 @@ class MatchStoryEngine:
         cls,
         match_id: str,
         events: list[dict[str, Any] | NormalizedEvent],
-        oaai: OAAIResult | None = None,
+        oaai: Any | None = None,
         verified_claims: list[dict[str, Any]] | None = None,
         perspective: AudiencePerspective = "media",
     ) -> MatchStory:
         verified_claims = verified_claims or []
         oaai_dict = compute_oaai(events, smoothing_mode="causal") if oaai is None else oaai
-        oaai_points = oaai_dict.get("points", []) if isinstance(oaai_dict, dict) else getattr(oaai_dict, "points", [])
-        oaai_change_points = oaai_dict.get("change_points", []) if isinstance(oaai_dict, dict) else getattr(oaai_dict, "change_points", [])
+        oaai_points = (
+            oaai_dict.get("timeline") or oaai_dict.get("points") or []
+            if isinstance(oaai_dict, dict)
+            else (getattr(oaai_dict, "timeline", None) or getattr(oaai_dict, "points", []))
+        )
+        oaai_change_points = (
+            oaai_dict.get("change_points", [])
+            if isinstance(oaai_dict, dict)
+            else getattr(oaai_dict, "change_points", [])
+        )
 
         # Determine total duration
-        max_sec = 0.0
-        for ev in events:
-            t = float(
-                getattr(ev, "timestamp_seconds", None)
-                if hasattr(ev, "timestamp_seconds")
-                else (
-                    ev.get("timestamp_seconds")
-                    if isinstance(ev, dict) and "timestamp_seconds" in ev
-                    else getattr(ev, "second", getattr(ev, "t", ev.get("t", ev.get("second", 0.0)) if isinstance(ev, dict) else 0.0))
-                )
-            )
-            if t > max_sec:
-                max_sec = t
+        max_sec = max((_event_time(ev) for ev in events), default=0.0)
 
         # Format-aware chapter boundaries
         if max_sec <= 900.0:
@@ -127,18 +143,22 @@ class MatchStoryEngine:
             # Find OAAI change-points in this phase
             phase_cps = [
                 cp for cp in oaai_change_points
-                if start_t <= float(cp.get("timestamp_seconds", 0.0) if isinstance(cp, dict) else getattr(cp, "timestamp_seconds", 0.0)) <= end_t
+                if start_t <= float(cp.get("timestamp_seconds", cp.get("t", 0.0)) if isinstance(cp, dict) else getattr(cp, "timestamp_seconds", getattr(cp, "t", 0.0))) <= end_t
             ]
 
             # Determine dominant team from OAAI points in phase
             phase_pts = [
                 p for p in oaai_points
-                if start_t <= float(p.get("timestamp_seconds", 0.0) if isinstance(p, dict) else getattr(p, "timestamp_seconds", 0.0)) <= end_t
+                if start_t <= float(p.get("timestamp_seconds", p.get("t", 0.0)) if isinstance(p, dict) else getattr(p, "timestamp_seconds", getattr(p, "t", 0.0))) <= end_t
             ]
             avg_wave = 0.0
             if phase_pts:
                 avg_wave = sum(
-                    float(p.get("smoothed_oaai", p.get("oaai", 0.0)) if isinstance(p, dict) else getattr(p, "smoothed_oaai", getattr(p, "oaai", 0.0)))
+                    float(
+                        p.get("oaai_value", p.get("smoothed_oaai", p.get("oaai", p.get("oaai_raw", 0.0))))
+                        if isinstance(p, dict)
+                        else getattr(p, "oaai_value", getattr(p, "smoothed_oaai", getattr(p, "oaai", 0.0)))
+                    )
                     for p in phase_pts
                 ) / len(phase_pts)
 
@@ -154,25 +174,17 @@ class MatchStoryEngine:
             # Find matching events in phase
             ev_in_phase: list[str] = []
             for ev in events:
-                t = float(
-                    getattr(ev, "timestamp_seconds", None)
-                    if hasattr(ev, "timestamp_seconds")
-                    else (
-                        ev.get("timestamp_seconds")
-                        if isinstance(ev, dict) and "timestamp_seconds" in ev
-                        else getattr(ev, "second", getattr(ev, "t", ev.get("t", ev.get("second", 0.0)) if isinstance(ev, dict) else 0.0))
-                    )
-                )
+                t = _event_time(ev)
                 if start_t <= t <= end_t:
-                    eid = getattr(ev, "event_id", None) if hasattr(ev, "event_id") else ev.get("event_id", getattr(ev, "id", None))
+                    eid = _event_id(ev)
                     if eid:
                         ev_in_phase.append(str(eid))
 
             # Narrative tuning by perspective
             if perspective == "coach":
                 narrative = (
-                    f"Phase {span}: Defensive structure maintained with territorial balance. "
-                    f"OAAI baseline centered at {avg_wave:+.2f}. Team {dominant} generated progressive corridor penetrations, "
+                    f"Phase {span}: On-ball actions balanced between both sides. "
+                    f"OAAI baseline centered at {avg_wave:+.2f}. Team {dominant} recorded progressive corridor entries, "
                     f"registering {len(phase_cps)} notable transitional shift(s)."
                 )
                 tags = ["CorridorProgression", "TransitionControl", f"Trend_{trend}"]
@@ -191,7 +203,24 @@ class MatchStoryEngine:
                 )
                 tags = ["BroadcastHighlight", "TurningPoint", "KeyShift"]
 
-            chapter_claims = [cid for cid in approved_claim_ids if idx < len(approved_claim_ids)]
+            # Bind claims occurring within or relevant to this phase window
+            chapter_claims = []
+            for c in verified_claims:
+                cid = c.get("claim_id") or c.get("id")
+                if not cid:
+                    continue
+                c_t = c.get("as_of") or c.get("t") or c.get("timestamp_seconds") or c.get("clock_seconds")
+                if c_t is not None:
+                    if start_t <= float(c_t) <= end_t:
+                        chapter_claims.append(str(cid))
+                else:
+                    w_start = c.get("window_start")
+                    w_end = c.get("window_end")
+                    if w_start is not None and w_end is not None:
+                        if not (float(w_end) < start_t or float(w_start) > end_t):
+                            chapter_claims.append(str(cid))
+                    elif idx < len(approved_claim_ids):
+                        chapter_claims.append(str(cid))
 
             chapters.append(StoryChapter(
                 chapter_id=f"chap-{idx+1}",
@@ -210,14 +239,43 @@ class MatchStoryEngine:
         headline = f"Tactical Chronicle: {match_id.replace('_', ' ').title()}"
         subtitle = "Chronological analysis generated by MatchLens Story Engine with Gate 2.0 verification"
 
+        # Gate 2.0 / Broadcast approval requirements:
+        # 1. Must have verified claims.
+        # 2. Must not contain any contested or rejected claims.
+        # 3. All claims must belong to current match_id (if match_id specified on claim).
+        # 4. All claims must be genuinely accepted / verified / passed.
+        has_contested = any(
+            c.get("status") in ("contested", "rejected", "disputed")
+            or c.get("outcome") in ("withdrawn", "rejected")
+            for c in verified_claims
+        )
+        cross_match_leak = any(
+            c.get("match_id") and c.get("match_id") != match_id
+            for c in verified_claims
+        )
+        all_passed = bool(verified_claims) and all(
+            c.get("status") in ("accepted", "verified", "passed", "approved")
+            or c.get("verdict") in ("verified", "approved", "passed", "publish")
+            or c.get("gate_passed") is True
+            or c.get("outcome") in ("maintained", "accepted")
+            for c in verified_claims
+        )
+
+        if has_contested or cross_match_leak:
+            approval_status = "contested"
+        elif all_passed:
+            approval_status = "approved_for_broadcast"
+        else:
+            approval_status = "draft_pending_gate"
+
         return MatchStory(
             story_id=f"story-{match_id}-{perspective}",
             match_id=match_id,
             headline=headline,
             subtitle=subtitle,
             perspective=perspective,
-            generated_at="2026-10-21T12:50:00Z",
-            approval_status="approved_for_broadcast" if verified_claims else "draft_pending_gate",
+            generated_at=datetime.now(timezone.utc).isoformat(),
+            approval_status=approval_status,
             chapters=chapters,
             summary_verdict="All structural statements verified through deterministic event logs and formula decomposition.",
             approved_claims_count=len(verified_claims),

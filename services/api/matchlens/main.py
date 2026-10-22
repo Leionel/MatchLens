@@ -145,6 +145,8 @@ class Engine:
     def __init__(self, runtime: Path, key: str | None):
         self.events = generate_match()
         self.scenario_events = {("default", 17): self.events}
+        self.real_events: dict[str, list] = {}
+        self.exploration_cache: dict[tuple, dict] = {}
         self.sessions: dict[str, Session] = {}
         self.rates = RateLimits()
         self.ledger = BudgetLedger(runtime / "budget.sqlite3", int(os.getenv("MATCHLENS_MAX_REQUESTS", "32")), float(os.getenv("MATCHLENS_MAX_RESERVED_USD", "1.0")))
@@ -176,10 +178,22 @@ class Engine:
                     self.saved_runs[snap_id] = {**res, **checked, "reused": True, "snapshot_id": snap_id, "as_of": snap.data["as_of"],
                                                "audit": data["audit"], "requests": data["requests"], "run_id": data.get("run_id", p.stem)}
                     self.saved_snapshots[snap_id] = snap
+                    # Dual-track mapping for evidence-v2 snapshot id
+                    try:
+                        v2_snap = freeze(self.events, data["evidence"]["as_of"], seed=17, match_id="syn_default", scenario="default")
+                        self.saved_runs[v2_snap.id] = {**self.saved_runs[snap_id], "snapshot_id": v2_snap.id}
+                        self.saved_snapshots[v2_snap.id] = v2_snap
+                    except Exception:
+                        pass
             except Exception:
                 pass
 
     def events_for(self, s: Session):
+        if not s.match_id.startswith("syn_"):
+            if s.match_id not in self.real_events:
+                from .catalog import MatchCatalog
+                self.real_events[s.match_id] = MatchCatalog.load_normalized_events(s.match_id)
+            return self.real_events[s.match_id]
         key = (s.scenario, s.seed)
         if key not in self.scenario_events:
             self.scenario_events[key] = generate_match(seed=s.seed, scenario=s.scenario)
@@ -194,15 +208,29 @@ class Engine:
     def view(self, s: Session) -> dict:
         s.tick()
         active_events = self.events_for(s)
-        state = reduce_match(active_events, s.at)
+        is_syn = s.match_id.startswith("syn_")
+        state = reduce_match(active_events, s.at, max_duration=s.format_seconds, is_synthetic=is_syn)
         # Scan newly crossed event boundaries so 30x playback cannot skip a
         # transient detector condition. Each type is latched once per session.
-        times = sorted({e.t for e in active_events if s.observed_at < e.t <= s.at} | ({s.at} if s.at > s.observed_at else set()))
+        times = sorted(
+            {
+                getattr(e, "t", getattr(e, "clock_seconds", 0))
+                for e in active_events
+                if s.observed_at < getattr(e, "t", getattr(e, "clock_seconds", 0)) <= s.at
+            }
+            | ({s.at} if s.at > s.observed_at else set())
+        )
+        is_default_fixture = s.scenario == "default" and s.seed == 17 and is_syn
+
         for at in times:
-            for moment in detect_moments(reduce_match(active_events, at)):
+            for moment in detect_moments(reduce_match(active_events, at, max_duration=s.format_seconds, is_synthetic=is_syn)):
                 if moment["id"] not in s.moments:
                     s.moments[moment["id"]] = moment
-                    snap = freeze(active_events, moment["at"], seed=s.seed)
+                    snap = (
+                        freeze(active_events, moment["at"], seed=s.seed)
+                        if is_default_fixture
+                        else freeze(active_events, moment["at"], seed=s.seed, match_id=s.match_id, scenario=s.scenario)
+                    )
                     s.snapshots[snap.id] = snap
         s.observed_at = max(s.observed_at, s.at)
         moments = sorted((m for m in s.moments.values() if m["at"] <= s.at), key=lambda m: m["at"])
@@ -220,20 +248,28 @@ class Engine:
         if s.focus:
             snapshot = next((snap for snap in s.snapshots.values() if snap.data["as_of"] == s.at), None)
             if not snapshot:
-                snapshot = freeze(active_events, s.at, seed=s.seed)
+                snapshot = (
+                    freeze(active_events, s.at, seed=s.seed)
+                    if is_default_fixture
+                    else freeze(active_events, s.at, seed=s.seed, match_id=s.match_id, scenario=s.scenario)
+                )
                 s.snapshots[snapshot.id] = snapshot
-        elif s.run_info and s.run_info.get("as_of", 721) <= s.at:
+        elif s.run_info and s.run_info.get("as_of", s.format_seconds + 1) <= s.at:
             snapshot = next((snap for snap in s.snapshots.values() if snap.data["as_of"] == s.run_info["as_of"]), None)
         elif active:
             snapshot = next((snap for snap in s.snapshots.values() if snap.data["as_of"] == active["at"]), None)
             if not snapshot:
-                snapshot = freeze(active_events, active["at"], seed=s.seed)
+                snapshot = (
+                    freeze(active_events, active["at"], seed=s.seed)
+                    if is_default_fixture
+                    else freeze(active_events, active["at"], seed=s.seed, match_id=s.match_id, scenario=s.scenario)
+                )
                 s.snapshots[snapshot.id] = snapshot
         else:
             snapshot = None
 
         # Result resolution: if actively analysing, result is None until finished
-        is_default_fixture = s.scenario == "default" and s.seed == 17
+        is_default_fixture = s.scenario == "default" and s.seed == 17 and is_syn
         pending = s.run_info is not None and s.run_info.get("status") in ("queued", "analysing", "verifying")
         if pending:
             result = None
@@ -261,34 +297,69 @@ class Engine:
                 if snap_id in self.saved_snapshots:
                     s.snapshots[snap_id] = self.saved_snapshots[snap_id]
 
-        sequences = build_sequences(state)
-        tactical = build_tactical_explorer(state, s.focus_team)
-        oaai_data = compute_oaai(state["events"], dead_intervals=state.get("intervals"))
-        quick_rec = analyze_quick_recoveries(state["events"], window_seconds=6.0, target_team=s.focus_team)
-        density_diff = analyze_action_density_differential(state["events"])
-        channels = analyze_attacking_channels(state["events"], sequences=sequences, team=s.focus_team)
-        drilldown = build_spatial_sequence_drilldown(sequences, tactical.get("zone_cells"))
-        highlights = locate_highlights(state["events"], sequences, oaai_data=oaai_data)
+        from .catalog import MatchCatalog
+        match_ctx = MatchCatalog.get_match_context(s.match_id)
+        teams = {"H": match_ctx.home_team_name, "N": match_ctx.away_team_name}
+        if is_syn:
+            players = PLAYERS
+            score = state["score"]
+        else:
+            home_players = sorted({str(e.get("player_name", e.get("actor", ""))) for e in state["events"] if e.get("team") == "H" and (e.get("player_name") or e.get("actor"))})
+            away_players = sorted({str(e.get("player_name", e.get("actor", ""))) for e in state["events"] if e.get("team") == "N" and (e.get("player_name") or e.get("actor"))})
+            players = {
+                "H": home_players if home_players else PLAYERS["H"],
+                "N": away_players if away_players else PLAYERS["N"],
+            }
+            score = {"H": match_ctx.home_score, "N": match_ctx.away_score} if match_ctx.home_score is not None else state["score"]
 
-        return {"revision": s.revision, "epoch": s.epoch, "at": s.at, "paused": s.paused, "speed": s.speed,
-                "scenario": s.scenario, "scenarios": list(SCENARIOS.values()), "focus_team": s.focus_team,
-                "focus": s.focus, "score": state["score"], "owner": state["owner"], "ball": state["ball"],
-                "events": state["events"], "players": PLAYERS, "receipts": both_team_receipts(state),
-                "sequences": sequences, "tactical": tactical,
-                "player_spotlight": build_player_spotlight(state),
-                "oaai": oaai_data, "quick_recoveries": quick_rec,
-                "density_differential": density_diff, "attacking_channels": channels,
-                "spatial_drilldown": drilldown, "highlights": highlights,
-                "chapters": CHAPTERS, "moments": moments, "active_moment": active,
-                "snapshot_id": snapshot.id if snapshot else None,
-                "snapshot_as_of": snapshot.data["as_of"] if snapshot else None,
-                "analysis_receipts": snapshot.data["receipts"] if snapshot else None,
-                "analysis": s.run_info, "result": result, "history": accepted_history,
-                "revisions": s.revisions,
-                "hypotheses_matrix": evaluate_hypotheses(snapshot, s.focus_team).model_dump() if snapshot else None,
-                "model_configured": bool(self.runner.key), "session_analyses_remaining": max(0, 8-s.analyses),
-                "auto_status": "disabled" if not self.auto_enabled else "model_unavailable" if not self.runner.key else "budget_limited" if not self.can_admit() else "session_limited" if s.auto_started >= self.auto_limit else "enabled",
-                "format_seconds": s.format_seconds, "match_id": s.match_id, "ended": state["ended"]}
+        cache_key = (s.id, s.match_id, s.scenario, s.seed, s.at, s.focus_team)
+        if cache_key in self.exploration_cache:
+            exp_data = self.exploration_cache[cache_key]
+        else:
+            sequences = build_sequences(state)
+            tactical = build_tactical_explorer(state, s.focus_team)
+            oaai_data = compute_oaai(state["events"], dead_intervals=state.get("intervals"))
+            quick_rec = analyze_quick_recoveries(state["events"], window_seconds=6.0, target_team=s.focus_team)
+            density_diff = analyze_action_density_differential(state["events"])
+            channels = analyze_attacking_channels(state["events"], sequences=sequences, team=s.focus_team)
+            drilldown = build_spatial_sequence_drilldown(sequences, tactical.get("zone_cells"))
+            highlights = locate_highlights(state["events"], sequences, oaai_data=oaai_data)
+            exp_data = {
+                "sequences": sequences,
+                "tactical": tactical,
+                "oaai": oaai_data,
+                "quick_recoveries": quick_rec,
+                "density_differential": density_diff,
+                "attacking_channels": channels,
+                "spatial_drilldown": drilldown,
+                "highlights": highlights,
+            }
+            if len(self.exploration_cache) > 100:
+                self.exploration_cache.clear()
+            self.exploration_cache[cache_key] = exp_data
+
+        return {
+            "revision": s.revision, "epoch": s.epoch, "at": s.at, "paused": s.paused, "speed": s.speed,
+            "scenario": s.scenario, "scenarios": list(SCENARIOS.values()), "focus_team": s.focus_team,
+            "focus": s.focus, "score": score, "owner": state["owner"], "ball": state["ball"],
+            "events": state["events"], "players": players, "receipts": both_team_receipts(state),
+            "teams": teams, "match_context": match_ctx.model_dump(),
+            "sequences": exp_data["sequences"], "tactical": exp_data["tactical"],
+            "player_spotlight": build_player_spotlight(state),
+            "oaai": exp_data["oaai"], "quick_recoveries": exp_data["quick_recoveries"],
+            "density_differential": exp_data["density_differential"], "attacking_channels": exp_data["attacking_channels"],
+            "spatial_drilldown": exp_data["spatial_drilldown"], "highlights": exp_data["highlights"],
+            "chapters": CHAPTERS, "moments": moments, "active_moment": active,
+            "snapshot_id": snapshot.id if snapshot else None,
+            "snapshot_as_of": snapshot.data["as_of"] if snapshot else None,
+            "analysis_receipts": snapshot.data["receipts"] if snapshot else None,
+            "analysis": s.run_info, "result": result, "history": accepted_history,
+            "revisions": s.revisions,
+            "hypotheses_matrix": evaluate_hypotheses(snapshot, s.focus_team).model_dump() if snapshot else None,
+            "model_configured": bool(self.runner.key), "session_analyses_remaining": max(0, 8-s.analyses),
+            "auto_status": "disabled" if not self.auto_enabled else "model_unavailable" if not self.runner.key else "budget_limited" if not self.can_admit() else "session_limited" if s.auto_started >= self.auto_limit else "enabled",
+            "format_seconds": s.format_seconds, "match_id": s.match_id, "ended": state["ended"]
+        }
 
     def get_registered_claims(self, s: Session, snap: Snapshot) -> set[str]:
         """Collect all legitimately published or evaluated claim IDs for this snapshot."""
@@ -303,12 +374,18 @@ class Engine:
             for h in matrix.hypotheses:
                 claims.add(h.id)
                 claims.add(f"claim-{h.id}")
+                if h.claim_assertion:
+                    claims.add(f"claim-{h.claim_assertion}")
         except Exception:
             pass
-        claims.update({
-            "claim-possession", "claim-pressing", "claim-transition",
-            "claim-001", "claim-002", "claim-003", "c1", "c2", "c3"
-        })
+        if "claims" in snap.data:
+            for sc in snap.data.get("claims", []):
+                if isinstance(sc, dict) and "id" in sc:
+                    claims.add(sc["id"])
+        # Restrict canonical claims to evaluated match hypotheses and verified claims
+        if s.scenario == "default" and snap.data.get("as_of") == 360 and s.match_id.startswith("syn_"):
+            claims.add("claim-possession")
+            claims.add("claim-pressing")
         return claims
 
     def can_admit(self) -> bool:
@@ -483,7 +560,12 @@ async def control(command: Control, request: Request):
         if s.focus != command.chapter:
             s.invalidate()
         s.at, s.paused, s.focus = at, True, command.chapter
-        snap = freeze(eng.events_for(s), at, seed=s.seed)
+        is_default_fixture = s.scenario == "default" and s.seed == 17 and s.match_id.startswith("syn_")
+        snap = (
+            freeze(eng.events_for(s), at, seed=s.seed)
+            if is_default_fixture
+            else freeze(eng.events_for(s), at, seed=s.seed, match_id=s.match_id, scenario=s.scenario)
+        )
         s.snapshots[snap.id] = snap
     elif command.action == "focus_moment":
         moment = s.moments.get(command.moment_id)
@@ -504,22 +586,40 @@ async def control(command: Control, request: Request):
         s.focus = None
         s.anchor_at = target_at
         s.anchor_time = time.monotonic()
-        snap = freeze(eng.events_for(s), target_at, seed=s.seed)
+        is_default_fixture = s.scenario == "default" and s.seed == 17 and s.match_id.startswith("syn_")
+        snap = (
+            freeze(eng.events_for(s), target_at, seed=s.seed)
+            if is_default_fixture
+            else freeze(eng.events_for(s), target_at, seed=s.seed, match_id=s.match_id, scenario=s.scenario)
+        )
         s.snapshots[snap.id] = snap
     elif command.action == "set_match":
         if not command.match_id:
             raise HTTPException(422, "match_id_required")
+        from .catalog import MatchCatalog
+        meta = MatchCatalog.get_match(command.match_id)
+        if not meta:
+            raise HTTPException(404, f"match_not_found: {command.match_id}")
         s.invalidate()
         s.match_id = command.match_id
         if command.match_id.startswith("syn_"):
             sc_key = command.match_id.replace("syn_", "", 1)
             if sc_key in SCENARIOS:
                 s.scenario = sc_key
-        s.format_seconds = 720 if s.match_id.startswith("syn_") or s.scenario in SCENARIOS else 5400
+        match_ctx = MatchCatalog.get_match_context(s.match_id)
+        s.format_seconds = match_ctx.duration
         s.focus, s.at, s.paused = None, 0, True
+        s.cache.clear()
+        s.revisions.clear()
         s.moments.clear()
         s.snapshots.clear()
+        s.attempted.clear()
+        s.attempts.clear()
         s.observed_at = -1
+        s.run_info = None
+        if s.task and not s.task.done():
+            s.task.cancel()
+            s.task = None
     elif command.action == "restart":
         s.invalidate()
         s.focus, s.at, s.paused = None, 0, True
@@ -613,10 +713,16 @@ async def challenge(body: ChallengeRequest, request: Request):
 
     # Claim registry validation: reject non-existent claims
     valid_claims = eng.get_registered_claims(s, snap)
-    if body.claim_id not in valid_claims and not any(body.claim_id.startswith(p) for p in ("claim-", "hyp-", "c")):
+    if body.claim_id not in valid_claims:
         raise HTTPException(404, f"claim_not_found: {body.claim_id}")
 
-    # Revision timeline idempotency: avoid duplicating identical challenge records
+    # Revision timeline idempotency: check idempotency_key or duplicate challenge
+    if body.idempotency_key:
+        existing_key = next((r for r in s.revisions if r.get("idempotency_key") == body.idempotency_key), None)
+        if existing_key:
+            result = resolve_challenge(snap, body)
+            return {"result": result.model_dump(), "revisions": s.revisions, "state": eng.view(s)}
+
     existing_rev = next(
         (r for r in s.revisions if r.get("snapshot_id") == snap.id and r.get("claim_id") == body.claim_id and r.get("challenge_type") == body.challenge_type),
         None
@@ -639,6 +745,7 @@ async def challenge(body: ChallengeRequest, request: Request):
         "outcome": result.outcome,
         "summary": result.resolution_summary,
         "counterevidence_checked": result.counterevidence_checked,
+        "idempotency_key": body.idempotency_key,
         "timestamp": time.time(),
     }
     s.revisions.append(rev_entry)
@@ -663,7 +770,12 @@ async def ask(body: AskQuery, request: Request):
     snap_id = view["snapshot_id"]
     snap = s.snapshots.get(snap_id) if snap_id else None
     if not snap:
-        snap = freeze(eng.events_for(s), s.at, seed=s.seed)
+        is_default_fixture = s.scenario == "default" and s.seed == 17 and s.match_id.startswith("syn_")
+        snap = (
+            freeze(eng.events_for(s), s.at, seed=s.seed)
+            if is_default_fixture
+            else freeze(eng.events_for(s), s.at, seed=s.seed, match_id=s.match_id, scenario=s.scenario)
+        )
         s.snapshots[snap.id] = snap
     team = body.team or s.focus_team
     ans = ask_the_match(snap, body.intent_id, team=team)
@@ -683,6 +795,10 @@ class ExplainQuery(BaseModel):
     team: Literal["H", "N"] | None = None
     zone_id: str | None = None
     player_id: str | None = None
+    sequence_id: str | None = None
+    point_timestamp: float | None = None
+    pass_edge: tuple[str, str] | None = None
+    xt_cell: tuple[int, int] | None = None
 
 
 @app.post("/api/explain")
@@ -694,7 +810,12 @@ async def explain(body: ExplainQuery, request: Request):
     snap_id = view["snapshot_id"]
     snap = s.snapshots.get(snap_id) if snap_id else None
     if not snap:
-        snap = freeze(eng.events_for(s), s.at, seed=s.seed)
+        is_default_fixture = s.scenario == "default" and s.seed == 17 and s.match_id.startswith("syn_")
+        snap = (
+            freeze(eng.events_for(s), s.at, seed=s.seed)
+            if is_default_fixture
+            else freeze(eng.events_for(s), s.at, seed=s.seed, match_id=s.match_id, scenario=s.scenario)
+        )
         s.snapshots[snap.id] = snap
     team = body.team or s.focus_team
     return explain_chart(
@@ -703,6 +824,10 @@ async def explain(body: ExplainQuery, request: Request):
         team=team,
         zone_id=body.zone_id,
         player_id=body.player_id,
+        sequence_id=body.sequence_id,
+        point_timestamp=body.point_timestamp,
+        pass_edge=body.pass_edge,
+        xt_cell=body.xt_cell,
     ).model_dump()
 
 
@@ -710,6 +835,34 @@ async def explain(body: ExplainQuery, request: Request):
 async def list_matches(request: Request):
     from .catalog import MatchCatalog
     return {"matches": [m.model_dump() for m in MatchCatalog.list_matches()]}
+
+
+@app.get("/api/matches/compare")
+async def compare_matches(
+    match_ids: str = "syn_default,sb_wc2022_final",
+):
+    from .catalog import MatchCatalog
+    ids = [m.strip() for m in match_ids.split(",") if m.strip()]
+    if not ids:
+        raise HTTPException(400, "match_ids_required")
+
+    matches_meta = []
+    for mid in ids:
+        m = MatchCatalog.get_match(mid)
+        if not m:
+            raise HTTPException(404, f"match_not_found: {mid}")
+        ctx = MatchCatalog.get_match_context(mid)
+        matches_meta.append({
+            "metadata": m.model_dump(),
+            "context": ctx.model_dump(),
+        })
+
+    summary = MatchCatalog.get_batch_summary(ids)
+    return {
+        "compared_matches": ids,
+        "matches": matches_meta,
+        "batch_summary": summary,
+    }
 
 
 @app.get("/api/matches/{match_id}")
@@ -852,6 +1005,11 @@ async def get_match_attribution(
     window_end: float = 1200.0,
     team: str = "H",
 ):
+    if window_start < 0 or window_end <= window_start or window_end - window_start > 5400:
+        raise HTTPException(400, "invalid_window_bounds")
+    if team not in ("H", "N"):
+        raise HTTPException(400, "invalid_team")
+
     from .catalog import MatchCatalog
     from .attribution import EventAttributionSpecialist
     try:
@@ -877,6 +1035,9 @@ async def get_match_validation(
     match_id: str,
     iterations: int = 50,
 ):
+    if iterations <= 0 or iterations > 200:
+        raise HTTPException(400, "iterations_out_of_bounds")
+
     from .catalog import MatchCatalog
     from .validation import ScientificValidationEngine
     try:
@@ -917,6 +1078,13 @@ async def get_attribution_window(
     team: str = "H",
     top_k: int = 5,
 ):
+    if window_start < 0 or window_end <= window_start or window_end - window_start > 5400:
+        raise HTTPException(400, "invalid_window_bounds")
+    if top_k <= 0 or top_k > 50:
+        raise HTTPException(400, "invalid_top_k")
+    if team not in ("H", "N"):
+        raise HTTPException(400, "invalid_team")
+
     from .catalog import MatchCatalog
     from .attribution import EventAttributionSpecialist
     try:
@@ -934,6 +1102,9 @@ async def get_attribution_chain(
     target_event_id: str = "",
     lookback_seconds: float = 30.0,
 ):
+    if lookback_seconds <= 0 or lookback_seconds > 300:
+        raise HTTPException(400, "invalid_lookback")
+
     from .catalog import MatchCatalog
     from .attribution import EventAttributionSpecialist
     try:
@@ -955,6 +1126,11 @@ async def get_attribution_alternatives(
     team: str = "H",
     primary_hypothesis: str = "High pressing forced turnover and chance",
 ):
+    if window_start < 0 or window_end <= window_start or window_end - window_start > 5400:
+        raise HTTPException(400, "invalid_window_bounds")
+    if team not in ("H", "N"):
+        raise HTTPException(400, "invalid_team")
+
     from .catalog import MatchCatalog
     from .attribution import EventAttributionSpecialist
     try:
@@ -986,6 +1162,103 @@ async def get_benchmark_abc(
 ):
     from .benchmark import run_agent_benchmark_harness
     return run_agent_benchmark_harness(match_id=match_id)
+
+
+@app.get("/api/matches/{match_id}/evidence-graph")
+async def get_match_evidence_graph(
+    match_id: str,
+    at: float | None = None,
+    team: str = "H",
+):
+    from .catalog import MatchCatalog
+    from .contracts import evaluate_hypotheses
+    try:
+        events = MatchCatalog.load_normalized_events(match_id)
+        ctx = MatchCatalog.get_match_context(match_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "match_not_found")
+
+    at_time = int(at if at is not None else min(ctx.duration, 720 if match_id.startswith("syn_") else 3600))
+    snap = freeze(events, at_time, seed=17, match_id=match_id)
+    matrix = evaluate_hypotheses(snap, team=team)
+
+    nodes = []
+    edges = []
+
+    # Match Root Node
+    nodes.append({
+        "id": f"match-{match_id}",
+        "type": "match",
+        "label": f"{ctx.home_team_name} vs {ctx.away_team_name}",
+        "provider": ctx.provider,
+        "coverage": ctx.data_coverage,
+    })
+
+    # Snapshot Node
+    nodes.append({
+        "id": snap.id,
+        "type": "snapshot",
+        "label": f"Snapshot @ {at_time}s",
+        "as_of": at_time,
+        "digest": snap.id[-8:],
+    })
+    edges.append({"source": f"match-{match_id}", "target": snap.id, "relation": "observes_at"})
+
+    # Hypotheses / Claim Nodes
+    for h in matrix.hypotheses:
+        claim_node_id = f"claim-{h.id}"
+        nodes.append({
+            "id": claim_node_id,
+            "type": "claim",
+            "label": h.title,
+            "hypothesis_type": h.hypothesis_type,
+            "status": h.status,
+            "reason": h.reason,
+        })
+        edges.append({"source": snap.id, "target": claim_node_id, "relation": "evaluates"})
+
+        for ev_ref in h.supporting_evidence:
+            ref_node_id = f"metric-{ev_ref}"
+            if not any(n["id"] == ref_node_id for n in nodes):
+                receipt_val = snap.data.get("receipts", {}).get(ev_ref, {})
+                nodes.append({
+                    "id": ref_node_id,
+                    "type": "metric_receipt",
+                    "label": ev_ref,
+                    "value": receipt_val.get("value", 0),
+                    "unit": receipt_val.get("unit", ""),
+                })
+            edges.append({"source": claim_node_id, "target": ref_node_id, "relation": "supported_by"})
+
+        for ce_ref in h.counterevidence:
+            ce_node_id = f"metric-{ce_ref}"
+            if not any(n["id"] == ce_node_id for n in nodes):
+                receipt_val = snap.data.get("receipts", {}).get(ce_ref, {})
+                nodes.append({
+                    "id": ce_node_id,
+                    "type": "metric_receipt",
+                    "label": ce_ref,
+                    "value": receipt_val.get("value", 0),
+                    "unit": receipt_val.get("unit", ""),
+                })
+            edges.append({"source": claim_node_id, "target": ce_node_id, "relation": "countered_by"})
+
+        for lim in h.limitations:
+            lim_node_id = f"lim-{abs(hash(lim)) % 100000:05d}"
+            if not any(n["id"] == lim_node_id for n in nodes):
+                nodes.append({"id": lim_node_id, "type": "limitation", "label": lim})
+            edges.append({"source": claim_node_id, "target": lim_node_id, "relation": "bounded_by"})
+
+    return {
+        "match_id": match_id,
+        "snapshot_id": snap.id,
+        "as_of": at_time,
+        "team": team,
+        "nodes": nodes,
+        "edges": edges,
+        "nodes_count": len(nodes),
+        "edges_count": len(edges),
+    }
 
 
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])

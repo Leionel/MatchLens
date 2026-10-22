@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .adapters.statsbomb import StatsBombAdapter, STATSBOMB_LICENSE_REF, STATSBOMB_ATTRIBUTION_TEXT
 from .football import SCENARIOS, TEAMS, generate_match
-from .schema import ActionType, DataCoverageLevel, NormalizedEvent, RawSourceRecord
+from .schema import ActionType, DataCoverageLevel, MatchContext, NormalizedEvent, RawSourceRecord
 
 MATCHES_DIR = Path(__file__).resolve().parent / "data" / "matches"
 
@@ -100,6 +100,60 @@ class MatchCatalog:
             if m.match_id == match_id:
                 return m
         return None
+
+    @classmethod
+    def get_match_context(cls, match_id: str) -> MatchContext:
+        meta = cls.get_match(match_id)
+        if not meta:
+            raise FileNotFoundError(f"Match not found: {match_id}")
+
+        if match_id.startswith("syn_"):
+            mode = "synthetic_replay"
+            home_id = "H"
+            away_id = "N"
+            duration = 720
+            observed_end = 720.0
+            period = 2
+            partial_notice = None
+        else:
+            mode = "partial_fixture" if meta.coverage_level == DataCoverageLevel.C1_PARTIAL else "historical"
+            home_id = "ARG" if "argentina" in meta.home_team.lower() else "H"
+            away_id = "FRA" if "france" in meta.away_team.lower() else "N"
+            duration = 5400
+            try:
+                events = cls.load_normalized_events(match_id)
+                observed_end = max((e.clock_seconds for e in events), default=5400.0)
+                period = max((e.period for e in events), default=2)
+            except Exception:
+                observed_end = 5363.0
+                period = 2
+            partial_notice = (
+                f"Partial fixture: {meta.events_count or 12} events across 90 minutes. Not full continuous replay."
+                if mode == "partial_fixture"
+                else None
+            )
+
+        return MatchContext(
+            match_id=meta.match_id,
+            provider=meta.data_provider,
+            data_coverage=meta.coverage_level.value,
+            mode=mode,
+            home_team_id=home_id,
+            home_team_name=meta.home_team,
+            away_team_id=away_id,
+            away_team_name=meta.away_team,
+            home_score=meta.home_score if meta.home_score is not None else 0,
+            away_score=meta.away_score if meta.away_score is not None else 0,
+            match_clock_basis="match_elapsed",
+            duration=duration,
+            observed_end=observed_end,
+            period=period,
+            attack_directions={"H": "left_to_right", "N": "right_to_left"},
+            event_source=meta.license_ref,
+            capabilities=meta.capabilities,
+            data_version="1.0.0",
+            partial_notice=partial_notice,
+        )
 
     @classmethod
     def load_normalized_events(cls, match_id: str) -> list[NormalizedEvent]:

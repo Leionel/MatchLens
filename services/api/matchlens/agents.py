@@ -65,22 +65,24 @@ class Run:
     draft: dict | None = None
     review: dict | None = None
     raw_outputs: list[dict] = field(default_factory=list)
+    focus_team: str = "H"
 
 
-def instructions(role: str) -> str:
-    common = """You are MatchLens, analysing a synthetic football match. You MUST call get_evidence with the supplied snapshot_id at least once in your role's session before your first answer, even when another agent supplied evidence. A schema correction in the same session uses that existing evidence. Only tool evidence is authoritative. Return one JSON object, no markdown.
+def instructions(role: str, focus_team: str = "H") -> str:
+    t = "N" if focus_team == "N" else "H"
+    common = f"""You are MatchLens, analysing a synthetic football match. You MUST call get_evidence with the supplied snapshot_id at least once in your role's session before your first answer, even when another agent supplied evidence. A schema correction in the same session uses that existing evidence. Only tool evidence is authoritative. Return one JSON object, no markdown.
 Football: possession measures controlled time, entries measure passes crossing attacking x=70m, shots measure attempts. More possession alone is not increased threat. A shot after a recovery is an observed temporal association; it cannot establish pressing, coaching intent or causation. A short window cannot establish a whole-match trend. Goal chains show recorded on-ball events only. This continuous demo has NO HALFTIME or break: never say 'after the break', 'first half' or 'second half'. Say 'current/previous window'. Each complete window is 180 seconds; start/end/as_of are match seconds. Do not restate match length or window duration in prose; the UI shows exact times.
-Prose rules: describe only the selected assertion. No invented names, timings, coordinates, percentages or statistics. Public facts are rendered from the selected typed assertion and frozen receipts; your prose stays in the operator audit. The Verifier must still reject incorrect prose. Never spell any quantity, including 'one', 'eleven', or 'once'; use a referenced metric slot or omit that quantity. All numbers in fan/analyst/reason/limitations prose MUST be slots like {{H.shots.current}} with a matching ref; NEVER write literal digits or spelled-out number words like 'zero', 'twice', 'two shots' there. If you discuss or compare the previous window, you MUST include the corresponding .previous receipts in refs. No xG, pressing, formation, fatigue, coaching intent, 'caused', 'because', 'forced', 'proves' or guarantees in Fan/Analyst text. Use simple English. Fan: one lively useful sentence, at most 45 words. Analyst: evidence comparison and appropriate uncertainty, visibly different from Fan, at most 100 words. Reasons/limitations can explain lack of causal evidence without numbers. Do not put unsupported speculation in published text.
+Prose rules: describe only the selected assertion. No invented names, timings, coordinates, percentages or statistics. Public facts are rendered from the selected typed assertion and frozen receipts; your prose stays in the operator audit. The Verifier must still reject incorrect prose. Never spell any quantity, including 'one', 'eleven', or 'once'; use a referenced metric slot or omit that quantity. All numbers in fan/analyst/reason/limitations prose MUST be slots like {{{{{t}.shots.current}}}} with a matching ref; NEVER write literal digits or spelled-out number words like 'zero', 'twice', 'two shots' there. If you discuss or compare the previous window, you MUST include the corresponding .previous receipts in refs. No xG, pressing, formation, fatigue, coaching intent, 'caused', 'because', 'forced', 'proves' or guarantees in Fan/Analyst text. Use simple English. Fan: one lively useful sentence, at most 45 words. Analyst: evidence comparison and appropriate uncertainty, visibly different from Fan, at most 100 words. Reasons/limitations can explain lack of causal evidence without numbers. Do not put unsupported speculation in published text.
 """
     if role == "Analyst":
-        task = """Investigate the candidate question using the receipts and selected events. Choose ONE useful supported core assertion, or propose a tentative assertion for review if evidence is insufficient. Do not select a verdict.
+        task = f"""Investigate the candidate question using the receipts and selected events. Choose ONE useful supported core assertion, or propose a tentative assertion for review if evidence is insufficient. Do not select a verdict.
 Allowed assertions and mandatory refs:
-possession_without_penetration: all six H.possession/H.shots/H.entries previous/current receipts; increased possession with no increase in shots and entries.
-attacking_threat_increased: H.shots and H.entries previous/current; both must increase.
-recoveries_followed_by_shots: H.high_recoveries.current and H.transition_shots.current; at least two linked transition shots. Mention the short sample, not a general tactical cause. If you mention previous window values, you must include the matching .previous receipts.
+possession_without_penetration: all six {t}.possession/{t}.shots/{t}.entries previous/current receipts; increased possession with no increase in shots and entries.
+attacking_threat_increased: {t}.shots and {t}.entries previous/current; both must increase.
+recoveries_followed_by_shots: {t}.high_recoveries.current and {t}.transition_shots.current; at least two linked transition shots. Mention the short sample, not a general tactical cause. If you mention previous window values, you must include the matching .previous receipts.
 recoveries_caused_shots: cannot be proven by these events; do not disguise it as association.
-goal_sequence: H.goals.match and its event chain; scope MUST be 'match'. Describe the uninterrupted on-ball passing and recovery chain culminating in the goal without claiming tactical causality.
-Normally use scope 'window'; only goal_sequence uses 'match'. primary.id='primary'. conservative is null unless a narrower version of the SAME true assertion is useful; conservative.id='conservative'. A conservative variant cannot reverse an incorrect assertion. Keep refs explicit and prose concise. claim id uses 'claim-' plus lowercase words. JSON structure: {snapshot_id,claims:[{id,assertion,primary:{id,scope,refs,fan,analyst},conservative:null or variant}]}.
+goal_sequence: {t}.goals.match and its event chain; scope MUST be 'match'. Describe the uninterrupted on-ball passing and recovery chain culminating in the goal without claiming tactical causality.
+Normally use scope 'window'; only goal_sequence uses 'match'. primary.id='primary'. conservative is null unless a narrower version of the SAME true assertion is useful; conservative.id='conservative'. A conservative variant cannot reverse an incorrect assertion. Keep refs explicit and prose concise. claim id uses 'claim-' plus lowercase words. JSON structure: {{snapshot_id,claims:[{{id,assertion,primary:{{id,scope,refs,fan,analyst}},conservative:null or variant}}]}}.
 """
     else:
         task = """Independently inspect the handed-off claims and ALL relevant evidence, including contrary measures. Check the precise Fan and Analyst prose as well as the assertion, scope and refs. Do not invent or revise prose.
@@ -109,7 +111,7 @@ class AgentRunner:
             if snapshot_id != run.snapshot.id:
                 raise ValueError("snapshot_outside_tool_scope")
             run.audit.append({"type": "tool", "role": role, "name": "get_evidence", "snapshot_id": snapshot_id})
-            return json.dumps(tool_evidence(run.snapshot), separators=(",", ":"))
+            return json.dumps(tool_evidence(run.snapshot, focus_team=run.focus_team), separators=(",", ":"))
 
         def get_event_chain(event_ids: list[str]) -> str:
             """Inspect at most twenty specific original events inside this snapshot prefix."""
@@ -169,7 +171,7 @@ class AgentRunner:
                                    timeout=23, http_client=transport) as sdk:
                 client = OpenAIChatCompletionClient(model="deepseek-flash", async_client=sdk,
                     function_invocation_configuration={"max_iterations": 3, "max_function_calls": 2})
-                agent = Agent(client=client, name=role, instructions=instructions(role),
+                agent = Agent(client=client, name=role, instructions=instructions(role, focus_team=run.focus_team),
                     tools=[get_evidence, get_event_chain, get_sequence], default_options={"response_format": {"type": "json_object"},
                     "extra_body": {"thinking": {"type": "disabled"}, "max_tokens": MAX_OUTPUT_TOKENS}})
                 session = agent.create_session()
@@ -183,10 +185,11 @@ class AgentRunner:
                     # No code changes the assertion or fabricates missing prose.
                     feedback = str(exc)[:900]
                     run.audit.append({"type": "schema_correction", "role": role, "validation": feedback})
+                    t_slot = "N" if run.focus_team == "N" else "H"
                     response = await agent.run("Your JSON failed local validation: "+feedback+
                         ". Return a corrected complete JSON object using the evidence already retrieved. "
                         "Do not call tools again. Follow the flat output schema, without extra fields or nested claim objects. "
-                        "Slots are exactly {{H.possession.current}}, not .value; percentage slots already include %. "
+                        f"Slots are exactly {{{{{t_slot}.possession.current}}}}, not .value; percentage slots already include %. "
                         "No literal digits in public prose, including reasons/limitations. Change only invalid fields; preserve other text. "
                         "Never change claim_id, assertion or scope. Keep review reason below 400 characters.", session=session)
                     raw = response.text

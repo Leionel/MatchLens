@@ -89,13 +89,16 @@ def _build_candidate_claims(events: list[NormalizedEvent]) -> list[dict[str, Any
     ev_1 = events[min(2, len(events) - 1)].event_id
     ev_mid = events[len(events) // 2].event_id
 
+    ev_x = events[0].x if events[0].x is not None else 50.0
+    ev_y = events[0].y if events[0].y is not None else 34.0
+
     # Construct test candidates with known ground truth
     candidates = [
         # 1. Valid Level 1 observation
         {
             "claim_id": "c1_valid_obs",
             "claim_level": 1,
-            "text": f"In window 0-300s, event {ev_0} was recorded at pitch coordinate ({events[0].x:.1f}, {events[0].y:.1f}).",
+            "text": f"In window 0-300s, event {ev_0} was recorded at pitch coordinate ({ev_x:.1f}, {ev_y:.1f}).",
             "evidence_scope": {"event_ids": [ev_0], "metric_ids": ["possession"]},
             "assumptions": [],
             "counterevidence": [],
@@ -196,10 +199,7 @@ class AgentBenchmarkHarness:
 
     def __init__(self, match_id: str = "syn_default"):
         self.match_id = match_id
-        try:
-            self.events = MatchCatalog.load_normalized_events(match_id)
-        except Exception:
-            self.events = MatchCatalog.load_normalized_events("syn_default")
+        self.events = MatchCatalog.load_normalized_events(match_id)
 
     def run(self, num_trials: int = 15) -> AgentBenchmarkSuiteResult:
         """Runs the comparative benchmark suite across Config A, B, and C."""

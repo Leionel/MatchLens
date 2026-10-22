@@ -203,8 +203,14 @@ def generate_match(seed: int = 17, scenario: str = "default") -> tuple[Event, ..
     return tuple(result)
 
 
-def reduce_match(events: tuple[Event, ...], at: int) -> dict:
-    if not 0 <= at <= 720:
+def reduce_match(
+    events: tuple[Event, ...] | list[Any],
+    at: int,
+    max_duration: int = 720,
+    is_synthetic: bool = True,
+    team_names: dict[str, str] | None = None,
+) -> dict:
+    if not 0 <= at <= max(720, max_duration):
         raise ValueError("clock_out_of_bounds")
     owner = holder = None
     ball = (52.5, 34.0)
@@ -215,62 +221,144 @@ def reduce_match(events: tuple[Event, ...], at: int) -> dict:
     ended = False
     enriched, intervals = [], []
     for e in events:
-        if e.t > at:
+        t = getattr(e, "t", None)
+        if t is None:
+            t = getattr(e, "clock_seconds", None)
+        if t is None and isinstance(e, dict):
+            t = e.get("t", e.get("clock_seconds", 0))
+        t_val = float(t) if t is not None else 0.0
+        if t_val > at:
             break
-        if e.seq != len(enriched)+1 or e.id != f"E{e.seq:04d}" or e.t <= last_t or ended:
-            raise ValueError("event_order_or_id")
-        for x, y in (e.start, e.end):
-            if not (0 <= x <= 105 and 0 <= y <= 68):
-                raise ValueError("coordinate_bounds")
-        if e.actor not in PLAYERS[e.team] or e.start != ball:
-            raise ValueError("actor_or_ball_discontinuity")
-        if e.kind != "pass" and e.receiver is not None or e.kind != "shot" and e.outcome != "complete":
-            raise ValueError("illegal_event_payload")
-        if enriched and owner is not None:
-            intervals.append({"start": last_t, "end": e.t, "team": owner,
-                              "event_id": enriched[-1]["id"]})
-        if pending_restart:
-            if e.kind != "restart" or e.team != pending_restart or e.end != (52.5, 34.0):
-                raise ValueError("illegal_restart")
-            pending_restart = None
-            owner, holder = e.team, e.actor
-            possession += 1
-        elif e.kind == "restart":
-            raise ValueError("unexpected_restart")
-        elif e.kind == "recovery":
-            if e.team != other(owner) or e.start != e.end or e.receiver or e.outcome != "complete":
-                raise ValueError("illegal_recovery")
-            owner, holder = e.team, e.actor
-            possession += 1
+        if is_synthetic and isinstance(e, Event):
+            if e.seq != len(enriched)+1 or e.id != f"E{e.seq:04d}" or e.t <= last_t or ended:
+                raise ValueError("event_order_or_id")
+            for x, y in (e.start, e.end):
+                if not (0 <= x <= 105 and 0 <= y <= 68):
+                    raise ValueError("coordinate_bounds")
+            if e.actor not in PLAYERS[e.team] or e.start != ball:
+                raise ValueError("actor_or_ball_discontinuity")
+            if e.kind != "pass" and e.receiver is not None or e.kind != "shot" and e.outcome != "complete":
+                raise ValueError("illegal_event_payload")
+            if enriched and owner is not None:
+                intervals.append({"start": last_t, "end": e.t, "team": owner,
+                                  "event_id": enriched[-1]["id"]})
+            if pending_restart:
+                if e.kind != "restart" or e.team != pending_restart or e.end != (52.5, 34.0):
+                    raise ValueError("illegal_restart")
+                pending_restart = None
+                owner, holder = e.team, e.actor
+                possession += 1
+            elif e.kind == "restart":
+                raise ValueError("unexpected_restart")
+            elif e.kind == "recovery":
+                if e.team != other(owner) or e.start != e.end or e.receiver or e.outcome != "complete":
+                    raise ValueError("illegal_recovery")
+                owner, holder = e.team, e.actor
+                possession += 1
+            else:
+                if e.team != owner or e.actor != holder:
+                    raise ValueError("non_owner_action")
+                if e.kind == "pass":
+                    if e.receiver not in PLAYERS[e.team] or e.receiver == holder or e.outcome != "complete":
+                        raise ValueError("illegal_pass")
+                    holder = e.receiver
+                elif e.kind == "shot":
+                    if e.outcome not in ("saved", "goal") or e.receiver:
+                        raise ValueError("illegal_shot")
+                    if e.outcome == "goal":
+                        if attack_x(e.team, e.end[0]) != 105 or abs(e.end[1]-34) > 3.66:
+                            raise ValueError("goal_outside_goal_mouth")
+                        score[e.team] += 1
+                        pending_restart = other(e.team)
+                        owner = holder = None
+                    else:
+                        owner = other(e.team)
+                        holder = owner+"1"
+                        possession += 1
+                elif e.kind == "end":
+                    if e.t != 720 or e.start != e.end:
+                        raise ValueError("illegal_end")
+                    ended = True
+            ball, last_t = e.end, e.t
+            enriched.append({**e.model_dump(mode="json"), "possession_id": possession,
+                             "owner_after": owner, "holder_after": holder})
         else:
-            if e.team != owner or e.actor != holder:
-                raise ValueError("non_owner_action")
-            if e.kind == "pass":
-                if e.receiver not in PLAYERS[e.team] or e.receiver == holder or e.outcome != "complete":
-                    raise ValueError("illegal_pass")
-                holder = e.receiver
-            elif e.kind == "shot":
-                if e.outcome not in ("saved", "goal") or e.receiver:
-                    raise ValueError("illegal_shot")
-                if e.outcome == "goal":
-                    if attack_x(e.team, e.end[0]) != 105 or abs(e.end[1]-34) > 3.66:
-                        raise ValueError("goal_outside_goal_mouth")
-                    score[e.team] += 1
-                    pending_restart = other(e.team)
-                    owner = holder = None
+            eid = (
+                getattr(e, "event_id", None)
+                or getattr(e, "id", None)
+                or (e.get("event_id") if isinstance(e, dict) else None)
+                or (e.get("id") if isinstance(e, dict) else f"E{len(enriched)+1:04d}")
+            )
+            raw_action = str(
+                getattr(e, "action_type", None)
+                or getattr(e, "kind", None)
+                or (e.get("action_type") if isinstance(e, dict) else "")
+                or (e.get("kind") if isinstance(e, dict) else "")
+            ).lower()
+            raw_team = str(
+                getattr(e, "team_id", None)
+                or getattr(e, "team", None)
+                or (e.get("team_id") if isinstance(e, dict) else "")
+                or (e.get("team") if isinstance(e, dict) else "H")
+            )
+            if team_names:
+                if raw_team in (team_names.get("H"), "H"):
+                    t_mapped = "H"
+                elif raw_team in (team_names.get("N"), "N"):
+                    t_mapped = "N"
                 else:
-                    owner = other(e.team)
-                    holder = owner+"1"
-                    possession += 1
-            elif e.kind == "end":
-                if e.t != 720 or e.start != e.end:
-                    raise ValueError("illegal_end")
-                ended = True
-        ball, last_t = e.end, e.t
-        enriched.append({**e.model_dump(mode="json"), "possession_id": possession,
-                         "owner_after": owner, "holder_after": holder})
+                    t_mapped = "H" if "arg" in raw_team.lower() or "home" in raw_team.lower() else "N"
+            else:
+                t_mapped = "H" if raw_team == "H" or "arg" in raw_team.lower() else "N"
+
+            raw_actor = str(
+                getattr(e, "player_name", None)
+                or getattr(e, "actor", None)
+                or (e.get("player_name") if isinstance(e, dict) else "")
+                or (e.get("actor") if isinstance(e, dict) else "P1")
+            )
+            raw_x = getattr(e, "x", None) or (e.get("x") if isinstance(e, dict) else 52.5)
+            raw_y = getattr(e, "y", None) or (e.get("y") if isinstance(e, dict) else 34.0)
+            raw_end_x = getattr(e, "end_x", None) or (e.get("end_x") if isinstance(e, dict) else raw_x)
+            raw_end_y = getattr(e, "end_y", None) or (e.get("end_y") if isinstance(e, dict) else raw_y)
+            raw_outcome = str(
+                getattr(e, "outcome", None)
+                or (e.get("outcome") if isinstance(e, dict) else "complete")
+            )
+
+            kind = (
+                "shot" if "shot" in raw_action
+                else ("recovery" if any(k in raw_action for k in ("recovery", "tackle", "interception"))
+                      else ("restart" if any(k in raw_action for k in ("start", "kick", "xi"))
+                            else "pass"))
+            )
+            if kind == "shot" and "goal" in raw_outcome.lower():
+                score[t_mapped] += 1
+
+            owner = t_mapped
+            holder = raw_actor
+            ball = (float(raw_end_x or 52.5), float(raw_end_y or 34.0))
+            if enriched:
+                intervals.append({"start": int(last_t), "end": int(t_val), "team": owner, "event_id": enriched[-1]["id"]})
+            last_t = int(t_val)
+            possession += 1
+            enriched.append({
+                "id": str(eid),
+                "seq": len(enriched) + 1,
+                "t": int(t_val),
+                "kind": kind,
+                "team": t_mapped,
+                "actor": raw_actor,
+                "receiver": getattr(e, "receiver", None) or (e.get("receiver") if isinstance(e, dict) else None),
+                "start": [float(raw_x or 52.5), float(raw_y or 34.0)],
+                "end": [float(raw_end_x or 52.5), float(raw_end_y or 34.0)],
+                "outcome": raw_outcome,
+                "possession_id": possession,
+                "owner_after": owner,
+                "holder_after": holder,
+            })
     if enriched and last_t < at and owner:
-        intervals.append({"start": last_t, "end": at, "team": owner, "event_id": enriched[-1]["id"]})
+        intervals.append({"start": int(last_t), "end": at, "team": owner, "event_id": enriched[-1]["id"]})
     return {"at": at, "score": score, "owner": owner, "holder": holder, "ball": list(ball),
             "events": enriched, "intervals": intervals, "ended": ended}
 
@@ -362,6 +450,20 @@ def both_team_receipts(state: dict) -> dict[str, dict]:
 
 
 @dataclass(frozen=True)
+class SnapshotContext:
+    match_id: str
+    scenario: str
+    seed: int
+    source_data_digest: str
+    as_of: int
+    metric_version: str = "football-v2"
+    schema_version: str = "evidence-v2"
+    match_clock_basis: str = "match_elapsed"
+    data_version: str = "1.0.0"
+    format_seconds: int = 720
+
+
+@dataclass(frozen=True)
 class Snapshot:
     id: str
     canonical: str
@@ -371,33 +473,126 @@ class Snapshot:
         # Callers receive a copy; tools cannot mutate the frozen source.
         return json.loads(self.canonical)
 
+    @property
+    def context(self) -> SnapshotContext | None:
+        d = self.data
+        if d.get("schema") == "evidence-v2":
+            return SnapshotContext(
+                match_id=d.get("match_id", ""),
+                scenario=d.get("scenario", "default"),
+                seed=d.get("seed", 17),
+                source_data_digest=d.get("source_data_digest", ""),
+                as_of=d.get("as_of", 0),
+                metric_version=d.get("metric_version", "football-v2"),
+                schema_version=d.get("schema", "evidence-v2"),
+                match_clock_basis=d.get("match_clock_basis", "match_elapsed"),
+                data_version=d.get("data_version", "1.0.0"),
+                format_seconds=d.get("format_seconds", 720),
+            )
+        return None
 
-def freeze(events: tuple[Event, ...], at: int, seed: int = 17) -> Snapshot:
-    state = reduce_match(events, at)
+
+def freeze(
+    events: tuple[Event, ...] | list[Any],
+    at: int,
+    seed: int = 17,
+    match_id: str | None = None,
+    scenario: str = "default",
+    data_version: str = "1.0.0",
+    clock_basis: str = "match_elapsed",
+    teams: dict[str, str] | None = None,
+    format_seconds: int = 720,
+    limitations: list[str] | None = None,
+) -> Snapshot:
+    is_syn = (match_id is None or match_id.startswith("syn_")) and scenario in SCENARIOS
+    max_d = format_seconds if format_seconds else (720 if is_syn else 5400)
+    state = reduce_match(events, at, max_duration=max_d, is_synthetic=is_syn, team_names=teams)
     receipts = metric_receipts(state)
+    actual_teams = teams or TEAMS
     candidate = "Compare Harbor's possession, shots and entries in the two windows. Look for contrary evidence."
-    if receipts["H.transition_shots.current"]["value"] >= 2:
+    if receipts.get("H.transition_shots.current", {}).get("value", 0) >= 2:
         candidate = "Investigate what followed Harbor's recoveries. Inspect the linked timings and sample size."
-    if state["score"]["H"]:
+    if state["score"].get("H", 0) > 0:
         candidate = "Explain the goal's recorded on-ball sequence. Separate observed sequence from tactical cause."
-    content = {"schema": "evidence-v1", "metric_version": "football-v1", "generator_version": "controlled-r01-3", "match_id": f"harbor-northbridge-{seed}",
-               "seed": seed, "format_seconds": 720, "as_of": at, "teams": TEAMS, "score": state["score"],
-               "candidate": candidate, "receipts": receipts, "events": state["events"], "intervals": state["intervals"],
-               "limitations": ["Synthetic 12-minute demonstration match.", "On-ball events only; no off-ball tracking, pressure, xG or coaching intent."]}
+
+    # Backward-compatible canonical hash for default synthetic match:
+    if match_id is None or (match_id == f"harbor-northbridge-{seed}" and scenario == "default" and seed == 17):
+        content = {
+            "schema": "evidence-v1",
+            "metric_version": "football-v1",
+            "generator_version": "controlled-r01-3",
+            "match_id": f"harbor-northbridge-{seed}",
+            "seed": seed,
+            "format_seconds": 720,
+            "as_of": at,
+            "teams": TEAMS,
+            "score": state["score"],
+            "candidate": candidate,
+            "receipts": receipts,
+            "events": state["events"],
+            "intervals": state["intervals"],
+            "limitations": [
+                "Synthetic 12-minute demonstration match.",
+                "On-ball events only; no off-ball tracking, pressure, xG or coaching intent."
+            ],
+        }
+    else:
+        # Versioned Snapshot Context (P0.4)
+        ev_ids = [
+            getattr(e, "id", None) or getattr(e, "event_id", None) or (e.get("id") if isinstance(e, dict) else "")
+            for e in events
+        ]
+        source_digest = hashlib.sha256("".join(str(i) for i in ev_ids).encode()).hexdigest()[:16]
+        content = {
+            "schema": "evidence-v2",
+            "metric_version": "football-v2",
+            "generator_version": "controlled-r02-1",
+            "match_id": match_id,
+            "scenario": scenario,
+            "seed": seed,
+            "source_data_digest": source_digest,
+            "data_version": data_version,
+            "match_clock_basis": clock_basis,
+            "format_seconds": max_d,
+            "as_of": at,
+            "teams": actual_teams,
+            "score": state["score"],
+            "candidate": candidate,
+            "receipts": receipts,
+            "events": state["events"],
+            "intervals": state["intervals"],
+            "limitations": limitations or (
+                [
+                    "Synthetic 12-minute demonstration match.",
+                    "On-ball events only; no off-ball tracking, pressure, xG or coaching intent."
+                ]
+                if match_id.startswith("syn_") else
+                [
+                    "Historical / partial event sequence; coverage level bounded.",
+                    "On-ball events only; no off-ball tracking, pressure, xG or coaching intent."
+                ]
+            ),
+        }
     canonical = json.dumps(content, sort_keys=True, separators=(",", ":"))
     return Snapshot("snap-"+hashlib.sha256(canonical.encode()).hexdigest()[:20], canonical)
 
 
-def tool_evidence(snapshot: Snapshot) -> dict:
+def tool_evidence(snapshot: Snapshot, focus_team: Literal["H", "N"] | str = "H") -> dict:
     data = snapshot.data
-    has_away_goals = "N.goals.match" in data["receipts"]
-    receipts = {k: v for k, v in data["receipts"].items() if k.startswith("H.") or has_away_goals}
+    # P0.10: Support dual-team visibility for both Analyst and Verifier
+    receipts = dict(data.get("receipts", {}))
     relevant = set()
     for v in receipts.values():
-        if "possession" not in v["id"]:
-            relevant.update(v["event_ids"])
-    return {"snapshot_id": snapshot.id, **{k: data[k] for k in ("as_of", "teams", "score", "candidate", "limitations")},
-            "receipts": receipts, "selected_events": [e for e in data["events"] if e["id"] in relevant]}
+        if isinstance(v, dict) and "possession" not in v.get("id", ""):
+            relevant.update(v.get("event_ids", []))
+    events = data.get("events", [])
+    return {
+        "snapshot_id": snapshot.id,
+        "focus_team": focus_team,
+        **{k: data[k] for k in ("as_of", "teams", "score", "candidate", "limitations") if k in data},
+        "receipts": receipts,
+        "selected_events": [e for e in events if e.get("id") in relevant],
+    }
 
 
 def detect_moments(state: dict) -> list[dict]:

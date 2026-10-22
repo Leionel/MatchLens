@@ -80,8 +80,8 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
           action:
             ed.kind === "pass"
               ? isZh
-                ? `中前场推进传球 (${ed.gain_m ? ed.gain_m.toFixed(0) : 10}m)`
-                : `Progressive Pass (${ed.gain_m ? ed.gain_m.toFixed(0) : 10}m)`
+                ? `中前场推进传球${ed.gain_m ? ` (${ed.gain_m.toFixed(0)}m)` : ""}`
+                : `Progressive Pass${ed.gain_m ? ` (${ed.gain_m.toFixed(0)}m)` : ""}`
               : ed.kind === "shot"
               ? isZh
                 ? `关键射门攻门终结`
@@ -93,8 +93,12 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
               : isZh
               ? `持球推进突破`
               : `Progressive Ball Carry`,
-          weight: `+${(0.38 / (idx + 1)).toFixed(2)}`,
-          player: ed.actor_name || ed.actor || "H10",
+          weight: ed.gain_m
+            ? `+${ed.gain_m.toFixed(0)}m`
+            : ed.xt_value
+            ? `+${ed.xt_value.toFixed(3)} xT`
+            : `Seq #${idx + 1}`,
+          player: ed.actor_name || ed.actor || (state.teams?.H ? `${state.teams.H} Player` : "Actor"),
           kind: ed.kind,
           eventId: ed.id,
         }));
@@ -120,14 +124,18 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
             : isZh
             ? `球权调度组织`
             : `Possession Transition`,
-        weight: `+${(0.3 / (idx + 1)).toFixed(2)}`,
-        player: ev.actor || "H10",
+        weight: ev.gain_m
+          ? `+${ev.gain_m.toFixed(0)}m`
+          : ev.xt_value
+          ? `+${ev.xt_value.toFixed(3)} xT`
+          : `Evt #${idx + 1}`,
+        player: ev.actor_name || ev.actor || (state.teams?.H ? `${state.teams.H} Player` : "Actor"),
         kind: ev.kind,
         eventId: ev.id,
       }));
     }
     return [];
-  }, [state.sequences, state.events, isZh]);
+  }, [state.sequences, state.events, state.teams, isZh]);
 
   // Dynamic Causal Chain from real sequence progression
   const dynamicCausalChain = React.useMemo(() => {
@@ -150,8 +158,8 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
           {
             step: `T-${Math.max(1, Math.round(dt / 2))}s`,
             desc: isZh
-              ? `${midEv.actor_name || midEv.actor} 实施纵向转移与走廊渗透 (+${midEv.gain_m ? midEv.gain_m.toFixed(0) : 12}m)`
-              : `${midEv.actor_name || midEv.actor} executed progressive transition (+${midEv.gain_m ? midEv.gain_m.toFixed(0) : 12}m)`,
+              ? `${midEv.actor_name || midEv.actor} 实施纵向转移与走廊渗透${midEv.gain_m ? ` (+${midEv.gain_m.toFixed(0)}m)` : ""}`
+              : `${midEv.actor_name || midEv.actor} executed progressive transition${midEv.gain_m ? ` (+${midEv.gain_m.toFixed(0)}m)` : ""}`,
             link: isZh ? "过渡转换" : "Transition",
           },
           {

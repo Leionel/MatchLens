@@ -345,13 +345,13 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
 
           <div style={{ padding: 12, background: "rgba(15, 23, 42, 0.6)", borderRadius: 8, border: "1px solid var(--pitch-border)", display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
-              {isZh ? `在关键失误抑制 ${counterfactualTurnoverReduced}% 下的推演变化:` : `Projected Outcome Under ${counterfactualTurnoverReduced}% Turnover Suppression:`}
+              {isZh ? `反事实观察边界 (失误抑制 ${counterfactualTurnoverReduced}%):` : `Observational Counterfactual Boundary (${counterfactualTurnoverReduced}% Turnover Suppression):`}
             </div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: "var(--turf-emerald)", marginTop: 4 }}>
-              {isZh ? "对手预期进球减少 (xG Conceded): " : "Opponent xG Conceded: "}-{(counterfactualTurnoverReduced * 0.008).toFixed(2)} xG
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--turf-emerald)", marginTop: 4 }}>
+              {isZh ? "潜在转换射门抑制: " : "Potential Transition Shots Suppressed: "}~{((Number(state.receipts?.[`${state.focus_team || "H"}.transition_shots.current`]?.value || 2) * counterfactualTurnoverReduced) / 100).toFixed(1)} {isZh ? "次起脚" : "shots"}
             </div>
-            <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>
-              {isZh ? "预估 Harbor FC 胜率净增: " : "Estimated Harbor FC Win Probability Delta: "}+{(counterfactualTurnoverReduced * 0.22).toFixed(1)}%
+            <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 4, lineHeight: 1.4 }}>
+              {isZh ? "Gate 2.0 边界守则: 缺乏22人全场追踪与体能负荷数据，严禁将失误率直接线性换算为胜率或教练意图因果。" : "Gate 2.0 Boundary: Without 22-player tracking and biometrics, linear conversion from turnover rate to win probability is rejected."}
             </div>
           </div>
         </div>

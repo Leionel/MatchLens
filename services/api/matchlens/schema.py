@@ -120,3 +120,47 @@ class VerifiedClaim(BaseModel):
     verification_method: str = "deterministic_rule"
     metric_versions: dict[str, str] = Field(default_factory=dict)
     verified: bool = True
+
+
+class MatchContext(BaseModel):
+    """Unified multi-match runtime context adhering to Section P0.2 specifications."""
+    model_config = ConfigDict(extra="forbid")
+
+    match_id: str
+    provider: str
+    data_coverage: str
+    mode: Literal["synthetic_replay", "historical", "partial_fixture"]
+    home_team_id: str
+    home_team_name: str
+    away_team_id: str
+    away_team_name: str
+    home_score: int
+    away_score: int
+    match_clock_basis: Literal["period_elapsed", "match_elapsed"] = "match_elapsed"
+    duration: int
+    observed_end: float
+    period: int
+    attack_directions: dict[str, str]
+    event_source: str
+    capabilities: list[str]
+    data_version: str
+    partial_notice: Optional[str] = None
+
+
+class TypedMetricReceipt(BaseModel):
+    """Rigorous typed metric receipt (P0.8) avoiding ad-hoc UI unit assumptions."""
+    model_config = ConfigDict(extra="forbid")
+
+    metric_id: str
+    name: str
+    value: float | int
+    unit: Literal["%", "seconds", "shots", "entries", "recoveries", "goals", "meters", "dimensionless"]
+    definition: str
+    numerator: Optional[float | int] = None
+    denominator: Optional[float | int] = None
+    time_window: Optional[tuple[int, int]] = None
+    team_scope: Literal["H", "N", "both"] = "H"
+    event_refs: list[str] = Field(default_factory=list)
+    model_version: str = "football-v2"
+    source: str = "deterministic_rule"
+    chains: Optional[list[Any]] = None
