@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { InspectorPayload, PossessionSequence, Receipt, Card, Evidence } from "./types";
+import { Locale } from "../../lib/i18n";
 
 interface InspectorDrawerProps {
   isOpen: boolean;
@@ -9,6 +10,7 @@ interface InspectorDrawerProps {
   payload: InspectorPayload | null;
   evidence?: Evidence | null;
   players?: Record<string, Record<string, string>>;
+  locale?: Locale;
   onSelectEvent?: (id: string) => void;
   onSelectSequence?: (seqId: string) => void;
   onInspectReceipt?: (receiptId: string) => void;
@@ -27,10 +29,12 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
   payload,
   evidence,
   players = {},
+  locale = "zh",
   onSelectEvent,
   onSelectSequence,
   onInspectReceipt,
 }) => {
+  const isZh = locale === "zh";
   const [activeTab, setActiveTab] = useState<"detail" | "formula" | "claim" | "sufficiency">("detail");
 
   // Sync tab when payload type changes
@@ -63,10 +67,10 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
           <span style={{ fontSize: 18 }}>🔍</span>
           <div>
             <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>
-              {payload?.title || (payload?.type ? `${payload.type.toUpperCase()} INSPECTOR` : "TACTICAL INSPECTOR")}
+              {payload?.title || (payload?.type ? (isZh ? `${payload.type.toUpperCase()} 审计` : `${payload.type.toUpperCase()} INSPECTOR`) : (isZh ? "战术审计侧边栏" : "TACTICAL INSPECTOR"))}
             </div>
             <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
-              Non-blocking Sidecar Audit
+              {isZh ? "全局无阻断深度审计侧边栏" : "Non-blocking Sidecar Audit"}
             </div>
           </div>
         </div>
@@ -75,8 +79,8 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
           type="button"
           className="drawer-close-btn"
           onClick={onClose}
-          aria-label="Close Inspector Drawer"
-          title="Close Inspector Drawer (Esc)"
+          aria-label={isZh ? "关闭抽屉" : "Close Inspector Drawer"}
+          title={isZh ? "关闭抽屉 (Esc)" : "Close Inspector Drawer (Esc)"}
         >
           ✕
         </button>
@@ -91,7 +95,9 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
           className={`drawer-nav-btn ${activeTab === "detail" ? "active" : ""}`}
           onClick={() => setActiveTab("detail")}
         >
-          {payload?.type === "zone" ? "Zone Drilldown" : "Sequence Steps"}
+          {payload?.type === "zone"
+            ? (isZh ? "九宫格场区下钻" : "Zone Drilldown")
+            : (isZh ? "控球序列步阶" : "Sequence Steps")}
         </button>
         <button
           type="button"
@@ -100,7 +106,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
           className={`drawer-nav-btn ${activeTab === "formula" ? "active" : ""}`}
           onClick={() => setActiveTab("formula")}
         >
-          Receipt & Math
+          {isZh ? "公式与确定性凭据" : "Receipt & Math"}
         </button>
         <button
           type="button"
@@ -109,7 +115,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
           className={`drawer-nav-btn ${activeTab === "claim" ? "active" : ""}`}
           onClick={() => setActiveTab("claim")}
         >
-          Claim & Gate 2.0
+          {isZh ? "论断与 Gate 2.0" : "Claim & Gate 2.0"}
         </button>
         <button
           type="button"
@@ -118,7 +124,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
           className={`drawer-nav-btn ${activeTab === "sufficiency" ? "active" : ""}`}
           onClick={() => setActiveTab("sufficiency")}
         >
-          Data Sufficiency
+          {isZh ? "数据充分性评估" : "Data Sufficiency"}
         </button>
       </div>
 
@@ -131,22 +137,26 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <div className="glass-card" style={{ borderLeft: "3px solid var(--tech-cyan)" }}>
                   <div style={{ fontSize: 11, fontWeight: 750, color: "var(--tech-cyan)", textTransform: "uppercase" }}>
-                    Spatial Pitch Zone Drilldown
+                    {isZh ? "九宫格空间分区审计" : "Spatial Pitch Zone Drilldown"}
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 800, marginTop: 4 }}>
                     {payload.zoneName || `Zone ${payload.zoneId}`}
                   </div>
                   <p style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 6, lineHeight: 1.5 }}>
-                    9-zone spatial decomposition partition. Tracks local action density differential ΔD(z) and penetration sequences crossing through this pitch sector.
+                    {isZh
+                      ? "九宫格空间分解分区。追踪局部行动占比差分 ΔD(z) 以及穿越该球场扇区的渗透控球序列。"
+                      : "9-zone spatial decomposition partition. Tracks local action density differential ΔD(z) and penetration sequences crossing through this pitch sector."}
                   </p>
                 </div>
 
                 <div className="glass-card">
                   <div style={{ fontSize: 12, fontWeight: 750, color: "var(--text-primary)", marginBottom: 8 }}>
-                    Tactical Significance
+                    {isZh ? "战术意义说明" : "Tactical Significance"}
                   </div>
                   <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                    High-density zones reflect high duel frequency or sustained territorial buildup. Traversed sequences represent passing or ball-carrying penetration routes across lines.
+                    {isZh
+                      ? "高密度区域反映出高频对抗争夺或持续阵地组织。穿越序列代表跨线传球或长途奔袭的纵向推进路线。"
+                      : "High-density zones reflect high duel frequency or sustained territorial buildup. Traversed sequences represent passing or ball-carrying penetration routes across lines."}
                   </div>
                 </div>
               </div>
@@ -157,14 +167,26 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span className="seq-id-badge">{seq.sequence_id}</span>
                     <span className={`seq-outcome ${seq.outcome}`}>
-                      {seq.outcome.replace("_", " ").toUpperCase()}
+                      {isZh
+                        ? seq.outcome === "goal"
+                          ? "进球 GOAL"
+                          : seq.outcome === "shot"
+                            ? "射门 SHOT"
+                            : seq.outcome === "saved"
+                              ? "扑救 SAVED"
+                              : seq.outcome === "turnover"
+                                ? "失误 TURNOVER"
+                                : seq.outcome.replace("_", " ").toUpperCase()
+                        : seq.outcome.replace("_", " ").toUpperCase()}
                     </span>
                   </div>
                   <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>
-                    {seq.team === "H" ? "Harbor FC (Home)" : "Northbridge Utd (Away)"} Possession
+                    {seq.team === "H"
+                      ? (isZh ? "Harbor FC (主队控球)" : "Harbor FC (Home) Possession")
+                      : (isZh ? "Northbridge Utd (客队控球)" : "Northbridge Utd (Away) Possession")}
                   </div>
                   <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>
-                    {clock(seq.start_t)} – {clock(seq.end_t)} ({seq.duration}s duration)
+                    {clock(seq.start_t)} – {clock(seq.end_t)} {isZh ? `(${seq.duration}秒时长)` : `(${seq.duration}s duration)`}
                   </div>
 
                   <div
@@ -179,19 +201,19 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                     }}
                   >
                     <div>
-                      <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Passes</div>
+                      <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "传球次数" : "Passes"}</div>
                       <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text-primary)" }}>{seq.pass_count}</div>
                     </div>
                     <div>
-                      <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Territory</div>
+                      <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "推进净增" : "Territory"}</div>
                       <div style={{ fontSize: 15, fontWeight: 800, color: "var(--turf-emerald)" }}>
                         {seq.territory_gained !== undefined ? `${seq.territory_gained > 0 ? `+${seq.territory_gained}` : seq.territory_gained}m` : `+${seq.progressive_distance}m`}
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Final 3rd</div>
+                      <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "打入前场" : "Final 3rd"}</div>
                       <div style={{ fontSize: 15, fontWeight: 800, color: seq.entered_final_third ? "var(--turf-emerald)" : "var(--text-tertiary)" }}>
-                        {seq.entered_final_third ? "YES ✓" : "NO"}
+                        {seq.entered_final_third ? (isZh ? "是 ✓" : "YES ✓") : (isZh ? "否" : "NO")}
                       </div>
                     </div>
                   </div>
@@ -200,7 +222,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                 {/* Step-by-Step Events Progression */}
                 <div className="glass-card">
                   <div style={{ fontSize: 12, fontWeight: 750, color: "var(--text-primary)", marginBottom: 8 }}>
-                    Step-by-Step Event Ladder ({seq.events_detail?.length || seq.event_ids.length} actions)
+                    {isZh ? `逐动作步阶梯度 (${seq.events_detail?.length || seq.event_ids.length} 个动作)` : `Step-by-Step Event Ladder (${seq.events_detail?.length || seq.event_ids.length} actions)`}
                   </div>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -243,7 +265,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                                 {st.actor_name || st.actor} · <span style={{ textTransform: "uppercase", color: "var(--tech-cyan)" }}>{st.kind}</span>
                               </div>
                               <div style={{ fontSize: 10, color: "var(--text-tertiary)" }}>
-                                {clock(st.t)} · start: [{st.start[0].toFixed(1)}, {st.start[1].toFixed(1)}] → end: [{st.end[0].toFixed(1)}, {st.end[1].toFixed(1)}]
+                                {clock(st.t)} · {isZh ? "起点" : "start"}: [{st.start[0].toFixed(1)}, {st.start[1].toFixed(1)}] → {isZh ? "终点" : "end"}: [{st.end[0].toFixed(1)}, {st.end[1].toFixed(1)}]
                               </div>
                             </div>
                           </div>
@@ -277,7 +299,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                             cursor: "pointer",
                           }}
                         >
-                          Action #{idx + 1}: <code>{eid}</code>
+                          {isZh ? `动作 #${idx + 1}: ` : `Action #${idx + 1}: `}<code>{eid}</code>
                         </button>
                       ))
                     )}
@@ -287,7 +309,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                 {/* Players Involved */}
                 <div className="glass-card">
                   <div style={{ fontSize: 12, fontWeight: 750, color: "var(--text-primary)", marginBottom: 8 }}>
-                    Players Involved in Sequence
+                    {isZh ? "本序列参与球员" : "Players Involved in Sequence"}
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                     {seq.players.map((pid) => (
@@ -313,10 +335,12 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
               <div style={{ textAlign: "center", padding: "40px 16px", color: "var(--text-tertiary)" }}>
                 <div style={{ fontSize: 28, marginBottom: 8 }}>⚽</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
-                  No Sequence or Zone Selected
+                  {isZh ? "未选择控球序列或九宫格分区" : "No Sequence or Zone Selected"}
                 </div>
                 <div style={{ fontSize: 12, marginTop: 4 }}>
-                  Click any possession sequence in Tactical Lab or Match Center to inspect its step-by-step path here.
+                  {isZh
+                    ? "在战术实验室或比赛中心点击任意控球序列，即可在此处逐动作拆解其推进路径与坐标。"
+                    : "Click any possession sequence in Tactical Lab or Match Center to inspect its step-by-step path here."}
                 </div>
               </div>
             )}
@@ -330,7 +354,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
               <>
                 <div className="glass-card" style={{ borderLeft: "3px solid var(--tech-cyan)" }}>
                   <div style={{ fontSize: 11, fontWeight: 750, color: "var(--tech-cyan)", textTransform: "uppercase" }}>
-                    Deterministic Metric Receipt
+                    {isZh ? "确定性指标计算收据" : "Deterministic Metric Receipt"}
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 800, marginTop: 4 }}>
                     <code>{receipt.id}</code>
@@ -351,7 +375,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                 {/* Mathematical Formula Contract */}
                 <div className="glass-card">
                   <div style={{ fontSize: 12, fontWeight: 750, color: "var(--text-primary)", marginBottom: 8 }}>
-                    Verification Formula & Bounds
+                    {isZh ? "核验数学公式与边界约束" : "Verification Formula & Bounds"}
                   </div>
                   {receipt.numerator !== undefined && receipt.denominator !== undefined ? (
                     <div
@@ -365,28 +389,32 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                         textAlign: "center",
                       }}
                     >
-                      <div>Numerator (k): <b>{receipt.numerator}</b></div>
+                      <div>{isZh ? "分子 (k): " : "Numerator (k): "}<b>{receipt.numerator}</b></div>
                       <div style={{ borderBottom: "1px solid var(--pitch-border)", margin: "4px auto", width: "60%" }} />
-                      <div>Denominator (N): <b>{receipt.denominator}</b></div>
+                      <div>{isZh ? "分母 (N): " : "Denominator (N): "}<b>{receipt.denominator}</b></div>
                       <div style={{ marginTop: 6, color: "var(--turf-emerald)", fontWeight: 700 }}>
                         = {(receipt.numerator / (receipt.denominator || 1)).toFixed(3)} ({receipt.value} {receipt.unit})
                       </div>
                     </div>
                   ) : (
                     <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-                      Direct deterministic count across time window {clock(receipt.start)}–{clock(receipt.end)}.
+                      {isZh
+                        ? `在时间窗口 ${clock(receipt.start)}–${clock(receipt.end)} 内的确定性事件计数。`
+                        : `Direct deterministic count across time window ${clock(receipt.start)}–${clock(receipt.end)}.`}
                     </div>
                   )}
 
                   <div style={{ marginTop: 12, fontSize: 11, color: "var(--text-tertiary)" }}>
-                    Time Window: {clock(receipt.start)} ({receipt.start}s) → {clock(receipt.end)} ({receipt.end}s)
+                    {isZh
+                      ? `时间窗口: ${clock(receipt.start)} (${receipt.start}秒) → ${clock(receipt.end)} (${receipt.end}秒)`
+                      : `Time Window: ${clock(receipt.start)} (${receipt.start}s) → ${clock(receipt.end)} (${receipt.end}s)`}
                   </div>
                 </div>
 
                 {/* SHA256 Evidence Contract */}
                 <div className="glass-card">
                   <div style={{ fontSize: 12, fontWeight: 750, color: "var(--text-primary)", marginBottom: 6 }}>
-                    Evidence Event IDs ({receipt.event_ids.length})
+                    {isZh ? `关联证据事件 ID 链 (${receipt.event_ids.length})` : `Evidence Event IDs (${receipt.event_ids.length})`}
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxHeight: 150, overflowY: "auto" }}>
                     {receipt.event_ids.map((eid) => (
@@ -414,10 +442,12 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
               <div style={{ textAlign: "center", padding: "40px 16px", color: "var(--text-tertiary)" }}>
                 <div style={{ fontSize: 28, marginBottom: 8 }}>📐</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
-                  No Metric Receipt Selected
+                  {isZh ? "未选择指标收据" : "No Metric Receipt Selected"}
                 </div>
                 <div style={{ fontSize: 12, marginTop: 4 }}>
-                  Click &quot;Audit Receipt&quot; or inspect any metric card to review exact mathematical proofs.
+                  {isZh
+                    ? "点击任意指标卡片或“审计收据”，即可审查严谨的数学分子分母与确定性证据。"
+                    : "Click \"Audit Receipt\" or inspect any metric card to review exact mathematical proofs."}
                 </div>
               </div>
             )}
@@ -432,7 +462,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                 <div className="glass-card" style={{ borderLeft: "3px solid var(--electric-gold)" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span style={{ fontSize: 11, fontWeight: 800, color: "var(--electric-gold)" }}>
-                      GATE 2.0 AUDIT · CLAIM {claim.claim_id}
+                      {isZh ? `GATE 2.0 门禁审计 · 论断 ${claim.claim_id}` : `GATE 2.0 AUDIT · CLAIM ${claim.claim_id}`}
                     </span>
                     <span
                       style={{
@@ -464,33 +494,37 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                   </div>
 
                   <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 8 }}>
-                    <b>Analyst Reasoning</b>: {claim.analyst}
+                    <b>{isZh ? "分析师因果推论" : "Analyst Reasoning"}</b>: {claim.analyst}
                   </div>
                 </div>
 
                 {/* Gate 2.0 Checks */}
                 <div className="glass-card">
                   <div style={{ fontSize: 12, fontWeight: 750, color: "var(--text-primary)", marginBottom: 8 }}>
-                    Publication Gate 2.0 Rigor Checks
+                    {isZh ? "Publication Gate 2.0 严格核验" : "Publication Gate 2.0 Rigor Checks"}
                   </div>
 
                   <div style={{ display: "grid", gap: 6, fontSize: 12 }}>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "var(--text-secondary)" }}>Claim Level:</span>
+                      <span style={{ color: "var(--text-secondary)" }}>{isZh ? "论断层级:" : "Claim Level:"}</span>
                       <span style={{ fontWeight: 700, color: "var(--turf-emerald)" }}>
-                        Level {claim.claim_level || 2} ({claim.claim_level === 1 ? "Pure Observation" : claim.claim_level === 3 ? "Causal Hypothesis" : "Formula Decomposition"})
+                        {isZh
+                          ? `Level ${claim.claim_level || 2} (${claim.claim_level === 1 ? "纯描述性观察" : claim.claim_level === 3 ? "因果推论假设" : "公式分解"})`
+                          : `Level ${claim.claim_level || 2} (${claim.claim_level === 1 ? "Pure Observation" : claim.claim_level === 3 ? "Causal Hypothesis" : "Formula Decomposition"})`}
                       </span>
                     </div>
 
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "var(--text-secondary)" }}>Counterevidence Searched:</span>
+                      <span style={{ color: "var(--text-secondary)" }}>{isZh ? "反证事实检索:" : "Counterevidence Searched:"}</span>
                       <span style={{ fontWeight: 700, color: claim.counterevidence_checked ? "var(--turf-emerald)" : "var(--electric-gold)" }}>
-                        {claim.counterevidence_checked ? "Audited (None Found) ✓" : "Adversarial Checked"}
+                        {claim.counterevidence_checked
+                          ? (isZh ? "已审计 (未发现反证) ✓" : "Audited (None Found) ✓")
+                          : (isZh ? "已执行对抗校验" : "Adversarial Checked")}
                       </span>
                     </div>
 
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "var(--text-secondary)" }}>SHA256 Bound Facts:</span>
+                      <span style={{ color: "var(--text-secondary)" }}>{isZh ? "SHA-256 事实绑定:" : "SHA256 Bound Facts:"}</span>
                       <span style={{ fontFamily: "Consolas, monospace", fontSize: 11, color: "var(--tech-cyan)" }}>
                         {claim.snapshot_id.slice(0, 12)}...
                       </span>
@@ -502,7 +536,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                 {claim.limitations && claim.limitations.length > 0 && (
                   <div className="glass-card">
                     <div style={{ fontSize: 12, fontWeight: 750, color: "var(--text-primary)", marginBottom: 6 }}>
-                      Documented Methodological Limitations
+                      {isZh ? "已声明的方法局限性 (Limitations)" : "Documented Methodological Limitations"}
                     </div>
                     <ul style={{ margin: 0, paddingLeft: 18, fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.5 }}>
                       {claim.limitations.map((lim, i) => (
@@ -516,10 +550,12 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
               <div style={{ textAlign: "center", padding: "40px 16px", color: "var(--text-tertiary)" }}>
                 <div style={{ fontSize: 28, marginBottom: 8 }}>🛡️</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
-                  No Claim Selected
+                  {isZh ? "未选择论断" : "No Claim Selected"}
                 </div>
                 <div style={{ fontSize: 12, marginTop: 4 }}>
-                  Select an AI hypothesis or audit card in Story & Agent Workbench to view Gate 2.0 verification details.
+                  {isZh
+                    ? "在战报与智能体研报中点击任意 AI 假设或审计卡片，即可查看 Gate 2.0 认证明细。"
+                    : "Select an AI hypothesis or audit card in Story & Agent Workbench to view Gate 2.0 verification details."}
                 </div>
               </div>
             )}
@@ -531,13 +567,15 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div className="glass-card" style={{ borderLeft: "3px solid var(--turf-emerald)" }}>
               <div style={{ fontSize: 11, fontWeight: 750, color: "var(--turf-emerald)", textTransform: "uppercase" }}>
-                Scientific Data Sufficiency Advisory (Track C BL-11)
+                {isZh ? "科学数据充分性评估标识 (Track C BL-11)" : "Scientific Data Sufficiency Advisory (Track C BL-11)"}
               </div>
               <div style={{ fontSize: 15, fontWeight: 800, marginTop: 4, color: "var(--text-primary)" }}>
-                Tracking vs. Event Stream Boundary
+                {isZh ? "光学追踪数据 vs 事件流边界" : "Tracking vs. Event Stream Boundary"}
               </div>
               <p style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 8, lineHeight: 1.55 }}>
-                MatchLens AI adheres to strict data integrity standards. Standard match events do not contain 25Hz continuous computer-vision coordinates for all 22 players. To avoid hallucinating defender off-ball spacing, MatchLens uses three mathematically verified proxies:
+                {isZh
+                  ? "MatchLens AI 恪守严苛的数据诚信准则。常规比赛事件流不包含全部 22 名球员的 25Hz 连续光学追踪坐标。为防止算法臆测防守无球跑动与间距，MatchLens 采用经数学验证的三大代理体系："
+                  : "MatchLens AI adheres to strict data integrity standards. Standard match events do not contain 25Hz continuous computer-vision coordinates for all 22 players. To avoid hallucinating defender off-ball spacing, MatchLens uses three mathematically verified proxies:"}
               </p>
             </div>
 
@@ -545,11 +583,13 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                 <span style={{ fontSize: 16 }}>⏱️</span>
                 <span style={{ fontSize: 13, fontWeight: 750, color: "var(--text-primary)" }}>
-                  1. 6-Second Quick Recovery Window (BL-03)
+                  {isZh ? "1. 6秒快速反抢时间窗口 (BL-03)" : "1. 6-Second Quick Recovery Window (BL-03)"}
                 </span>
               </div>
               <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                Evaluates counterpressing intensity by measuring how rapidly ball possession is reclaimed within 6s of turnover in each vertical third and horizontal channel.
+                {isZh
+                  ? "通过测量丢球后6秒内在纵向三区与横向走廊夺回球权的速度与频次，精准度量反抢压迫强度。"
+                  : "Evaluates counterpressing intensity by measuring how rapidly ball possession is reclaimed within 6s of turnover in each vertical third and horizontal channel."}
               </div>
             </div>
 
@@ -557,11 +597,13 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                 <span style={{ fontSize: 16 }}>🗺️</span>
                 <span style={{ fontSize: 13, fontWeight: 750, color: "var(--text-primary)" }}>
-                  2. 9-Zone Action Density Differential ΔD(z) (BL-04)
+                  {isZh ? "2. 九宫格场区行动占比差分 ΔD(z) (BL-04)" : "2. 9-Zone Action Density Differential ΔD(z) (BL-04)"}
                 </span>
               </div>
               <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                Computes spatial control differentials without tracking data by comparing home vs away on-ball event density across the 3×3 pitch partition.
+                {isZh
+                  ? "在无光学追踪坐标时，通过对比主客双方在 3×3 球场网格内的触球事件密度差分，客观计算场区掌控力。"
+                  : "Computes spatial control differentials without tracking data by comparing home vs away on-ball event density across the 3×3 pitch partition."}
               </div>
             </div>
 
@@ -569,11 +611,13 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                 <span style={{ fontSize: 16 }}>📈</span>
                 <span style={{ fontSize: 13, fontWeight: 750, color: "var(--text-primary)" }}>
-                  3. Expected Threat (xT) Grid Contraction Matrix (BL-09)
+                  {isZh ? "3. 期望威胁 (xT) 网格收缩拟合矩阵 (BL-09)" : "3. Expected Threat (xT) Grid Contraction Matrix (BL-09)"}
                 </span>
               </div>
               <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                Rigorous empirical transition matrices calibrated with bootstrapping and regularization, with MAE &lt; 0.015 and Pearson r &gt; 0.94.
+                {isZh
+                  ? "采用正则化与自举采样的严谨经验状态转移矩阵，绝对误差 MAE < 0.015，皮尔逊相关性 r > 0.94。"
+                  : "Rigorous empirical transition matrices calibrated with bootstrapping and regularization, with MAE < 0.015 and Pearson r > 0.94."}
               </div>
             </div>
           </div>

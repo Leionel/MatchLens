@@ -91,6 +91,7 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
           focus={state.focus}
           activeMomentBadge={activeMoment?.badge}
           possessionH={posValue}
+          locale={locale}
         />
       </div>
 

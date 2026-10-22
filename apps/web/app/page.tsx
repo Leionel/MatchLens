@@ -371,10 +371,12 @@ export default function MatchLensCockpit() {
           >
             <div className="loader-ring" />
             <h2 style={{ fontSize: 20, fontWeight: 800, color: "var(--text-primary)" }}>
-              Initializing MatchLens AI Obsidian Cockpit...
+              {locale === "zh" ? "正在初始化 MatchLens AI 黑曜石战术工作台..." : "Initializing MatchLens AI Obsidian Cockpit..."}
             </h2>
             <p style={{ fontSize: 13, color: "var(--text-secondary)", maxWidth: 500, lineHeight: 1.5 }}>
-              Connecting to real-time deterministic match stream, loading S2 possession sequences, and priming dual-agent deliberation runtime...
+              {locale === "zh"
+                ? "连接确定性实时赛事流，载入 S2 控球推进序列，并预热三智能体审议与 Gate 2.0 核验引擎..."
+                : "Connecting to real-time deterministic match stream, loading S2 possession sequences, and priming dual-agent deliberation runtime..."}
             </p>
           </div>
         ) : (
@@ -431,6 +433,7 @@ export default function MatchLensCockpit() {
                 perspective={perspective}
                 busy={busy}
                 analysesRemaining={state.session_analyses_remaining}
+                locale={locale}
                 onAnalyse={analyse}
                 onInspectReceipt={(id, sId) => inspect(id, sId)}
                 onSelectEvent={(id) => setSelectedEventId(id)}
@@ -444,6 +447,7 @@ export default function MatchLensCockpit() {
               <ValidationLabWorkspace
                 state={state}
                 perspective={perspective}
+                locale={locale}
                 onOpenInspector={handleOpenInspector}
               />
             )}
@@ -454,6 +458,7 @@ export default function MatchLensCockpit() {
                 <MatchRecap
                   score={state.score}
                   history={state.history}
+                  locale={locale}
                   onInspect={(rId, sId) => inspect(rId, sId)}
                 />
               </div>
@@ -468,6 +473,7 @@ export default function MatchLensCockpit() {
           payload={inspectorPayload}
           evidence={evidence}
           players={state?.players}
+          locale={locale}
           onSelectEvent={(id) => setSelectedEventId(id)}
           onSelectSequence={(seqId) => setSelectedSeqId(seqId)}
           onInspectReceipt={(id) => inspect(id)}
@@ -483,10 +489,12 @@ export default function MatchLensCockpit() {
         {/* Cockpit Footer */}
         <footer className="cockpit-footer" role="contentinfo">
           <div>
-            <b style={{ color: "var(--text-primary)" }}>MatchLens AI Cockpit 4.0</b> · Obsidian Tactical Dark Architecture
+            <b style={{ color: "var(--text-primary)" }}>MatchLens AI Cockpit 4.0</b> · {locale === "zh" ? "黑曜石战术暗夜架构" : "Obsidian Tactical Dark Architecture"}
           </div>
           <div>
-            Deterministic Event Stream · SHA-256 Verifiable Receipts · Gate 2.0 Tri-Agent Intelligence
+            {locale === "zh"
+              ? "确定性事件流 · SHA-256 可核验证据凭证 · Gate 2.0 三智能体协作研报"
+              : "Deterministic Event Stream · SHA-256 Verifiable Receipts · Gate 2.0 Tri-Agent Intelligence"}
           </div>
         </footer>
       </div>

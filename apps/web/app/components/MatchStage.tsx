@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Locale, getTranslation } from "../lib/i18n";
 
 export type FootballEvent = {
   id: string;
@@ -146,6 +147,7 @@ type MatchStageProps = {
   playerSpotlight?: any[];
   selectedZoneId?: string | null;
   sequenceTraversedZones?: string[];
+  locale?: Locale;
   onSelectEvent?: (eventId: string) => void;
   onClearSequence?: () => void;
   onSelectPlayer?: (playerId: string | null) => void;
@@ -165,11 +167,15 @@ export function MatchStage({
   playerSpotlight,
   selectedZoneId,
   sequenceTraversedZones = [],
+  locale = "zh",
   onSelectEvent,
   onClearSequence,
   onSelectPlayer,
   onSelectZone,
 }: MatchStageProps) {
+  const t = getTranslation(locale);
+  const isZh = locale === "zh";
+
   const [layer, setLayer] = useState<"live" | "network" | "progression" | "recoveries" | "zones">("live");
   const [stepIndex, setStepIndex] = useState<number | null>(null);
   const [channelMode, setChannelMode] = useState<"overall" | "attacking">("overall");
@@ -195,23 +201,27 @@ export function MatchStage({
     <div className="match-stage" aria-label="Interactive Tactical Pitch Stage">
       <div className="stage-header">
         <div className="stage-title-wrap">
-          <span className="live-camera-tag">TACTICAL EXPLORER · {isNorthbridge ? "NORTHBRIDGE UTD" : "HARBOR FC"}</span>
+          <span className="live-camera-tag">
+            {isZh ? "战术球场实况" : "TACTICAL EXPLORER"} · {isNorthbridge ? "NORTHBRIDGE UTD" : "HARBOR FC"}
+          </span>
           <h2 className="stage-title">
             {selectedSequence
-              ? `Inspecting ${selectedSequence.sequence_id} (${sequenceDetail.length} steps · net ${selectedSequence.territory_gained ?? selectedSequence.progressive_distance}m)`
+              ? isZh
+                ? `复盘序列 ${selectedSequence.sequence_id}（${sequenceDetail.length} 动作步阶 · 净增 ${selectedSequence.territory_gained ?? selectedSequence.progressive_distance}m）`
+                : `Inspecting ${selectedSequence.sequence_id} (${sequenceDetail.length} steps · net ${selectedSequence.territory_gained ?? selectedSequence.progressive_distance}m)`
               : selectedPlayerId && focusedPlayerData
-                ? `Player Spotlight · ${focusedPlayerData.name} (${focusedPlayerData.player_id})`
+                ? `${t.playerSpotlightLabel} · ${focusedPlayerData.name} (${focusedPlayerData.player_id})`
                 : selectedEvent
-                  ? `Inspecting Event · ${selectedEvent.id}`
+                  ? isZh ? `复盘事件 · ${selectedEvent.id}` : `Inspecting Event · ${selectedEvent.id}`
                   : layer === "network"
-                    ? `${isNorthbridge ? "Northbridge" : "Harbor"} Passing Network`
+                    ? isZh ? `${isNorthbridge ? "Northbridge" : "Harbor"} 传球网络拓扑` : `${isNorthbridge ? "Northbridge" : "Harbor"} Passing Network`
                     : layer === "progression"
-                      ? "Progressive Passes & Final-Third Entries"
+                      ? isZh ? "推进传球与进前场三区分布" : "Progressive Passes & Final-Third Entries"
                       : layer === "recoveries"
-                        ? "Ball Recovery Locations"
+                        ? isZh ? "球权夺回位置分布" : "Ball Recovery Locations"
                         : layer === "zones"
-                          ? `${isNorthbridge ? "Northbridge" : "Harbor"} 9-Zone Spatial Density Map`
-                          : "Live On-Ball Action Map"}
+                          ? isZh ? `${isNorthbridge ? "Northbridge" : "Harbor"} 九宫格密度热力图` : `${isNorthbridge ? "Northbridge" : "Harbor"} 9-Zone Spatial Density Map`
+                          : isZh ? "实时球权与动作分布" : "Live On-Ball Action Map"}
           </h2>
         </div>
         <div className="stage-direction">
@@ -221,9 +231,9 @@ export function MatchStage({
               className="feed-filter-btn"
               style={{ marginRight: 8, padding: "2px 8px", fontSize: 11, backgroundColor: "#00b074", color: "#ffffff" }}
               onClick={() => onSelectZone?.(null)}
-              title="清除九宫格下钻过滤"
+              title={isZh ? "清除九宫格下钻过滤" : "Clear 9-zone drilldown filter"}
             >
-              Zone Filter: {tactical?.zone_cells?.find(c => c.cell_id === selectedZoneId)?.name || selectedZoneId} ✕
+              {isZh ? "区域过滤" : "Zone Filter"}: {tactical?.zone_cells?.find(c => c.cell_id === selectedZoneId)?.name || selectedZoneId} ✕
             </button>
           )}
           {selectedSequence && (
@@ -236,16 +246,16 @@ export function MatchStage({
                 onClearSequence?.();
               }}
             >
-              Exit Sequence ✕
+              {t.exitSequenceView}
             </button>
           )}
           {isNorthbridge ? (
             <>
-              <span style={{ color: "#60a5fa" }}>●</span> <b>←</b> Northbridge Attacks
+              <span style={{ color: "#60a5fa" }}>●</span> <b>←</b> {isZh ? "Northbridge 进攻方向" : "Northbridge Attacks"}
             </>
           ) : (
             <>
-              <span className="team-h-dot">●</span> Harbor Attacks <b>→</b>
+              <span className="team-h-dot">●</span> {isZh ? "Harbor 进攻方向" : "Harbor Attacks"} <b>→</b>
             </>
           )}
         </div>
@@ -255,11 +265,11 @@ export function MatchStage({
       <div className="tactical-layer-bar" role="group" aria-label="Tactical visualization layers">
         {(
           [
-            ["live", selectedSequence ? `Sequence (${sequenceDetail.length} steps)` : "Action & Sequences"],
-            ["network", "Passing Network"],
-            ["progression", `Progression (${tactical?.progressive_passes.length ?? 0})`],
-            ["recoveries", `Recoveries (${tactical?.recoveries.length ?? 0})`],
-            ["zones", `9-Zone Heatmap (${tactical?.zone_cells?.length ?? 9})`],
+            ["live", selectedSequence ? (isZh ? `序列轨迹 (${sequenceDetail.length} 步)` : `Sequence (${sequenceDetail.length} steps)`) : t.layerLive],
+            ["network", t.layerNetwork],
+            ["progression", `${t.layerProgression} (${tactical?.progressive_passes.length ?? 0})`],
+            ["recoveries", `${t.layerRecoveries} (${tactical?.recoveries.length ?? 0})`],
+            ["zones", `${t.layerZones} (${tactical?.zone_cells?.length ?? 9})`],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -294,7 +304,7 @@ export function MatchStage({
           }}
         >
           <span>
-            🎯 <b>Player Spotlight:</b> <b style={{ color: teamColor }}>{focusedPlayerData.name} ({focusedPlayerData.player_id})</b> · {focusedPlayerData.passes} passes ({focusedPlayerData.progressive_passes} prog, +{focusedPlayerData.progressive_distance}m) · {focusedPlayerData.recoveries} recoveries · {focusedPlayerData.shots} shots
+            🎯 <b>{t.playerSpotlightLabel}:</b> <b style={{ color: teamColor }}>{focusedPlayerData.name} ({focusedPlayerData.player_id})</b> · {focusedPlayerData.passes} {isZh ? "次传球" : "passes"} ({focusedPlayerData.progressive_passes} {isZh ? "推进" : "prog"}, +{focusedPlayerData.progressive_distance}m) · {focusedPlayerData.recoveries} {isZh ? "次夺回" : "rec"} · {focusedPlayerData.shots} {isZh ? "次射门" : "shots"}
           </span>
           <button
             type="button"
@@ -302,7 +312,7 @@ export function MatchStage({
             style={{ padding: "2px 8px", fontSize: 11 }}
             onClick={() => onSelectPlayer?.(null)}
           >
-            Clear Player ✕
+            {t.clearPlayerSpotlight}
           </button>
         </div>
       )}
@@ -316,7 +326,7 @@ export function MatchStage({
             disabled={stepIndex === null || stepIndex <= 0}
             onClick={() => setStepIndex((prev) => (prev === null ? 0 : Math.max(0, prev - 1)))}
           >
-            ◀ Step Back
+            {t.stepBack}
           </button>
 
           <div className="step-chips-row">
@@ -325,7 +335,7 @@ export function MatchStage({
               className={`step-chip ${stepIndex === null ? "active" : ""}`}
               onClick={() => setStepIndex(null)}
             >
-              All ({sequenceDetail.length})
+              {isZh ? `全部 (${sequenceDetail.length})` : `All (${sequenceDetail.length})`}
             </button>
             {sequenceDetail.map((st, idx) => (
               <button
@@ -350,7 +360,7 @@ export function MatchStage({
               setStepIndex((prev) => (prev === null ? 0 : Math.min(sequenceDetail.length - 1, prev + 1)))
             }
           >
-            Step Forward ▶
+            {t.stepForward}
           </button>
         </div>
       )}

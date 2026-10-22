@@ -1,5 +1,7 @@
 "use client";
 
+import { Locale } from "../lib/i18n";
+
 type Receipt = {
   id: string;
   value: number;
@@ -11,13 +13,22 @@ type MetricComparisonProps = {
   at: number;
   snapshotId: string | null;
   focusTeam?: "H" | "N";
+  locale?: Locale;
   onInspect: (receiptId: string) => void;
 };
 
 const clock = (s: number) =>
   `${Math.floor(s / 60).toString().padStart(2, "0")}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
 
-const labels: Record<string, string> = {
+const labelsZh: Record<string, string> = {
+  possession: "有效控球率",
+  shots: "射门尝试次数",
+  entries: "推进进前场 (x=70m)",
+  high_recoveries: "前场高位反抢",
+  transition_shots: "反抢就地射门 (≤10s)",
+};
+
+const labelsEn: Record<string, string> = {
   possession: "Controlled Possession",
   shots: "Shot Attempts",
   entries: "Attacking Entries (x=70m)",
@@ -30,8 +41,11 @@ export function MetricComparison({
   at,
   snapshotId,
   focusTeam = "H",
+  locale = "zh",
   onInspect,
 }: MetricComparisonProps) {
+  const isZh = locale === "zh";
+  const labels = isZh ? labelsZh : labelsEn;
   const prevStart = Math.max(0, at - 360);
   const prevEnd = Math.max(0, at - 180);
   const currStart = prevEnd;
@@ -55,15 +69,19 @@ export function MetricComparison({
     <section className="metric-comparison-card" aria-label="Window Metric Delta Comparison">
       <div className="comparison-header">
         <div className="header-title-wrap">
-          <span className="comparison-tag">TACTICAL METRICS DELTA · {teamLabel.toUpperCase()}</span>
-          <h3 className="comparison-title">3-Minute Window Comparison ({teamLabel})</h3>
+          <span className="comparison-tag">
+            {isZh ? `战术指标变化 · ${teamLabel.toUpperCase()}` : `TACTICAL METRICS DELTA · ${teamLabel.toUpperCase()}`}
+          </span>
+          <h3 className="comparison-title">
+            {isZh ? `3分钟滑动窗口对比 (${teamLabel})` : `3-Minute Window Comparison (${teamLabel})`}
+          </h3>
         </div>
         <div className="comparison-windows">
-          <span className="window-pill prev" title={`Previous window: ${prevDuration}s duration`}>
+          <span className="window-pill prev" title={isZh ? `上一窗口: ${prevDuration}秒时长` : `Previous window: ${prevDuration}s duration`}>
             {clock(prevStart)}–{clock(prevEnd)} ({prevDuration}s)
           </span>
           <span className="window-arrow">→</span>
-          <span className="window-pill curr" title={`Current window: ${currDuration}s duration`}>
+          <span className="window-pill curr" title={isZh ? `当前窗口: ${currDuration}秒时长` : `Current window: ${currDuration}s duration`}>
             {clock(currStart)}–{clock(currEnd)} ({currDuration}s)
           </span>
         </div>
@@ -80,7 +98,9 @@ export function MetricComparison({
           fontSize: "12px",
           fontWeight: 600,
         }}>
-          ⚠️ Early match stage (t &lt; 3m): insufficient sample for two distinct 180s comparison windows.
+          {isZh
+            ? "⚠️ 比赛开场阶段 (t < 3m): 样本量不足以构成两个独立的 180s 对比窗口。"
+            : "⚠️ Early match stage (t < 3m): insufficient sample for two distinct 180s comparison windows."}
         </div>
       )}
 
@@ -95,16 +115,18 @@ export function MetricComparison({
           fontSize: "12px",
           fontWeight: 500,
         }}>
-          ℹ️ Single baseline window active (00:00–03:00); previous window represents opening baseline.
+          {isZh
+            ? "ℹ️ 单基准窗口生效中 (00:00–03:00)；上一窗口表示开场初始基准线。"
+            : "ℹ️ Single baseline window active (00:00–03:00); previous window represents opening baseline."}
         </div>
       )}
 
       <div className="comparison-table">
         <div className="table-head">
-          <span>METRIC</span>
-          <span>PREVIOUS</span>
-          <span className="col-bar">DELTA VISUALIZER</span>
-          <span>CURRENT</span>
+          <span>{isZh ? "战术指标" : "METRIC"}</span>
+          <span>{isZh ? "上一窗口" : "PREVIOUS"}</span>
+          <span className="col-bar">{isZh ? "变化对比图" : "DELTA VISUALIZER"}</span>
+          <span>{isZh ? "当前窗口" : "CURRENT"}</span>
         </div>
 
         {metrics.map((m) => {
@@ -126,7 +148,7 @@ export function MetricComparison({
               className="metric-row-btn"
               onClick={() => onInspect(curr.id)}
               disabled={!snapshotId}
-              title={`Click to inspect ${labels[m]} evidence receipt`}
+              title={isZh ? `点击审计 ${labels[m]} 证据凭证与计算链` : `Click to inspect ${labels[m]} evidence receipt`}
             >
               <span className="metric-label">
                 {labels[m]}
@@ -153,7 +175,11 @@ export function MetricComparison({
       </div>
 
       <div className="comparison-footer">
-        <span>Metrics stay fixed at this evidence snapshot. Controlled possession denominator excludes dead-ball intervals. Select any row to inspect proof.</span>
+        <span>
+          {isZh
+            ? "指标锁定于此时刻的证据快照。有效控球分母排除死球中断时间。点击任意行即可在右侧抽屉展开确定性数学证明。"
+            : "Metrics stay fixed at this evidence snapshot. Controlled possession denominator excludes dead-ball intervals. Select any row to inspect proof."}
+        </span>
       </div>
     </section>
   );

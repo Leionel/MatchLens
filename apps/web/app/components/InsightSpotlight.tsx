@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Locale } from "../lib/i18n";
 import { AudienceSwitcher } from "./AudienceSwitcher";
 import { TacticalHypothesisLab } from "./TacticalHypothesisLab";
 import { AskTheMatch } from "./AskTheMatch";
@@ -84,6 +85,7 @@ type InsightSpotlightProps = {
   hypothesesMatrix?: any;
   revisions?: any[];
   focusTeam?: "H" | "N";
+  locale?: Locale;
   onChallengeSubmitted?: (data: any) => void;
 };
 
@@ -114,8 +116,10 @@ export function InsightSpotlight({
   hypothesesMatrix = null,
   revisions = [],
   focusTeam = "H",
+  locale = "zh",
   onChallengeSubmitted,
 }: InsightSpotlightProps) {
+  const isZh = locale === "zh";
   const [activeTab, setActiveTab] = useState<"insight" | "hypotheses" | "ask" | "timeline" | "flow">("insight");
   const [isChallengeOpen, setIsChallengeOpen] = useState(false);
 
@@ -127,9 +131,11 @@ export function InsightSpotlight({
     <section className={`insight-spotlight-panel ${card ? "has-insight" : ""}`} aria-labelledby="spotlight-heading">
       <div className="spotlight-top-strip">
         <div className="spotlight-title-group">
-          <span className="live-ai-badge">MATCHLENS R2 · INTERACTIVE RESEARCH WORKBENCH</span>
+          <span className="live-ai-badge">
+            {isZh ? "MATCHLENS R2 · 交互式战术研究工作台" : "MATCHLENS R2 · INTERACTIVE RESEARCH WORKBENCH"}
+          </span>
           <h2 id="spotlight-heading" className="spotlight-main-heading">
-            Tactical intelligence
+            {isZh ? "战术智能洞察" : "Tactical intelligence"}
           </h2>
         </div>
         {activeTab === "insight" && <AudienceSwitcher mode={mode} onChange={onModeChange} />}
@@ -142,35 +148,35 @@ export function InsightSpotlight({
           className={`workbench-tab ${activeTab === "insight" ? "active" : ""}`}
           onClick={() => setActiveTab("insight")}
         >
-          ✨ Verified Insight
+          {isZh ? "✨ 认证洞察" : "✨ Verified Insight"}
         </button>
         <button
           type="button"
           className={`workbench-tab ${activeTab === "hypotheses" ? "active" : ""}`}
           onClick={() => setActiveTab("hypotheses")}
         >
-          🧪 Hypothesis Lab
+          {isZh ? "🧪 假设实验室" : "🧪 Hypothesis Lab"}
         </button>
         <button
           type="button"
           className={`workbench-tab ${activeTab === "ask" ? "active" : ""}`}
           onClick={() => setActiveTab("ask")}
         >
-          💬 Ask the Match
+          {isZh ? "💬 战术对话" : "💬 Ask the Match"}
         </button>
         <button
           type="button"
           className={`workbench-tab ${activeTab === "timeline" ? "active" : ""}`}
           onClick={() => setActiveTab("timeline")}
         >
-          📜 Revisions {revisions.length > 0 ? `(${revisions.length})` : ""}
+          {isZh ? `📜 迭代修订 ${revisions.length > 0 ? `(${revisions.length})` : ""}` : `📜 Revisions ${revisions.length > 0 ? `(${revisions.length})` : ""}`}
         </button>
         <button
           type="button"
           className={`workbench-tab ${activeTab === "flow" ? "active" : ""}`}
           onClick={() => setActiveTab("flow")}
         >
-          🤖 Agent Pipeline
+          {isZh ? "🤖 智能体流水线" : "🤖 Agent Pipeline"}
         </button>
       </div>
 

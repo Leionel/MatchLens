@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { CockpitState, PerspectiveId, InspectorPayload, Card } from "./types";
+import { Locale, getTranslation } from "../../lib/i18n";
 import { InsightSpotlight } from "../InsightSpotlight";
 
 interface StoryAgentWorkbenchProps {
@@ -9,6 +10,7 @@ interface StoryAgentWorkbenchProps {
   perspective: PerspectiveId;
   busy: boolean;
   analysesRemaining: number;
+  locale?: Locale;
   onAnalyse: () => void;
   onInspectReceipt: (receiptId: string, snapshotId?: string) => void;
   onSelectEvent: (eventId: string) => void;
@@ -28,12 +30,15 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
   perspective,
   busy,
   analysesRemaining,
+  locale = "zh",
   onAnalyse,
   onInspectReceipt,
   onSelectEvent,
   onOpenInspector,
   onCommitState,
 }) => {
+  const t = getTranslation(locale);
+  const isZh = locale === "zh";
   const [workbenchTab, setWorkbenchTab] = useState<
     "deliberation" | "attribution" | "match_story" | "gate_audit"
   >("deliberation");
@@ -108,7 +113,7 @@ ${verifiedClaims
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 18 }}>🤖</span>
               <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>
-                TRI-AGENT DELIBERATION PIPELINE (TRACK C & D)
+                {t.pipelineTitle}
               </span>
               <span
                 style={{
@@ -121,11 +126,11 @@ ${verifiedClaims
                   color: "var(--agent-violet)",
                 }}
               >
-                SPECIALIST ACTIVE
+                {t.specialistActiveBadge}
               </span>
             </div>
             <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>
-              Analyst Agent → Event Attribution Specialist → Verifier Agent → Gate 2.0 Publication
+              {t.pipelineSubtitle}
             </div>
           </div>
 
@@ -151,7 +156,7 @@ ${verifiedClaims
                 boxShadow: "var(--shadow-glow-emerald)",
               }}
             >
-              {pending ? "Deliberating..." : "⚡ Run Tri-Agent Deliberation"}
+              {pending ? t.deliberatingState : t.runDeliberationBtn}
             </button>
           </div>
         </div>
@@ -173,15 +178,15 @@ ${verifiedClaims
           >
             <div className="step-num-badge">1</div>
             <div className="step-card-header">
-              <span className="step-agent-name">Analyst Agent</span>
-              <span className="step-agent-role">Hypothesis & Anomaly</span>
+              <span className="step-agent-name">{t.stage1Name}</span>
+              <span className="step-agent-role">{t.stage1Role}</span>
             </div>
             <p className="step-desc">
-              Detects OAAI/xT inflection spikes and drafts empirical observation claims.
+              {t.stage1Desc}
             </p>
             <div className="step-foot-stats">
-              <span>Output: <code>Claim Level 1–2</code></span>
-              <span className="gate-ok">READY</span>
+              <span>{isZh ? "输出:" : "Output:"} <code>Claim Level 1–2</code></span>
+              <span className="gate-ok">{isZh ? "就绪" : "READY"}</span>
             </div>
           </div>
 
@@ -205,15 +210,15 @@ ${verifiedClaims
             </div>
             <div className="step-card-header">
               <span className="step-agent-name" style={{ color: "var(--agent-violet)" }}>
-                Event Attribution Specialist
+                {t.stage2Name}
               </span>
-              <span className="step-agent-role">Decomposition & Causal Chain</span>
+              <span className="step-agent-role">{t.stage2Role}</span>
             </div>
             <p className="step-desc">
-              Weights window events, queries backwards causal chains, and assesses alternative hypotheses.
+              {t.stage2Desc}
             </p>
             <div className="step-foot-stats">
-              <span>Tool: <code>TemporalDecomp</code></span>
+              <span>{isZh ? "工具:" : "Tool:"} <code>TemporalDecomp</code></span>
               <span style={{ color: "var(--agent-violet)", fontWeight: 700 }}>TRACK C</span>
             </div>
           </div>
@@ -228,15 +233,15 @@ ${verifiedClaims
           >
             <div className="step-num-badge">3</div>
             <div className="step-card-header">
-              <span className="step-agent-name">Verifier Agent</span>
-              <span className="step-agent-role">Adversarial Scrutiny</span>
+              <span className="step-agent-name">{t.stage3Name}</span>
+              <span className="step-agent-role">{t.stage3Role}</span>
             </div>
             <p className="step-desc">
-              Pulls independent facts, searches counterevidence, and strips unsupported causal claims.
+              {t.stage3Desc}
             </p>
             <div className="step-foot-stats">
-              <span>Audit: <code>Counterevidence</code></span>
-              <span className="verdict-tag">SCRUTINIZED</span>
+              <span>{isZh ? "审计:" : "Audit:"} <code>Counterevidence</code></span>
+              <span className="verdict-tag">{isZh ? "严苛核查" : "SCRUTINIZED"}</span>
             </div>
           </div>
 
@@ -246,14 +251,14 @@ ${verifiedClaims
           <div className={`collab-step-card ${result ? "completed" : ""}`}>
             <div className="step-num-badge">4</div>
             <div className="step-card-header">
-              <span className="step-agent-name">Publication Gate 2.0</span>
-              <span className="step-agent-role">SHA256 Bound Facts</span>
+              <span className="step-agent-name">{isZh ? "发布门禁 Gate 2.0" : "Publication Gate 2.0"}</span>
+              <span className="step-agent-role">{isZh ? "SHA256 事实绑定" : "SHA256 Bound Facts"}</span>
             </div>
             <p className="step-desc">
-              Enforces strict bound-facts contract: zero hallucinated values and verified formulas.
+              {isZh ? "执行强约束事实契约：杜绝无凭据数值，所有指标严谨溯源至确定性事件收据。" : "Enforces strict bound-facts contract: zero hallucinated values and verified formulas."}
             </p>
             <div className="step-foot-stats">
-              <span>Status: <b className="gate-ok">100% AUDITED</b></span>
+              <span>{isZh ? "状态:" : "Status:"} <b className="gate-ok">{isZh ? "100% 审计认证" : "100% AUDITED"}</b></span>
               <span><code>bound-facts-v2</code></span>
             </div>
           </div>
@@ -274,7 +279,7 @@ ${verifiedClaims
           className={`feed-filter-btn ${workbenchTab === "deliberation" ? "active" : ""}`}
           style={{ fontSize: 13, padding: "8px 16px" }}
         >
-          🎙️ Deliberation Workshop & Spotlight
+          {isZh ? "🎙️ 智能体协作过程与事实聚焦" : "🎙️ Deliberation Workshop & Spotlight"}
         </button>
 
         <button
@@ -283,7 +288,7 @@ ${verifiedClaims
           className={`feed-filter-btn ${workbenchTab === "attribution" ? "active" : ""}`}
           style={{ fontSize: 13, padding: "8px 16px" }}
         >
-          🔍 Event Attribution & Causal Chains (Track C)
+          {isZh ? "🔍 事件归因拆解与因果链 (Track C)" : "🔍 Event Attribution & Causal Chains (Track C)"}
         </button>
 
         <button
@@ -292,7 +297,7 @@ ${verifiedClaims
           className={`feed-filter-btn ${workbenchTab === "match_story" ? "active" : ""}`}
           style={{ fontSize: 13, padding: "8px 16px" }}
         >
-          📰 BL-06 Match Story & Content Approval (Track D)
+          {isZh ? "📰 BL-06 比赛战报与内容审批 (Track D)" : "📰 BL-06 Match Story & Content Approval (Track D)"}
         </button>
 
         <button
@@ -301,7 +306,7 @@ ${verifiedClaims
           className={`feed-filter-btn ${workbenchTab === "gate_audit" ? "active" : ""}`}
           style={{ fontSize: 13, padding: "8px 16px" }}
         >
-          🛡️ Gate 2.0 & Data Sufficiency Audit
+          {isZh ? "🛡️ Gate 2.0 门禁与充分性审计" : "🛡️ Gate 2.0 & Data Sufficiency Audit"}
         </button>
       </div>
 
@@ -334,6 +339,7 @@ ${verifiedClaims
             hypothesesMatrix={state.hypotheses_matrix || null}
             revisions={state.revisions || []}
             focusTeam={state.focus_team || "H"}
+            locale={locale}
             onChallengeSubmitted={(res) => {
               if (res?.state && onCommitState) onCommitState(res.state);
             }}
@@ -350,25 +356,55 @@ ${verifiedClaims
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 16 }}>⏱️</span>
                 <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text-primary)" }}>
-                  TEMPORAL WINDOW DECOMPOSITION (BL-02 & BL-10)
+                  {isZh ? "时序窗口贡献分解 (BL-02 & BL-10)" : "TEMPORAL WINDOW DECOMPOSITION (BL-02 & BL-10)"}
                 </span>
               </div>
               <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(168, 85, 247, 0.2)", color: "var(--agent-violet)", fontWeight: 700 }}>
-                TOOL #1
+                {isZh ? "工具 #1" : "TOOL #1"}
               </span>
             </div>
 
             <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 12, lineHeight: 1.5 }}>
-              Calculates objective contribution weights for actions occurring within the active OAAI momentum wave window ({clock(state.at - 120)}–{clock(state.at)}).
+              {isZh
+                ? `客观量化计算当前 OAAI 攻防动量潮汐窗口 (${clock(state.at - 120)}–${clock(state.at)}) 内各触球动作的正向贡献权重。`
+                : `Calculates objective contribution weights for actions occurring within the active OAAI momentum wave window (${clock(state.at - 120)}–${clock(state.at)}).`}
             </p>
 
             {/* Top Contributing Actions */}
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {[
-                { rank: 1, action: "Progressive Carry into Half-Space", weight: "+0.38", player: "H10", kind: "carry", eventId: "ev_h_carry_42" },
-                { rank: 2, action: "Line-breaking Pass to Box Entry", weight: "+0.29", player: "H8", kind: "pass", eventId: "ev_h_pass_43" },
-                { rank: 3, action: "Shot on Target (Post-recovery)", weight: "+0.21", player: "H9", kind: "shot", eventId: "ev_h_shot_44" },
-                { rank: 4, action: "Opponent High-Press Recovery", weight: "+0.12", player: "H4", kind: "recovery", eventId: "ev_h_rec_40" },
+                {
+                  rank: 1,
+                  action: isZh ? "带球长躯直入推进至肋部" : "Progressive Carry into Half-Space",
+                  weight: "+0.38",
+                  player: "H10",
+                  kind: "carry",
+                  eventId: "ev_h_carry_42",
+                },
+                {
+                  rank: 2,
+                  action: isZh ? "穿透防线直塞打入禁区" : "Line-breaking Pass to Box Entry",
+                  weight: "+0.29",
+                  player: "H8",
+                  kind: "pass",
+                  eventId: "ev_h_pass_43",
+                },
+                {
+                  rank: 3,
+                  action: isZh ? "反抢就地迎球射正门框" : "Shot on Target (Post-recovery)",
+                  weight: "+0.21",
+                  player: "H9",
+                  kind: "shot",
+                  eventId: "ev_h_shot_44",
+                },
+                {
+                  rank: 4,
+                  action: isZh ? "前场高位逼抢夺回球权" : "Opponent High-Press Recovery",
+                  weight: "+0.12",
+                  player: "H4",
+                  kind: "recovery",
+                  eventId: "ev_h_rec_40",
+                },
               ].map((item) => (
                 <div
                   key={item.rank}
@@ -406,7 +442,7 @@ ${verifiedClaims
                         {item.action}
                       </div>
                       <div style={{ fontSize: 10, color: "var(--text-tertiary)" }}>
-                        Actor: {item.player} · Action ID: <code>{item.eventId}</code>
+                        {isZh ? "执行人:" : "Actor:"} {item.player} · {isZh ? "事件编号:" : "Action ID:"} <code>{item.eventId}</code>
                       </div>
                     </div>
                   </div>
@@ -427,19 +463,31 @@ ${verifiedClaims
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 16 }}>⛓️</span>
                   <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text-primary)" }}>
-                    CAUSAL CHAIN QUERY (BACKWARDS TRACE)
+                    {isZh ? "因果链回溯检索 (BACKWARDS TRACE)" : "CAUSAL CHAIN QUERY (BACKWARDS TRACE)"}
                   </span>
                 </div>
                 <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(56, 189, 248, 0.2)", color: "var(--tech-cyan)", fontWeight: 700 }}>
-                  TOOL #2
+                  {isZh ? "工具 #2" : "TOOL #2"}
                 </span>
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {[
-                  { step: "T-8s", desc: "Turnover won via 6s quick counterpress (Zone 4)", link: "Trigger" },
-                  { step: "T-5s", desc: "Rapid progressive switch across central corridor", link: "Transition" },
-                  { step: "T-0s", desc: "Dangerous box entry & shot execution", link: "Inflection" },
+                  {
+                    step: "T-8s",
+                    desc: isZh ? "4号区域通过6s高压反抢断下球权" : "Turnover won via 6s quick counterpress (Zone 4)",
+                    link: isZh ? "触发起因" : "Trigger",
+                  },
+                  {
+                    step: "T-5s",
+                    desc: isZh ? "中路快速推进大范围横向转移" : "Rapid progressive switch across central corridor",
+                    link: isZh ? "过渡转换" : "Transition",
+                  },
+                  {
+                    step: "T-0s",
+                    desc: isZh ? "危险侵入禁区完成关键起脚终结" : "Dangerous box entry & shot execution",
+                    link: isZh ? "进攻拐点" : "Inflection",
+                  },
                 ].map((s, idx) => (
                   <div
                     key={idx}
@@ -472,30 +520,34 @@ ${verifiedClaims
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 16 }}>⚖️</span>
                   <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text-primary)" }}>
-                    ALTERNATIVE HYPOTHESIS ASSESSMENT
+                    {isZh ? "对立战术假设与争议评估" : "ALTERNATIVE HYPOTHESIS ASSESSMENT"}
                   </span>
                 </div>
                 <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(245, 158, 11, 0.2)", color: "var(--electric-gold)", fontWeight: 700 }}>
-                  TOOL #3
+                  {isZh ? "工具 #3" : "TOOL #3"}
                 </span>
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 12 }}>
                 <div style={{ padding: "8px 12px", borderRadius: 6, background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.3)" }}>
                   <div style={{ fontWeight: 700, color: "var(--turf-emerald)" }}>
-                    Hypothesis A (Primary): Proactive High Press Overload
+                    {isZh ? "假设 A (主导): 主动高位逼抢人数超载" : "Hypothesis A (Primary): Proactive High Press Overload"}
                   </div>
                   <div style={{ color: "var(--text-secondary)", marginTop: 2 }}>
-                    Harbor FC coordinated 3-man boundary squeeze in Channel 2, inducing turnover within 4.2 seconds.
+                    {isZh
+                      ? "Harbor FC 在2号走廊协同形成3人逼抢合围，在4.2秒内迫使对手传球失误。"
+                      : "Harbor FC coordinated 3-man boundary squeeze in Channel 2, inducing turnover within 4.2 seconds."}
                   </div>
                 </div>
 
                 <div style={{ padding: "8px 12px", borderRadius: 6, background: "rgba(245, 158, 11, 0.08)", border: "1px solid rgba(245, 158, 11, 0.3)" }}>
                   <div style={{ fontWeight: 700, color: "var(--electric-gold)" }}>
-                    Hypothesis B (Alternative): Unforced Backline Miscommunication
+                    {isZh ? "假设 B (对立): 客队后场非受迫失误沟通不畅" : "Hypothesis B (Alternative): Unforced Backline Miscommunication"}
                   </div>
                   <div style={{ color: "var(--text-secondary)", marginTop: 2 }}>
-                    Northbridge defender N4 misjudged body shape under low initial pressure. (Controversy Score: 32%)
+                    {isZh
+                      ? "Northbridge 后卫 N4 在较小防守压力下身体姿态判断失误。(争议分: 32%)"
+                      : "Northbridge defender N4 misjudged body shape under low initial pressure. (Controversy Score: 32%)"}
                   </div>
                 </div>
               </div>
@@ -512,17 +564,17 @@ ${verifiedClaims
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <div>
                 <span style={{ fontSize: 10, fontWeight: 800, color: "var(--turf-emerald)", textTransform: "uppercase" }}>
-                  BL-06 AUTOMATED NARRATIVE
+                  {isZh ? "BL-06 自动生成结构化叙事" : "BL-06 AUTOMATED NARRATIVE"}
                 </span>
                 <h3 style={{ fontSize: 15, fontWeight: 750, margin: "2px 0 0" }}>
-                  Match Story Chapters ({state.chapters?.length || 3} Segments)
+                  {isZh ? `比赛战报分章节 (${state.chapters?.length || 3} 个赛段)` : `Match Story Chapters (${state.chapters?.length || 3} Segments)`}
                 </h3>
               </div>
 
               <div style={{ display: "flex", gap: 6 }}>
                 <button
                   type="button"
-                  onClick={() => copyToClipboard(generateStoryMarkdown(), "Match Story Report")}
+                  onClick={() => copyToClipboard(generateStoryMarkdown(), isZh ? "战报研报" : "Match Story Report")}
                   style={{
                     fontSize: 11,
                     fontWeight: 700,
@@ -534,14 +586,14 @@ ${verifiedClaims
                     cursor: "pointer",
                   }}
                 >
-                  📋 Copy Markdown
+                  📋 {t.copyMarkdownBtn}
                 </button>
                 <button
                   type="button"
                   onClick={() =>
                     copyToClipboard(
                       JSON.stringify({ claims: allClaims, snapshot: state.snapshot_id, score: state.score }, null, 2),
-                      "Evidence JSON"
+                      isZh ? "证据 JSON" : "Evidence JSON"
                     )
                   }
                   style={{
@@ -555,7 +607,7 @@ ${verifiedClaims
                     cursor: "pointer",
                   }}
                 >
-                  💾 Export JSON
+                  💾 {t.exportJsonBtn}
                 </button>
               </div>
             </div>
@@ -565,27 +617,30 @@ ${verifiedClaims
               {[
                 {
                   id: "ch_1",
-                  title: "Opening Phase: Tactical Reconnaissance",
+                  title: isZh ? "开场阶段: 战术试探与阵型博弈" : "Opening Phase: Tactical Reconnaissance",
                   time: "00:00 – 03:30",
-                  narrative:
-                    "Both squads began in cautious 4-3-3 defensive shapes. Harbor FC probed primarily through the left corridor, attempting early switches to isolate the wingback.",
-                  stat: "Harbor Possession 56% · 0 Shots Allowed",
+                  narrative: isZh
+                    ? "双方均采取谨慎的 4-3-3 防守站位。Harbor FC 主要通过左路走廊试探，尝试早期横向大范围转移调度以孤立对方边后卫。"
+                    : "Both squads began in cautious 4-3-3 defensive shapes. Harbor FC probed primarily through the left corridor, attempting early switches to isolate the wingback.",
+                  stat: isZh ? "Harbor 控球率 56% · 0 允许射门" : "Harbor Possession 56% · 0 Shots Allowed",
                 },
                 {
                   id: "ch_2",
-                  title: "Turning Point: 6-Second Press Surge",
+                  title: isZh ? "转折爆发: 6秒快速反抢狂潮" : "Turning Point: 6-Second Press Surge",
                   time: "03:30 – 07:15",
-                  narrative:
-                    "Harbor FC elevated pressing intensity significantly. Two high recoveries in Zone 6 precipitated a flurry of box penetrations, leading to the breakthrough goal.",
-                  stat: "OAAI Wave Peak +1.82 · xG Delta +0.44",
+                  narrative: isZh
+                    ? "Harbor FC 显著提升了压迫强度。在6号区域的两次高位反抢迅速转化为连续的禁区冲击，最终打入打破僵局的关键进球。"
+                    : "Harbor FC elevated pressing intensity significantly. Two high recoveries in Zone 6 precipitated a flurry of box penetrations, leading to the breakthrough goal.",
+                  stat: isZh ? "OAAI 进攻波峰峰值 +1.82 · xG 净增 +0.44" : "OAAI Wave Peak +1.82 · xG Delta +0.44",
                 },
                 {
                   id: "ch_3",
-                  title: "Final Standoff & Counter Containment",
+                  title: isZh ? "终局相持: 紧凑阵型防反限制" : "Final Standoff & Counter Containment",
                   time: "07:15 – Full Time",
-                  narrative:
-                    "Northbridge attempted rapid direct vertical counters, but Harbor FC consolidated a compact defensive density differential, closing central passing lanes.",
-                  stat: "9-Zone ΔD(z) Central Advantage: +24%",
+                  narrative: isZh
+                    ? "Northbridge 尝试通过直接长传打身后发动快速反击，但 Harbor FC 保持了密集的防守场区占比差分，有效封锁了中路传球路线。"
+                    : "Northbridge attempted rapid direct vertical counters, but Harbor FC consolidated a compact defensive density differential, closing central passing lanes.",
+                  stat: isZh ? "九宫格 ΔD(z) 中路控制优势: +24%" : "9-Zone ΔD(z) Central Advantage: +24%",
                 },
               ].map((ch) => (
                 <div
@@ -609,7 +664,7 @@ ${verifiedClaims
                     {ch.narrative}
                   </p>
                   <div style={{ fontSize: 11, fontWeight: 700, color: "var(--turf-emerald)", marginTop: 6 }}>
-                    Key Metric: {ch.stat}
+                    {isZh ? "核心指标:" : "Key Metric:"} {ch.stat}
                   </div>
                 </div>
               ))}
@@ -621,21 +676,21 @@ ${verifiedClaims
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <div>
                 <span style={{ fontSize: 10, fontWeight: 800, color: "var(--electric-gold)", textTransform: "uppercase" }}>
-                  CONTENT APPROVAL WORKFLOW
+                  {isZh ? "内容审批流水线" : "CONTENT APPROVAL WORKFLOW"}
                 </span>
                 <h3 style={{ fontSize: 15, fontWeight: 750, margin: "2px 0 0" }}>
-                  Claims Approval ({allClaims.length})
+                  {isZh ? `论断核准清单 (${allClaims.length})` : `Claims Approval (${allClaims.length})`}
                 </h3>
               </div>
               <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
-                Draft vs Gate 2.0 Certified
+                {isZh ? "草稿 vs Gate 2.0 认证" : "Draft vs Gate 2.0 Certified"}
               </span>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {allClaims.length === 0 ? (
                 <div style={{ padding: 20, textAlign: "center", color: "var(--text-tertiary)", fontSize: 12 }}>
-                  No claims generated yet. Run Deliberation to populate claims.
+                  {isZh ? "尚未生成论断。点击上方运行三智能体审议。" : "No claims generated yet. Run Deliberation to populate claims."}
                 </div>
               ) : (
                 allClaims.map((cl) => {
@@ -682,7 +737,7 @@ ${verifiedClaims
                               {cl.assertion}
                             </div>
                             <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 2 }}>
-                              Level {cl.claim_level || 2} · Snapshot: <code>{cl.snapshot_id?.slice(0, 8)}</code>
+                              {isZh ? `Level ${cl.claim_level || 2} · 证据快照: ` : `Level ${cl.claim_level || 2} · Snapshot: `}<code>{cl.snapshot_id?.slice(0, 8)}</code>
                             </div>
                           </div>
                         </label>
@@ -693,7 +748,7 @@ ${verifiedClaims
                             onOpenInspector({
                               type: "claim",
                               claim: cl,
-                              title: `Gate Audit: Claim ${cl.claim_id}`,
+                              title: isZh ? `门禁审计: 论断 ${cl.claim_id}` : `Gate Audit: Claim ${cl.claim_id}`,
                             })
                           }
                           style={{
@@ -729,34 +784,40 @@ ${verifiedClaims
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <div className="glass-panel" style={{ padding: 18 }}>
             <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)", marginBottom: 12 }}>
-              🛡️ Publication Gate 2.0 Enforced Criteria
+              {isZh ? "🛡️ Gate 2.0 强制发布审查准则" : "🛡️ Publication Gate 2.0 Enforced Criteria"}
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ padding: 10, borderRadius: 6, background: "rgba(15, 23, 42, 0.7)", border: "1px solid var(--glass-border)" }}>
                 <div style={{ fontSize: 12, fontWeight: 750, color: "var(--turf-emerald)" }}>
-                  Level 1: Pure Descriptive Observation
+                  {isZh ? "Level 1: 纯描述性事实观察" : "Level 1: Pure Descriptive Observation"}
                 </div>
                 <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
-                  Must directly mirror raw recorded events without inferential verbs. E.g., &quot;Player H10 completed 12 passes in minutes 10–15.&quot;
+                  {isZh
+                    ? "必须直接对应原始记录事件，禁止使用主观推理性动词。例如：'球员 H10 在第 10–15 分钟完成 12 次成功传球'。"
+                    : "Must directly mirror raw recorded events without inferential verbs. E.g., \"Player H10 completed 12 passes in minutes 10–15.\""}
                 </div>
               </div>
 
               <div style={{ padding: 10, borderRadius: 6, background: "rgba(15, 23, 42, 0.7)", border: "1px solid var(--glass-border)" }}>
                 <div style={{ fontSize: 12, fontWeight: 750, color: "var(--tech-cyan)" }}>
-                  Level 2: Deterministic Formula Decomposition
+                  {isZh ? "Level 2: 确定性数学公式分解" : "Level 2: Deterministic Formula Decomposition"}
                 </div>
                 <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
-                  Must reference SHA-256 bound mathematical receipts with defined numerator and denominator. E.g., &quot;High recovery rate was 66.7% (4/6).&quot;
+                  {isZh
+                    ? "必须引用绑定 SHA-256 签名的确定性数学凭证，具备明确分子分母。例如：'高位反抢率为 66.7% (4/6)'。"
+                    : "Must reference SHA-256 bound mathematical receipts with defined numerator and denominator. E.g., \"High recovery rate was 66.7% (4/6).\""}
                 </div>
               </div>
 
               <div style={{ padding: 10, borderRadius: 6, background: "rgba(15, 23, 42, 0.7)", border: "1px solid var(--glass-border)" }}>
                 <div style={{ fontSize: 12, fontWeight: 750, color: "var(--electric-gold)" }}>
-                  Level 3: Causal Tactical Hypotheses
+                  {isZh ? "Level 3: 战术因果推论假设" : "Level 3: Causal Tactical Hypotheses"}
                 </div>
                 <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
-                  Mandatory requirements: explicit assumptions list, defined verification method, and confirmed counterevidence search. Without these, Gate 2.0 rejects the claim.
+                  {isZh
+                    ? "强制前置条件：必须列出显式假设、验证机制，并检索反证事实。若存在反证或缺乏论据，Gate 2.0 将坚决拦截或降级。"
+                    : "Mandatory requirements: explicit assumptions list, defined verification method, and confirmed counterevidence search. Without these, Gate 2.0 rejects the claim."}
                 </div>
               </div>
             </div>
@@ -764,25 +825,27 @@ ${verifiedClaims
 
           <div className="glass-panel" style={{ padding: 18 }}>
             <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)", marginBottom: 12 }}>
-              📡 Scientific Data Sufficiency Badge
+              {isZh ? "📡 科学数据充分性评估标识" : "📡 Scientific Data Sufficiency Badge"}
             </div>
 
             <p style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.55 }}>
-              Standard match broadcast and event feeds lack optical tracking coordinates for all off-ball players. MatchLens AI explicitly tags all claims with Data Sufficiency indicators:
+              {isZh
+                ? "常规赛事转播与触球事件数据源不包含所有无球球员的连续 25Hz 光学追踪坐标。MatchLens AI 明确标注数据充分性指标以防算法臆测："
+                : "Standard match broadcast and event feeds lack optical tracking coordinates for all off-ball players. MatchLens AI explicitly tags all claims with Data Sufficiency indicators:"}
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "rgba(11, 15, 25, 0.4)", borderRadius: 6 }}>
-                <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>Event Data Coverage:</span>
-                <span style={{ fontSize: 11, fontWeight: 750, color: "var(--turf-emerald)" }}>100% (Verifiable)</span>
+                <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{isZh ? "触球事件数据覆盖度:" : "Event Data Coverage:"}</span>
+                <span style={{ fontSize: 11, fontWeight: 750, color: "var(--turf-emerald)" }}>{isZh ? "100% (完全可核验)" : "100% (Verifiable)"}</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "rgba(11, 15, 25, 0.4)", borderRadius: 6 }}>
-                <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>Off-Ball Tracking Data:</span>
-                <span style={{ fontSize: 11, fontWeight: 750, color: "var(--electric-gold)" }}>Proxy Active (6s + ΔD)</span>
+                <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{isZh ? "无球跑动光学追踪数据:" : "Off-Ball Tracking Data:"}</span>
+                <span style={{ fontSize: 11, fontWeight: 750, color: "var(--electric-gold)" }}>{isZh ? "代理指标激活 (6s + ΔD)" : "Proxy Active (6s + ΔD)"}</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "rgba(11, 15, 25, 0.4)", borderRadius: 6 }}>
-                <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>Mathematical Hallucination Risk:</span>
-                <span style={{ fontSize: 11, fontWeight: 750, color: "var(--turf-emerald)" }}>0.00% (Locked by Receipts)</span>
+                <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{isZh ? "数学虚构/幻觉风险:" : "Mathematical Hallucination Risk:"}</span>
+                <span style={{ fontSize: 11, fontWeight: 750, color: "var(--turf-emerald)" }}>{isZh ? "0.00% (完全收据锁定)" : "0.00% (Locked by Receipts)"}</span>
               </div>
             </div>
           </div>

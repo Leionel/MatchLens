@@ -124,10 +124,10 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
           <span style={{ fontSize: 20 }}>🧭</span>
           <div>
             <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>
-              TACTICAL & SPATIAL LAB
+              {t.tacticalLabTitle}
             </div>
             <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
-              Bidirectional S2/S3 Spatial Drilldown · 5 Tactical Pitch Layers · 9-Zone Density ΔD(z)
+              {t.tacticalLabSubtitle}
             </div>
           </div>
         </div>
@@ -148,7 +148,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                 cursor: "pointer",
               }}
             >
-              Filtered to Zone {selectedZoneId} ✕
+              {isZh ? `已锁定九宫格 ${selectedZoneId} ✕` : `Filtered to Zone ${selectedZoneId} ✕`}
             </button>
           )}
 
@@ -167,7 +167,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                 cursor: "pointer",
               }}
             >
-              Player {selectedPlayerId} ✕
+              {isZh ? `已聚焦球员 ${selectedPlayerId} ✕` : `Player ${selectedPlayerId} ✕`}
             </button>
           )}
 
@@ -182,7 +182,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
               color: "var(--tech-cyan)",
             }}
           >
-            {totalSeq} S2 Sequences Detected
+            {isZh ? `检测到 ${totalSeq} 条 S2 序列` : `${totalSeq} S2 Sequences Detected`}
           </span>
         </div>
       </div>
@@ -201,10 +201,10 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text-primary)" }}>
-                  INTERACTIVE TACTICAL CANVAS
+                  {isZh ? "交互式战术球场画板" : "INTERACTIVE TACTICAL CANVAS"}
                 </span>
                 <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(16, 185, 129, 0.15)", color: "var(--turf-emerald)", fontWeight: 700 }}>
-                  5 LAYERS ACTIVE
+                  {isZh ? "5 大图层激活" : "5 LAYERS ACTIVE"}
                 </span>
               </div>
 
@@ -215,7 +215,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                     onOpenInspector({
                       type: "sequence",
                       sequence: selectedSeq,
-                      title: `Sequence ${selectedSeq.sequence_id} (Full Path)`,
+                      title: isZh ? `控球序列 ${selectedSeq.sequence_id} (完整轨迹)` : `Sequence ${selectedSeq.sequence_id} (Full Path)`,
                     })
                   }
                   style={{
@@ -229,7 +229,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                     cursor: "pointer",
                   }}
                 >
-                  Examine Steps in Drawer →
+                  {isZh ? "在侧边抽屉中拆解步阶 →" : "Examine Steps in Drawer →"}
                 </button>
               )}
             </div>
@@ -243,6 +243,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
               clockText={clockText}
               focusTeam={state.focus_team || "H"}
               tactical={state.tactical}
+              locale={locale}
               selectedPlayerId={selectedPlayerId}
               playerSpotlight={state.player_spotlight}
               selectedZoneId={selectedZoneId}
@@ -261,7 +262,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                     type: "zone",
                     zoneId: zid,
                     zoneName: state.tactical?.zone_cells?.find((c: any) => c.cell_id === zid)?.name || `Zone ${zid}`,
-                    title: `Zone ${zid} Spatial Audit`,
+                    title: isZh ? `九宫格 ${zid} 场区空间审计` : `Zone ${zid} Spatial Audit`,
                   });
                 }
               }}
@@ -275,13 +276,14 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
               at={state.snapshot_as_of ?? state.at}
               snapshotId={state.snapshot_id}
               focusTeam={state.focus_team || "H"}
+              locale={locale}
               onInspect={(id) => {
                 onInspectReceipt(id);
                 onOpenInspector({
                   type: "receipt",
                   receiptId: id,
                   receipt: (state.analysis_receipts || state.receipts)?.[id] || null,
-                  title: `Metric Receipt: ${id}`,
+                  title: isZh ? `战术指标凭证: ${id}` : `Metric Receipt: ${id}`,
                 });
               }}
             />
@@ -295,10 +297,10 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <div>
                 <span style={{ fontSize: 10, fontWeight: 800, color: "var(--turf-emerald)", textTransform: "uppercase" }}>
-                  EVENT-GROUNDED EXPLORER
+                  {isZh ? "基于事件事实的探测器" : "EVENT-GROUNDED EXPLORER"}
                 </span>
                 <h3 style={{ fontSize: 15, fontWeight: 750, margin: "2px 0 0" }}>
-                  {explorerTab === "sequences" ? "Possession Sequences (S2)" : "Player Spotlight"}
+                  {explorerTab === "sequences" ? (isZh ? "控球进攻序列 (S2)" : "Possession Sequences (S2)") : (isZh ? "球员焦点聚光灯" : "Player Spotlight")}
                 </h3>
               </div>
 
@@ -309,7 +311,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                   onClick={() => setExplorerTab("sequences")}
                   style={{ fontSize: 11, padding: "4px 8px" }}
                 >
-                  Sequences ({totalSeq})
+                  {isZh ? `控球序列 (${totalSeq})` : `Sequences (${totalSeq})`}
                 </button>
                 <button
                   type="button"
@@ -317,7 +319,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                   onClick={() => setExplorerTab("players")}
                   style={{ fontSize: 11, padding: "4px 8px" }}
                 >
-                  Players ({(state.player_spotlight || []).filter((p) => p.team === (state.focus_team || "H")).length})
+                  {isZh ? `球员焦点 (${(state.player_spotlight || []).filter((p) => p.team === (state.focus_team || "H")).length})` : `Players (${(state.player_spotlight || []).filter((p) => p.team === (state.focus_team || "H")).length})`}
                 </button>
               </div>
             </div>
@@ -338,19 +340,19 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: 9, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Total</div>
+                    <div style={{ fontSize: 9, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "总序列数" : "Total"}</div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>{totalSeq}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Final 3rd</div>
+                    <div style={{ fontSize: 9, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "打入前场率" : "Final 3rd"}</div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: "var(--turf-emerald)" }}>{entryRate}%</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Avg Pass</div>
+                    <div style={{ fontSize: 9, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "场均传球" : "Avg Pass"}</div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>{avgPasses}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Avg Net</div>
+                    <div style={{ fontSize: 9, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "净向前推进" : "Avg Net"}</div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: "var(--turf-emerald)" }}>+{avgProg}m</div>
                   </div>
                 </div>
@@ -359,11 +361,11 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                 <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
                   {(
                     [
-                      ["all", `All (${zoneFiltered.length})`],
-                      ["final_third", `Final 3rd (${zoneFiltered.filter((s) => s.entered_final_third).length})`],
-                      ["shots", `Shots (${zoneFiltered.filter((s) => s.outcome === "shot" || s.outcome === "goal" || s.outcome === "saved").length})`],
-                      ["progression", `Prog ≥15m (${zoneFiltered.filter((s) => (s.territory_gained ?? s.progressive_distance) >= 15).length})`],
-                      ["turnover", `Turnover (${zoneFiltered.filter((s) => s.outcome === "turnover").length})`],
+                      ["all", isZh ? `全部 (${zoneFiltered.length})` : `All (${zoneFiltered.length})`],
+                      ["final_third", isZh ? `进前场30米 (${zoneFiltered.filter((s) => s.entered_final_third).length})` : `Final 3rd (${zoneFiltered.filter((s) => s.entered_final_third).length})`],
+                      ["shots", isZh ? `射门终结 (${zoneFiltered.filter((s) => s.outcome === "shot" || s.outcome === "goal" || s.outcome === "saved").length})` : `Shots (${zoneFiltered.filter((s) => s.outcome === "shot" || s.outcome === "goal" || s.outcome === "saved").length})`],
+                      ["progression", isZh ? `长推≥15米 (${zoneFiltered.filter((s) => (s.territory_gained ?? s.progressive_distance) >= 15).length})` : `Prog ≥15m (${zoneFiltered.filter((s) => (s.territory_gained ?? s.progressive_distance) >= 15).length})`],
+                      ["turnover", isZh ? `中途失误 (${zoneFiltered.filter((s) => s.outcome === "turnover").length})` : `Turnover (${zoneFiltered.filter((s) => s.outcome === "turnover").length})`],
                     ] as const
                   ).map(([key, label]) => (
                     <button
@@ -392,7 +394,9 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                     <div style={{ textAlign: "center", padding: "30px 10px", color: "var(--text-tertiary)" }}>
                       <div style={{ fontSize: 20 }}>📍</div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginTop: 4 }}>
-                        {selectedZoneId ? "No sequences crossing this 9-zone cell" : "No sequences match filter"}
+                        {selectedZoneId
+                          ? (isZh ? "无控球序列穿越此九宫格分区" : "No sequences crossing this 9-zone cell")
+                          : (isZh ? "未找到符合筛选条件的序列" : "No sequences match filter")}
                       </div>
                       {selectedZoneId && (
                         <button
@@ -410,7 +414,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                             cursor: "pointer",
                           }}
                         >
-                          Clear Zone Filter
+                          {isZh ? "清除九宫格过滤" : "Clear Zone Filter"}
                         </button>
                       )}
                     </div>
@@ -443,7 +447,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                                   onOpenInspector({
                                     type: "sequence",
                                     sequence: sq,
-                                    title: `Sequence ${sq.sequence_id}`,
+                                    title: isZh ? `控球序列 ${sq.sequence_id}` : `Sequence ${sq.sequence_id}`,
                                   });
                                 }
                               }}
@@ -463,17 +467,27 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                                 <span className="seq-id-badge">{sq.sequence_id}</span>
                                 <div>
                                   <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>
-                                    {clock(sq.start_t)}–{clock(sq.end_t)} ({sq.duration}s) · {sq.pass_count} passes
+                                    {clock(sq.start_t)}–{clock(sq.end_t)} ({sq.duration}s) · {sq.pass_count} {isZh ? "次传球" : "passes"}
                                   </div>
                                   <div style={{ fontSize: 10, color: "var(--text-tertiary)" }}>
-                                    Net: {sq.territory_gained !== undefined ? `${sq.territory_gained > 0 ? `+${sq.territory_gained}` : sq.territory_gained}m` : `+${sq.progressive_distance}m`}
-                                    {sq.entered_final_third ? " · Final 3rd ✓" : ""}
+                                    {isZh ? "净向前: " : "Net: "}{sq.territory_gained !== undefined ? `${sq.territory_gained > 0 ? `+${sq.territory_gained}` : sq.territory_gained}m` : `+${sq.progressive_distance}m`}
+                                    {sq.entered_final_third ? (isZh ? " · 进前场30米 ✓" : " · Final 3rd ✓") : ""}
                                   </div>
                                 </div>
                               </div>
 
                               <span className={`seq-outcome ${sq.outcome}`}>
-                                {sq.outcome.replace("_", " ").toUpperCase()}
+                                {isZh
+                                  ? sq.outcome === "goal"
+                                    ? "进球 GOAL"
+                                    : sq.outcome === "shot"
+                                      ? "射门 SHOT"
+                                      : sq.outcome === "saved"
+                                        ? "扑救 SAVED"
+                                        : sq.outcome === "turnover"
+                                          ? "失误 TURNOVER"
+                                          : sq.outcome.replace("_", " ").toUpperCase()
+                                  : sq.outcome.replace("_", " ").toUpperCase()}
                               </span>
                             </button>
 
@@ -560,16 +574,16 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                             </span>
                           </div>
                           <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 2 }}>
-                            {p.passes} passes ({p.progressive_passes} prog, +{p.progressive_distance}m) · {p.recoveries} rec
+                            {p.passes} {isZh ? "次传球" : "passes"} ({p.progressive_passes} {isZh ? "推进" : "prog"}, +{p.progressive_distance}m) · {p.recoveries} {isZh ? "夺回" : "rec"}
                           </div>
                         </div>
 
                         <div style={{ textAlign: "right" }}>
                           <span style={{ fontSize: 11, fontWeight: 700, color: "var(--turf-emerald)" }}>
-                            {p.goals > 0 ? `⚽ ${p.goals} GOAL` : `${p.shots} shots`}
+                            {p.goals > 0 ? (isZh ? `⚽ ${p.goals} 进球` : `⚽ ${p.goals} GOAL`) : `${p.shots} ${isZh ? "次射门" : "shots"}`}
                           </span>
                           <div style={{ fontSize: 10, color: "var(--text-secondary)" }}>
-                            {p.sequences_involved} seqs
+                            {p.sequences_involved} {isZh ? "次参与" : "seqs"}
                           </div>
                         </div>
                       </button>

@@ -2,18 +2,23 @@
 
 import React, { useState } from "react";
 import { CockpitState, PerspectiveId, InspectorPayload } from "./types";
+import { Locale, getTranslation } from "../../lib/i18n";
 
 interface ValidationLabWorkspaceProps {
   state: CockpitState;
   perspective: PerspectiveId;
+  locale?: Locale;
   onOpenInspector: (payload: InspectorPayload) => void;
 }
 
 export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
   state,
   perspective,
+  locale = "zh",
   onOpenInspector,
 }) => {
+  const t = getTranslation(locale);
+  const isZh = locale === "zh";
   const [selectedGridResolution, setSelectedGridResolution] = useState<"16x12" | "12x8">("16x12");
   const [counterfactualTurnoverReduced, setCounterfactualTurnoverReduced] = useState(25); // percentage
 
@@ -48,10 +53,10 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
           <span style={{ fontSize: 20 }}>📊</span>
           <div>
             <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>
-              VALIDATION LAB & SCIENTIFIC AUDIT (TRACK E)
+              {t.validationLabTitle}
             </div>
             <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
-              xT Contraction Matrices · Tri-Agent Benchmark Harness (A/B/C) · What-if Counterfactual Sandbox
+              {t.validationLabSubtitle}
             </div>
           </div>
         </div>
@@ -61,7 +66,7 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
           onClick={() =>
             onOpenInspector({
               type: "sufficiency",
-              title: "Scientific Data Sufficiency Framework",
+              title: isZh ? "科学数据充分性评估框架" : "Scientific Data Sufficiency Framework",
             })
           }
           style={{
@@ -75,7 +80,7 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
             cursor: "pointer",
           }}
         >
-          View Sufficiency Contract →
+          {t.viewSufficiencyContract}
         </button>
       </div>
 
@@ -84,22 +89,22 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div>
             <span style={{ fontSize: 10, fontWeight: 800, color: "var(--turf-emerald)", textTransform: "uppercase" }}>
-              BL-09 MATHEMATICAL SPATIAL FIT
+              {isZh ? "BL-09 数学空间拟合" : "BL-09 MATHEMATICAL SPATIAL FIT"}
             </span>
             <h3 style={{ fontSize: 15, fontWeight: 750, margin: "2px 0 0" }}>
-              Expected Threat (xT) Grid Contraction Matrix
+              {t.xtContractionTitle}
             </h3>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>Grid Resolution:</span>
+            <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{t.gridResolutionLabel}</span>
             <button
               type="button"
               className={`feed-filter-btn ${selectedGridResolution === "16x12" ? "active" : ""}`}
               onClick={() => setSelectedGridResolution("16x12")}
               style={{ fontSize: 11, padding: "3px 8px" }}
             >
-              16 × 12 (Fine)
+              {isZh ? "16 × 12 (细粒度)" : "16 × 12 (Fine)"}
             </button>
             <button
               type="button"
@@ -107,7 +112,7 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
               onClick={() => setSelectedGridResolution("12x8")}
               style={{ fontSize: 11, padding: "3px 8px" }}
             >
-              12 × 8 (Contracted)
+              {isZh ? "12 × 8 (收缩拟合)" : "12 × 8 (Contracted)"}
             </button>
           </div>
         </div>
@@ -127,24 +132,24 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
           }}
         >
           <div>
-            <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>MAE (Error)</div>
+            <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>MAE ({isZh ? "绝对误差" : "Error"})</div>
             <div style={{ fontSize: 16, fontWeight: 800, color: "var(--turf-emerald)" }}>0.0124</div>
-            <div style={{ fontSize: 9, color: "var(--text-secondary)" }}>Target &lt; 0.0150 ✓</div>
+            <div style={{ fontSize: 9, color: "var(--text-secondary)" }}>{isZh ? "目标 < 0.0150 ✓" : "Target < 0.0150 ✓"}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>RMSE</div>
+            <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>RMSE ({isZh ? "均方根差" : "RMSE"})</div>
             <div style={{ fontSize: 16, fontWeight: 800, color: "var(--turf-emerald)" }}>0.0189</div>
-            <div style={{ fontSize: 9, color: "var(--text-secondary)" }}>Stabilized fit ✓</div>
+            <div style={{ fontSize: 9, color: "var(--text-secondary)" }}>{isZh ? "收敛平稳 ✓" : "Stabilized fit ✓"}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Pearson r</div>
+            <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "皮尔逊相关性 r" : "Pearson r"}</div>
             <div style={{ fontSize: 16, fontWeight: 800, color: "var(--tech-cyan)" }}>0.942</div>
-            <div style={{ fontSize: 9, color: "var(--text-secondary)" }}>Strong correlation ✓</div>
+            <div style={{ fontSize: 9, color: "var(--text-secondary)" }}>{isZh ? "强相关性 ✓" : "Strong correlation ✓"}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Cross-Validation</div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--electric-gold)" }}>10-Fold Bootstrapped</div>
-            <div style={{ fontSize: 9, color: "var(--text-secondary)" }}>Seed: <code>0x4f82a9</code></div>
+            <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "交叉验证" : "Cross-Validation"}</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--electric-gold)" }}>{isZh ? "10折自举采样" : "10-Fold Bootstrapped"}</div>
+            <div style={{ fontSize: 9, color: "var(--text-secondary)" }}>{isZh ? "随机种子:" : "Seed:"} <code>0x4f82a9</code></div>
           </div>
         </div>
 
@@ -198,8 +203,10 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
           )}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-tertiary)", marginTop: 6 }}>
-          <span>← Own Defensive Third (0.005)</span>
-          <span style={{ color: "var(--turf-emerald)", fontWeight: 700 }}>Opponent Goal & Six-Yard Box (0.28+) →</span>
+          <span>{isZh ? "← 己方防守三区 (0.005)" : "← Own Defensive Third (0.005)"}</span>
+          <span style={{ color: "var(--turf-emerald)", fontWeight: 700 }}>
+            {isZh ? "对方球门与小禁区危险核心 (0.28+) →" : "Opponent Goal & Six-Yard Box (0.28+) →"}
+          </span>
         </div>
       </div>
 
@@ -208,14 +215,14 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div>
             <span style={{ fontSize: 10, fontWeight: 800, color: "var(--tech-cyan)", textTransform: "uppercase" }}>
-              TRACK E AGENT BENCHMARK
+              {isZh ? "TRACK E 智能体基准评估" : "TRACK E AGENT BENCHMARK"}
             </span>
             <h3 style={{ fontSize: 15, fontWeight: 750, margin: "2px 0 0" }}>
-              Quantitative Comparative Audit: Agent Architecture A / B / C
+              {isZh ? "智能体架构 A / B / C 定量对照实验评估报告" : "Quantitative Comparative Audit: Agent Architecture A / B / C"}
             </h3>
           </div>
           <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
-            Evaluated on FIFA World Cup 2022 Final & Simulated Matches
+            {isZh ? "基于 2022 世界杯决赛 (阿根廷 vs 法国) 与合成比赛基准集" : "Evaluated on FIFA World Cup 2022 Final & Simulated Matches"}
           </span>
         </div>
 
@@ -223,59 +230,61 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
           <table className="tactical-table">
             <thead>
               <tr>
-                <th>Configuration</th>
-                <th>Agents Active</th>
-                <th>Gate Rejection Rate</th>
-                <th>Claim Accuracy</th>
-                <th>Alt Hypotheses / Claim</th>
-                <th>Avg Tokens / Match</th>
-                <th>Latency</th>
-                <th>Rating</th>
+                <th>{isZh ? "架构配置" : "Configuration"}</th>
+                <th>{isZh ? "挂载智能体" : "Agents Active"}</th>
+                <th>{isZh ? "Gate 拦截率" : "Gate Rejection Rate"}</th>
+                <th>{isZh ? "论断准确率" : "Claim Accuracy"}</th>
+                <th>{isZh ? "对立假设数/论断" : "Alt Hypotheses / Claim"}</th>
+                <th>{isZh ? "场均 Token 消耗" : "Avg Tokens / Match"}</th>
+                <th>{isZh ? "处理延迟" : "Latency"}</th>
+                <th>{isZh ? "评级" : "Rating"}</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>
-                  <b>Config A (Baseline)</b>
+                  <b>{isZh ? "配置 A (双智能体基线)" : "Config A (Baseline)"}</b>
                 </td>
-                <td>Dual-Agent (Analyst + Verifier)</td>
+                <td>{isZh ? "双智能体 (Analyst + Verifier)" : "Dual-Agent (Analyst + Verifier)"}</td>
                 <td style={{ color: "var(--crimson-warn)", fontWeight: 750 }}>38.5%</td>
                 <td>82.4%</td>
                 <td>1.2</td>
                 <td>2,380</td>
                 <td>1.8s</td>
-                <td><span style={{ color: "var(--text-tertiary)" }}>Basic</span></td>
+                <td><span style={{ color: "var(--text-tertiary)" }}>{isZh ? "基础版" : "Basic"}</span></td>
               </tr>
               <tr>
                 <td>
-                  <b>Config B (Tools Only)</b>
+                  <b>{isZh ? "配置 B (单工具增强)" : "Config B (Tools Only)"}</b>
                 </td>
-                <td>Dual-Agent + Temporal Decomp Tool</td>
+                <td>{isZh ? "双智能体 + 时序窗口分解工具" : "Dual-Agent + Temporal Decomp Tool"}</td>
                 <td style={{ color: "var(--electric-gold)", fontWeight: 750 }}>24.1%</td>
                 <td>91.0%</td>
                 <td>2.1</td>
                 <td>3,150</td>
                 <td>2.3s</td>
-                <td><span style={{ color: "var(--tech-cyan)" }}>Capable</span></td>
+                <td><span style={{ color: "var(--tech-cyan)" }}>{isZh ? "可用" : "Capable"}</span></td>
               </tr>
               <tr style={{ background: "rgba(16, 185, 129, 0.08)", borderLeft: "3px solid var(--turf-emerald)" }}>
                 <td>
-                  <b style={{ color: "var(--turf-emerald)" }}>Config C (Tri-Agent Full)</b>
+                  <b style={{ color: "var(--turf-emerald)" }}>{isZh ? "配置 C (完整三智能体)" : "Config C (Tri-Agent Full)"}</b>
                 </td>
-                <td><b>Analyst + Event Attribution Specialist + Verifier</b></td>
-                <td style={{ color: "var(--turf-emerald)", fontWeight: 800 }}>12.3% (Lowest)</td>
-                <td style={{ color: "var(--turf-emerald)", fontWeight: 800 }}>97.6% (Top)</td>
-                <td style={{ color: "var(--turf-emerald)", fontWeight: 800 }}>3.4 (Thorough)</td>
+                <td><b>{isZh ? "分析师 + 事件归因专家 + 审核门禁" : "Analyst + Event Attribution Specialist + Verifier"}</b></td>
+                <td style={{ color: "var(--turf-emerald)", fontWeight: 800 }}>12.3% ({isZh ? "最低拦截" : "Lowest"})</td>
+                <td style={{ color: "var(--turf-emerald)", fontWeight: 800 }}>97.6% ({isZh ? "最高" : "Top"})</td>
+                <td style={{ color: "var(--turf-emerald)", fontWeight: 800 }}>3.4 ({isZh ? "充分覆盖" : "Thorough"})</td>
                 <td>4,620</td>
                 <td>3.2s</td>
-                <td><b style={{ color: "var(--turf-emerald)" }}>Production Gold ✓</b></td>
+                <td><b style={{ color: "var(--turf-emerald)" }}>{isZh ? "生产金标 ✓" : "Production Gold ✓"}</b></td>
               </tr>
             </tbody>
           </table>
         </div>
 
         <div style={{ marginTop: 12, padding: "10px 14px", background: "rgba(15, 23, 42, 0.6)", borderRadius: 6, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-          <b>Key Benchmark Finding</b>: Incorporating the dedicated <i>Event Attribution Specialist</i> (Config C) cuts false-positive Gate 2.0 rejections by 68% while elevating alternative hypothesis coverage to 3.4 plausible explanations per claim, completely preventing premature causal hallucination.
+          <b>{isZh ? "核心评测结论" : "Key Benchmark Finding"}</b>: {isZh
+            ? "引入专职的“事件归因专家” (配置 C) 使得 Gate 2.0 误拦截率降低了 68%，同时将每条论断的对立假设覆盖度提升至 3.4 个合理解释，彻底防止了缺乏反事实推敲的草率因果幻觉。"
+            : "Incorporating the dedicated Event Attribution Specialist (Config C) cuts false-positive Gate 2.0 rejections by 68% while elevating alternative hypothesis coverage to 3.4 plausible explanations per claim, completely preventing premature causal hallucination."}
         </div>
       </div>
 
@@ -286,10 +295,10 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
             <span style={{ fontSize: 18 }}>🧪</span>
             <div>
               <span style={{ fontSize: 10, fontWeight: 800, color: "var(--electric-gold)", textTransform: "uppercase" }}>
-                LEVEL 3 RESEARCH EXPERIMENT
+                {isZh ? "LEVEL 3 探索性科研实验" : "LEVEL 3 RESEARCH EXPERIMENT"}
               </span>
               <h3 style={{ fontSize: 15, fontWeight: 750, margin: "2px 0 0" }}>
-                What-If Counterfactual Sandbox (Simulated Interventions)
+                {isZh ? "What-If 反事实推演沙盒 (模拟战术干预)" : "What-If Counterfactual Sandbox (Simulated Interventions)"}
               </h3>
             </div>
           </div>
@@ -305,18 +314,20 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
               color: "var(--electric-gold)",
             }}
           >
-            ⚠️ RESEARCH ONLY — NOT FOR OFFICIAL BROADCAST
+            {isZh ? "⚠️ 严谨科研提示：仅限探索实验 — 不作为正式转播结论" : "⚠️ RESEARCH ONLY — NOT FOR OFFICIAL BROADCAST"}
           </span>
         </div>
 
         <p style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 14 }}>
-          This sandbox runs simulated Markovian state transitions. In accordance with MatchLens integrity protocols, counterfactual experiments explore hypothetical scenarios without asserting real match causality.
+          {isZh
+            ? "本沙盒基于马尔可夫状态转移概率推演。根据 MatchLens 严谨科研协议，反事实推演仅用于探索假设情景，严禁宣称为真实比赛的确定性事实因果。"
+            : "This sandbox runs simulated Markovian state transitions. In accordance with MatchLens integrity protocols, counterfactual experiments explore hypothetical scenarios without asserting real match causality."}
         </p>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <div style={{ padding: 12, background: "rgba(15, 23, 42, 0.6)", borderRadius: 8, border: "1px solid var(--pitch-border)" }}>
             <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>
-              Simulated Reduction in Defensive Turnover Rate: {counterfactualTurnoverReduced}%
+              {isZh ? `模拟减少后场关键防守失误率: ${counterfactualTurnoverReduced}%` : `Simulated Reduction in Defensive Turnover Rate: ${counterfactualTurnoverReduced}%`}
             </label>
             <input
               type="range"
@@ -327,20 +338,20 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
               style={{ width: "100%", accentColor: "var(--turf-emerald)" }}
             />
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-tertiary)", marginTop: 4 }}>
-              <span>Baseline (0%)</span>
-              <span>Maximum Suppression (50%)</span>
+              <span>{isZh ? "基线现状 (0%)" : "Baseline (0%)"}</span>
+              <span>{isZh ? "最大抑制 (50%)" : "Maximum Suppression (50%)"}</span>
             </div>
           </div>
 
           <div style={{ padding: 12, background: "rgba(15, 23, 42, 0.6)", borderRadius: 8, border: "1px solid var(--pitch-border)", display: "flex", flexDirection: "column", justifyContent: "center" }}>
             <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
-              Projected Outcome Under {counterfactualTurnoverReduced}% Turnover Suppression:
+              {isZh ? `在关键失误抑制 ${counterfactualTurnoverReduced}% 下的推演变化:` : `Projected Outcome Under ${counterfactualTurnoverReduced}% Turnover Suppression:`}
             </div>
             <div style={{ fontSize: 14, fontWeight: 800, color: "var(--turf-emerald)", marginTop: 4 }}>
-              Opponent xG Conceded: -{(counterfactualTurnoverReduced * 0.008).toFixed(2)} xG
+              {isZh ? "对手预期进球减少 (xG Conceded): " : "Opponent xG Conceded: "}-{(counterfactualTurnoverReduced * 0.008).toFixed(2)} xG
             </div>
             <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>
-              Estimated Harbor FC Win Probability Delta: +{(counterfactualTurnoverReduced * 0.22).toFixed(1)}%
+              {isZh ? "预估 Harbor FC 胜率净增: " : "Estimated Harbor FC Win Probability Delta: "}+{(counterfactualTurnoverReduced * 0.22).toFixed(1)}%
             </div>
           </div>
         </div>
