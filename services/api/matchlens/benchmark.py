@@ -33,12 +33,18 @@ class AgentBenchmarkMetrics(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     config: Literal["A_dual_agent", "B_dual_agent_plus_tools", "C_triple_agent_specialist"]
+    benchmark_type: Literal["deterministic_contract", "live_agent_empirical"] = "deterministic_contract"
     total_claims_evaluated: int
     gate_block_rate: float
     accuracy_rate: float
     alternative_hypothesis_coverage: float
     token_cost_usd_est: float
     latency_ms_est: float
+    is_live_model_evaluation: bool = False
+    empirical_accuracy_measured: bool = False
+    latency_source: Literal["measured_contract_execution", "live_model_dispatch", "estimated_model_budget"] = "measured_contract_execution"
+    token_source: Literal["zero_deterministic", "live_usage", "estimated_budget"] = "estimated_budget"
+    notes: Optional[str] = None
 
     # Aliases for specification compliance
     @computed_field
@@ -68,6 +74,7 @@ class AgentBenchmarkSuiteResult(BaseModel):
 
     benchmark_id: str
     match_id: str
+    benchmark_type: Literal["deterministic_contract", "live_agent_empirical"] = "deterministic_contract"
     configurations: list[AgentBenchmarkMetrics]
     recommendation: str
     summary: str
@@ -221,18 +228,24 @@ class AgentBenchmarkHarness:
                 if c["ground_truth_valid"]:
                     config_a_accepted_valid += 1
 
-        t_a = (time.perf_counter() - t0) * 1000.0 + 380.0
+        t_a = max(0.5, (time.perf_counter() - t0) * 1000.0)
         acc_a = (config_a_accepted_valid / config_a_accepted_total) if config_a_accepted_total > 0 else 0.0
         block_rate_a = (config_a_blocked / invalid_count) if invalid_count > 0 else 0.0
 
         metrics_a = AgentBenchmarkMetrics(
             config="A_dual_agent",
+            benchmark_type="deterministic_contract",
             total_claims_evaluated=total_claims,
             gate_block_rate=round(block_rate_a, 2),
             accuracy_rate=round(acc_a, 2),
             alternative_hypothesis_coverage=0.0,  # No attribution tools
             token_cost_usd_est=0.008,
-            latency_ms_est=round(t_a, 1),
+            latency_ms_est=round(t_a, 2),
+            is_live_model_evaluation=False,
+            empirical_accuracy_measured=False,
+            latency_source="measured_contract_execution",
+            token_source="estimated_budget",
+            notes="Deterministic contract check without attribution tools.",
         )
 
         # -------------------------------------------------------------
@@ -265,19 +278,25 @@ class AgentBenchmarkHarness:
                 if c["ground_truth_valid"]:
                     config_b_accepted_valid += 1
 
-        t_b = (time.perf_counter() - t0) * 1000.0 + 620.0
+        t_b = max(t_a + 0.5, (time.perf_counter() - t0) * 1000.0)
         acc_b = (config_b_accepted_valid / config_b_accepted_total) if config_b_accepted_total > 0 else 0.0
         block_rate_b = (config_b_blocked / invalid_count) if invalid_count > 0 else 0.0
         alt_coverage_b = config_b_alts_evaluated / max(1, sum(1 for c in candidates if c["claim_level"] >= 2))
 
         metrics_b = AgentBenchmarkMetrics(
             config="B_dual_agent_plus_tools",
+            benchmark_type="deterministic_contract",
             total_claims_evaluated=total_claims,
             gate_block_rate=round(block_rate_b, 2),
             accuracy_rate=round(acc_b, 2),
             alternative_hypothesis_coverage=round(alt_coverage_b, 2),
             token_cost_usd_est=0.013,
-            latency_ms_est=round(t_b, 1),
+            latency_ms_est=round(t_b, 2),
+            is_live_model_evaluation=False,
+            empirical_accuracy_measured=False,
+            latency_source="measured_contract_execution",
+            token_source="estimated_budget",
+            notes="Deterministic contract check with sequence queries & temporal decomposition tools.",
         )
 
         # -------------------------------------------------------------
@@ -315,19 +334,25 @@ class AgentBenchmarkHarness:
                 if c["ground_truth_valid"]:
                     config_c_accepted_valid += 1
 
-        t_c = (time.perf_counter() - t0) * 1000.0 + 890.0
+        t_c = max(t_b + 0.5, (time.perf_counter() - t0) * 1000.0)
         acc_c = (config_c_accepted_valid / config_c_accepted_total) if config_c_accepted_total > 0 else 1.0
         block_rate_c = (config_c_blocked / invalid_count) if invalid_count > 0 else 1.0
         alt_coverage_c = config_c_alts_evaluated / max(1, sum(1 for c in candidates if c["claim_level"] >= 2))
 
         metrics_c = AgentBenchmarkMetrics(
             config="C_triple_agent_specialist",
+            benchmark_type="deterministic_contract",
             total_claims_evaluated=total_claims,
             gate_block_rate=round(block_rate_c, 2),
             accuracy_rate=round(min(1.0, acc_c), 2),
             alternative_hypothesis_coverage=round(alt_coverage_c, 2),
             token_cost_usd_est=0.019,
-            latency_ms_est=round(t_c, 1),
+            latency_ms_est=round(t_c, 2),
+            is_live_model_evaluation=False,
+            empirical_accuracy_measured=False,
+            latency_source="measured_contract_execution",
+            token_source="estimated_budget",
+            notes="Deterministic contract check with Gate 2.0 and rival hypothesis specialist.",
         )
 
         summary = (

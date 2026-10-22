@@ -8,7 +8,8 @@ d:\Projects\match-lens\.agents\teamwork\orchestrator_1\FOOTBALL_INTELLIGENCE_PLA
 from pathlib import Path
 import pytest
 
-REPORT_PATH = Path(r"d:\Projects\match-lens\.agents\teamwork\orchestrator_1\FOOTBALL_INTELLIGENCE_PLATFORMS_2026.md")
+ROOT = Path(__file__).resolve().parents[3]
+REPORT_PATH = ROOT / ".agents" / "teamwork" / "orchestrator_1" / "FOOTBALL_INTELLIGENCE_PLATFORMS_2026.md"
 
 
 @pytest.fixture(scope="module")

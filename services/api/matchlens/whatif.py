@@ -20,14 +20,16 @@ from enum import Enum
 from typing import Any, Literal, Optional, Sequence
 from pydantic import BaseModel, ConfigDict, Field
 
+from .models.xg import compute_pre_shot_xg
 from .models.xt import ExpectedThreatModel
 from .oaai import compute_oaai
 from .schema import ActionType, NormalizedEvent
 
 WHATIF_DISCLAIMER_TEXT = (
     "Level 3 Research / Exploratory — Not validated for production causal claims. "
-    "RESEARCH SANDBOX NOTICE (Level 3 Hypothesis): This is an in-silico mathematical counterfactual perturbation. "
-    "It does not represent historical fact and must not be published as definitive causal ground-truth."
+    "RESEARCH SANDBOX NOTICE (Level 3 Hypothesis): In-silico mathematical intervention on historical event stream. "
+    "Does not represent true counterfactual replay, physical match rerun, or win probability forecast. "
+    "Uncertainty bounds represent heuristic sensitivity spreads under local assumptions, NOT calibrated 95% confidence intervals."
 )
 
 
@@ -69,14 +71,12 @@ def _extract_xg(ev: Any) -> float:
             pass
     act = _extract_action(ev)
     if "shot" in act:
-        if str(_get_field(ev, "outcome", "")).lower() == "goal":
-            return 0.75
         x = _get_field(ev, "x")
         y = _get_field(ev, "y")
-        if x is not None and y is not None:
-            dist = math.sqrt((105.0 - float(x)) ** 2 + (34.0 - float(y)) ** 2)
-            return round(max(0.02, min(0.85, 0.85 * math.exp(-0.08 * dist))), 3)
-        return 0.12
+        eid = _extract_id(ev)
+        outcome = _get_field(ev, "outcome")
+        shot_eval = compute_pre_shot_xg(x=x, y=y, event_id=eid, outcome=outcome)
+        return shot_eval.pre_shot_xg
     return 0.0
 
 
@@ -116,7 +116,10 @@ class WhatIfSimulationResult(BaseModel):
     delta_oaai_amplitude: float
     delta_threat: float
     delta_xg: float
-    confidence_band: tuple[float, float]
+    sensitivity_spread: tuple[float, float]
+    confidence_band: tuple[float, float]  # Backwards-compatible alias for sensitivity_spread
+    is_calibrated_ci: bool = False
+    uncertainty_method: str = "heuristic_sensitivity_spread_uncalibrated"
     affected_events_count: int
     affected_event_ids: list[str]
     claim_level: Literal["level_3_hypothesis"] = "level_3_hypothesis"
@@ -347,10 +350,10 @@ class WhatIfSandbox:
 
         delta_threat = round(pert_xt_added - base_xt_added, 4)
 
-        # 5. Uncertainty Propagation Confidence Band (95% CI on delta threat / amplitude)
-        se = max(0.015, abs(delta_amp) * 0.18 + abs(delta_threat) * 0.12)
-        ci_low = round(delta_amp - 1.96 * se, 3)
-        ci_high = round(delta_amp + 1.96 * se, 3)
+        # 5. Sensitivity spread calculation (uncalibrated heuristic bounds, not 95% CI)
+        spread = max(0.015, abs(delta_amp) * 0.18 + abs(delta_threat) * 0.12)
+        spread_low = round(delta_amp - spread, 3)
+        spread_high = round(delta_amp + spread, 3)
 
         sim_id = f"sim-{random.randint(1000, 9999)}"
 
@@ -363,7 +366,10 @@ class WhatIfSandbox:
             delta_oaai_amplitude=delta_amp,
             delta_threat=delta_threat,
             delta_xg=delta_xg,
-            confidence_band=(ci_low, ci_high),
+            sensitivity_spread=(spread_low, spread_high),
+            confidence_band=(spread_low, spread_high),
+            is_calibrated_ci=False,
+            uncertainty_method="heuristic_sensitivity_spread_uncalibrated",
             affected_events_count=len(affected_ids),
             affected_event_ids=affected_ids,
             claim_level="level_3_hypothesis",

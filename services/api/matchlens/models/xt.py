@@ -221,37 +221,37 @@ def create_calibrated_xt_grid(nx: int = 16, ny: int = 12) -> dict:
     return {
         "model_name": "matchlens_xt_grid",
         "model_version": "1.0.0",
+        "model_type": "heuristic_threat_surface",
+        "calibration_status": "uncalibrated_spatial_prior",
         "grid_resolution": {"nx": nx, "ny": ny},
         "pitch_dimensions_meters": {"length": pitch_length, "width": pitch_width},
         "interpolation_mode": "bilinear",
         "horizon_steps": 5,
-        "smoothing_method": "calibrated_empirical_prior",
-        "training_corpus": {
-            "provider": "StatsBomb Open Data Baseline Benchmark",
-            "competitions": ["FIFA World Cup 2022", "UEFA Euro 2020"],
-            "calibration_reference": "Karun Singh xT standard formulation",
-        },
+        "smoothing_method": "analytical_geometric_prior",
+        "description": "Synthetic spatial expected threat surface generated via Karun Singh analytical distance/channel formulations. Not fitted to empirical match samples.",
+        "training_corpus": None,
+        "calibration_reference": "Karun Singh (2019) conceptual spatial distribution (analytical curves)",
         "license_and_attribution": {
-            "data_license": "StatsBomb Open Data Terms (CC BY-NC-SA 4.0)",
-            "required_attribution": "Data provided by StatsBomb (https://github.com/statsbomb/open-data)",
-            "logo_requirement": "Must display StatsBomb logo on public visualizations derived from StatsBomb Open Data",
+            "model_license": "MIT License",
+            "required_attribution": "Generated via MatchLens Analytical Spatial Curves (Karun Singh 2019 formulation)",
+            "logo_requirement": "None for heuristic surface",
         },
         "values": values,
     }
 
 
 def save_default_grids():
-    """Ensure standard grid files exist on disk."""
+    """Explicit helper to write standard grid files to disk if missing."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     for nx, ny in [(16, 12), (12, 8)]:
-        grid = create_calibrated_xt_grid(nx, ny)
         out_path = DATA_DIR / f"xt_grid_{nx}x{ny}.json"
-        with open(out_path, "w", encoding="utf-8") as f:
-            json.dump(grid, f, indent=2)
+        if not out_path.exists():
+            grid = create_calibrated_xt_grid(nx, ny)
+            with open(out_path, "w", encoding="utf-8") as f:
+                json.dump(grid, f, indent=2)
 
 
-# Save default grids on module initialization if not already present
-save_default_grids()
+# Default grids are loaded on demand or created in-memory; NO automatic write side-effects on import.
 
 
 class ExpectedThreatFitter:
