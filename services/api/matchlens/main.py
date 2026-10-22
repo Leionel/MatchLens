@@ -670,6 +670,42 @@ async def ask(body: AskQuery, request: Request):
     return ans
 
 
+class ExplainQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    chart_type: Literal[
+        "oaai_momentum",
+        "density_differential",
+        "passing_network",
+        "attacking_channels",
+        "spatial_drilldown",
+        "xt_surface",
+    ]
+    team: Literal["H", "N"] | None = None
+    zone_id: str | None = None
+    player_id: str | None = None
+
+
+@app.post("/api/explain")
+async def explain(body: ExplainQuery, request: Request):
+    from .explain import explain_chart
+    s, eng = session(request), engine(request)
+    eng.rates.check("explain:" + s.id, 60)
+    view = eng.view(s)
+    snap_id = view["snapshot_id"]
+    snap = s.snapshots.get(snap_id) if snap_id else None
+    if not snap:
+        snap = freeze(eng.events_for(s), s.at, seed=s.seed)
+        s.snapshots[snap.id] = snap
+    team = body.team or s.focus_team
+    return explain_chart(
+        snapshot=snap,
+        chart_type=body.chart_type,
+        team=team,
+        zone_id=body.zone_id,
+        player_id=body.player_id,
+    ).model_dump()
+
+
 @app.get("/api/matches")
 async def list_matches(request: Request):
     from .catalog import MatchCatalog
