@@ -149,18 +149,19 @@ def publication_gate_2_0(
 
     if isinstance(claim, dict):
         claim_id = str(claim.get("claim_id", claim.get("id", "claim-unknown")))
-        claim_level = claim.get("claim_level", 1)
-        if isinstance(claim_level, str):
-            if "1" in claim_level:
-                claim_level = 1
-            elif "2" in claim_level:
-                claim_level = 2
-            elif "3" in claim_level:
-                claim_level = 3
-            elif "4" in claim_level:
-                claim_level = 4
-            else:
-                claim_level = 1
+        raw_level = claim.get("claim_level", 1)
+        if isinstance(raw_level, int):
+            claim_level = max(1, min(4, raw_level))
+        elif isinstance(raw_level, str):
+            level_map = {
+                "level_1_observed": 1, "level_1": 1, "1": 1,
+                "level_2_metric_attribution": 2, "level_2": 2, "2": 2,
+                "level_3_statistical_association": 3, "level_3_hypothesis": 3, "level_3": 3, "3": 3,
+                "level_4_causal_inference": 4, "level_4": 4, "4": 4,
+            }
+            claim_level = level_map.get(raw_level.lower().strip(), 1)
+        else:
+            claim_level = 1
         text = str(claim.get("text", claim.get("analyst", claim.get("primary", {}).get("analyst", ""))))
         evidence_scope = claim.get("evidence_scope", {})
         event_ids = list(evidence_scope.get("event_ids", claim.get("event_ids", claim.get("refs", []))))
@@ -171,7 +172,19 @@ def publication_gate_2_0(
         metric_versions = dict(claim.get("metric_versions", {}))
     else:
         claim_id = claim.claim_id
-        claim_level = claim.claim_level
+        raw_level = claim.claim_level
+        if isinstance(raw_level, int):
+            claim_level = max(1, min(4, raw_level))
+        elif isinstance(raw_level, str):
+            level_map = {
+                "level_1_observed": 1, "level_1": 1, "1": 1,
+                "level_2_metric_attribution": 2, "level_2": 2, "2": 2,
+                "level_3_statistical_association": 3, "level_3_hypothesis": 3, "level_3": 3, "3": 3,
+                "level_4_causal_inference": 4, "level_4": 4, "4": 4,
+            }
+            claim_level = level_map.get(raw_level.lower().strip(), 1)
+        else:
+            claim_level = 1
         text = claim.text
         evidence_scope = claim.evidence_scope
         event_ids = list(evidence_scope.get("event_ids", []))
@@ -210,8 +223,13 @@ def publication_gate_2_0(
 
     verified_event_ids: list[str] = []
     for eid in event_ids:
-        # Check direct ID or slot ref format like ev-0 or 0
-        if str(eid) in known_event_ids or f"ev-{eid}" in known_event_ids or any(k.endswith(f"-{eid}") for k in known_event_ids):
+        eid_str = str(eid).strip()
+        candidates = {eid_str, f"ev-{eid_str}"}
+        if eid_str.isdigit():
+            candidates.add(f"E{int(eid_str):04d}")
+            candidates.add(f"ev-{int(eid_str)}")
+            candidates.add(str(int(eid_str)))
+        if candidates & known_event_ids:
             verified_event_ids.append(str(eid))
         else:
             rule_violations.append(f"Referenced event ID '{eid}' does not exist in match events.")
@@ -220,7 +238,7 @@ def publication_gate_2_0(
     verified_metric_ids: list[str] = []
     for mid in metric_ids:
         clean_mid = mid.split(".")[-1] if "." in mid else mid
-        if mid in valid_metrics or clean_mid in valid_metrics or any(m in mid for m in valid_metrics):
+        if mid in valid_metrics or clean_mid in valid_metrics:
             verified_metric_ids.append(mid)
         else:
             rule_violations.append(f"Referenced metric ID '{mid}' is not in catalog metrics.")

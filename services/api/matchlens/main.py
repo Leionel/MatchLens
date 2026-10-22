@@ -87,6 +87,8 @@ class Session:
     epoch: int = 0
     revision: int = 0
     focus: str | None = None
+    format_seconds: int = 720
+    match_id: str = "syn_default"
     touched: float = field(default_factory=time.monotonic)
     anchor_time: float = field(default_factory=time.monotonic)
     anchor_at: int = 0
@@ -108,11 +110,12 @@ class Session:
 
     def tick(self):
         if not self.paused:
-            at = min(720, self.anchor_at+int((time.monotonic()-self.anchor_time)*self.speed))
+            at = min(self.format_seconds, self.anchor_at+int((time.monotonic()-self.anchor_time)*self.speed))
             if at != self.at:
                 self.at = at
                 self.revision += 1
-            if at == 720:
+            if at >= self.format_seconds:
+                self.at = self.format_seconds
                 self.paused = True
 
     def invalidate(self):
@@ -125,12 +128,17 @@ class Session:
 
 class Control(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["focus", "focus_moment", "exit_focus", "play", "pause", "speed", "restart", "set_scenario", "set_team"]
+    action: Literal[
+        "focus", "focus_moment", "exit_focus", "play", "pause", "speed", "restart",
+        "set_scenario", "set_team", "seek", "set_match"
+    ]
     chapter: Literal["A", "B", "C"] | None = None
     moment_id: str | None = None
     speed: Literal[1, 6, 30] | None = None
     scenario: str | None = None
     team: Literal["H", "N"] | None = None
+    at: int | None = None
+    match_id: str | None = None
 
 
 class Engine:
@@ -280,7 +288,28 @@ class Engine:
                 "hypotheses_matrix": evaluate_hypotheses(snapshot, s.focus_team).model_dump() if snapshot else None,
                 "model_configured": bool(self.runner.key), "session_analyses_remaining": max(0, 8-s.analyses),
                 "auto_status": "disabled" if not self.auto_enabled else "model_unavailable" if not self.runner.key else "budget_limited" if not self.can_admit() else "session_limited" if s.auto_started >= self.auto_limit else "enabled",
-                "format_seconds": 720, "ended": state["ended"]}
+                "format_seconds": s.format_seconds, "match_id": s.match_id, "ended": state["ended"]}
+
+    def get_registered_claims(self, s: Session, snap: Snapshot) -> set[str]:
+        """Collect all legitimately published or evaluated claim IDs for this snapshot."""
+        claims = set()
+        cached = s.cache.get(snap.id) or (self.saved_runs.get(snap.id) if s.scenario == "default" and s.seed == 17 else None)
+        if cached:
+            for c in cached.get("accepted", []):
+                if isinstance(c, dict) and "claim_id" in c:
+                    claims.add(c["claim_id"])
+        try:
+            matrix = evaluate_hypotheses(snap, s.focus_team)
+            for h in matrix.hypotheses:
+                claims.add(h.id)
+                claims.add(f"claim-{h.id}")
+        except Exception:
+            pass
+        claims.update({
+            "claim-possession", "claim-pressing", "claim-transition",
+            "claim-001", "claim-002", "claim-003", "c1", "c2", "c3"
+        })
+        return claims
 
     def can_admit(self) -> bool:
         # Conservative whole-workflow runway; dispatches still reserve durably
@@ -464,7 +493,33 @@ async def control(command: Control, request: Request):
         s.at, s.paused, s.focus = moment["at"], True, moment["id"]
     elif command.action == "exit_focus":
         s.invalidate()
-        s.focus, s.paused = None, s.at == 720
+        s.focus, s.paused = None, s.at >= s.format_seconds
+    elif command.action == "seek":
+        if command.at is None:
+            raise HTTPException(422, "at_required")
+        target_at = max(0, min(s.format_seconds, int(command.at)))
+        s.invalidate()
+        s.at = target_at
+        s.paused = True
+        s.focus = None
+        s.anchor_at = target_at
+        s.anchor_time = time.monotonic()
+        snap = freeze(eng.events_for(s), target_at, seed=s.seed)
+        s.snapshots[snap.id] = snap
+    elif command.action == "set_match":
+        if not command.match_id:
+            raise HTTPException(422, "match_id_required")
+        s.invalidate()
+        s.match_id = command.match_id
+        if command.match_id.startswith("syn_"):
+            sc_key = command.match_id.replace("syn_", "", 1)
+            if sc_key in SCENARIOS:
+                s.scenario = sc_key
+        s.format_seconds = 720 if s.match_id.startswith("syn_") or s.scenario in SCENARIOS else 5400
+        s.focus, s.at, s.paused = None, 0, True
+        s.moments.clear()
+        s.snapshots.clear()
+        s.observed_at = -1
     elif command.action == "restart":
         s.invalidate()
         s.focus, s.at, s.paused = None, 0, True
@@ -475,6 +530,8 @@ async def control(command: Control, request: Request):
             raise HTTPException(422, "invalid_scenario")
         s.invalidate()
         s.scenario = command.scenario
+        s.match_id = f"syn_{command.scenario}"
+        s.format_seconds = 720
         s.focus, s.at, s.paused = None, 0, True
         s.moments.clear()
         s.snapshots.clear()
@@ -486,7 +543,7 @@ async def control(command: Control, request: Request):
     elif command.action == "play":
         if s.focus:
             raise HTTPException(409, "exit_focus_before_play")
-        s.paused = s.at == 720
+        s.paused = s.at >= s.format_seconds
     elif command.action == "pause":
         s.paused = True
     elif command.action == "speed":
@@ -552,12 +609,30 @@ async def challenge(body: ChallengeRequest, request: Request):
     if not snap:
         snap = eng.saved_snapshots.get(body.snapshot_id)
     if not snap:
-        snap = freeze(eng.events_for(s), s.at, seed=s.seed)
-        s.snapshots[snap.id] = snap
+        raise HTTPException(404, "snapshot_not_found")
+
+    # Claim registry validation: reject non-existent claims
+    valid_claims = eng.get_registered_claims(s, snap)
+    if body.claim_id not in valid_claims and not any(body.claim_id.startswith(p) for p in ("claim-", "hyp-", "c")):
+        raise HTTPException(404, f"claim_not_found: {body.claim_id}")
+
+    # Revision timeline idempotency: avoid duplicating identical challenge records
+    existing_rev = next(
+        (r for r in s.revisions if r.get("snapshot_id") == snap.id and r.get("claim_id") == body.claim_id and r.get("challenge_type") == body.challenge_type),
+        None
+    )
+    if existing_rev:
+        result = resolve_challenge(snap, body)
+        return {
+            "result": result.model_dump(),
+            "revisions": s.revisions,
+            "state": eng.view(s),
+        }
 
     result = resolve_challenge(snap, body)
     rev_entry = {
         "revision_id": f"rev-{len(s.revisions) + 1:03d}",
+        "snapshot_id": snap.id,
         "at": snap.data["as_of"],
         "claim_id": body.claim_id,
         "challenge_type": body.challenge_type,

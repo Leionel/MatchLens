@@ -92,18 +92,33 @@ class MatchStoryEngine:
         # Determine total duration
         max_sec = 0.0
         for ev in events:
-            t = float(getattr(ev, "timestamp_seconds", None) if hasattr(ev, "timestamp_seconds") else ev.get("timestamp_seconds", getattr(ev, "second", 0.0)))
+            t = float(
+                getattr(ev, "timestamp_seconds", None)
+                if hasattr(ev, "timestamp_seconds")
+                else (
+                    ev.get("timestamp_seconds")
+                    if isinstance(ev, dict) and "timestamp_seconds" in ev
+                    else getattr(ev, "second", getattr(ev, "t", ev.get("t", ev.get("second", 0.0)) if isinstance(ev, dict) else 0.0))
+                )
+            )
             if t > max_sec:
                 max_sec = t
 
-        max_sec = max(5400.0, max_sec)
-
-        # Slice into 3-4 natural tactical phases
-        phase_boundaries = [
-            (0.0, max_sec * 0.33, "Opening Rhythm & Territorial Sparring", "0'–30'"),
-            (max_sec * 0.33, max_sec * 0.66, "Midfield Dynamics & Decisive Adjustments", "30'–60'"),
-            (max_sec * 0.66, max_sec, "Climax Surge & Terminal Opportunities", "60'–90'+"),
-        ]
+        # Format-aware chapter boundaries
+        if max_sec <= 900.0:
+            total_duration = max(720.0, max_sec)
+            phase_boundaries = [
+                (0.0, total_duration / 3.0, "Opening Rhythm & Territorial Sparring", "0'–4'"),
+                (total_duration / 3.0, total_duration * 2.0 / 3.0, "Midfield Dynamics & Decisive Adjustments", "4'–8'"),
+                (total_duration * 2.0 / 3.0, total_duration, "Climax Surge & Terminal Opportunities", "8'–12'"),
+            ]
+        else:
+            total_duration = max(5400.0, max_sec)
+            phase_boundaries = [
+                (0.0, total_duration / 3.0, "Opening Rhythm & Territorial Sparring", "0'–30'"),
+                (total_duration / 3.0, total_duration * 2.0 / 3.0, "Midfield Dynamics & Decisive Adjustments", "30'–60'"),
+                (total_duration * 2.0 / 3.0, total_duration, "Climax Surge & Terminal Opportunities", "60'–90'+"),
+            ]
 
         chapters: list[StoryChapter] = []
         approved_claim_ids: list[str] = [c.get("claim_id", f"claim-{i}") for i, c in enumerate(verified_claims)]
@@ -139,7 +154,15 @@ class MatchStoryEngine:
             # Find matching events in phase
             ev_in_phase: list[str] = []
             for ev in events:
-                t = float(getattr(ev, "timestamp_seconds", None) if hasattr(ev, "timestamp_seconds") else ev.get("timestamp_seconds", getattr(ev, "second", 0.0)))
+                t = float(
+                    getattr(ev, "timestamp_seconds", None)
+                    if hasattr(ev, "timestamp_seconds")
+                    else (
+                        ev.get("timestamp_seconds")
+                        if isinstance(ev, dict) and "timestamp_seconds" in ev
+                        else getattr(ev, "second", getattr(ev, "t", ev.get("t", ev.get("second", 0.0)) if isinstance(ev, dict) else 0.0))
+                    )
+                )
                 if start_t <= t <= end_t:
                     eid = getattr(ev, "event_id", None) if hasattr(ev, "event_id") else ev.get("event_id", getattr(ev, "id", None))
                     if eid:

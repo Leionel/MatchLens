@@ -49,10 +49,28 @@ def test_story_engine_generation_with_verified_claims(sample_match_events):
     assert story.approval_status == "approved_for_broadcast"
     assert story.approved_claims_count == 2
     assert len(story.chapters) == 3
+    # 12-minute synthetic match correctly segments into 4-minute chapters
+    assert story.chapters[0].minute_span == "0'–4'"
+    assert story.chapters[1].minute_span == "4'–8'"
+    assert story.chapters[2].minute_span == "8'–12'"
+    assert any("KeyShift" in c.tactical_tags or "TurningPoint" in c.tactical_tags for c in story.chapters)
+
+
+def test_story_engine_90min_match_minute_span():
+    # 90-minute match (5400s) segments into 30-minute chapters
+    events_90m = [
+        {"event_id": "ev-0", "timestamp_seconds": 0.0, "team": "H", "action": "pass"},
+        {"event_id": "ev-1", "timestamp_seconds": 2700.0, "team": "N", "action": "shot"},
+        {"event_id": "ev-2", "timestamp_seconds": 5400.0, "team": "H", "action": "goal"},
+    ]
+    story = MatchStoryEngine.generate_story(
+        match_id="test-match-90m",
+        events=events_90m,
+        perspective="media",
+    )
     assert story.chapters[0].minute_span == "0'–30'"
     assert story.chapters[1].minute_span == "30'–60'"
     assert story.chapters[2].minute_span == "60'–90'+"
-    assert any("KeyShift" in c.tactical_tags or "TurningPoint" in c.tactical_tags for c in story.chapters)
 
 
 def test_story_engine_draft_when_no_claims(sample_match_events):
