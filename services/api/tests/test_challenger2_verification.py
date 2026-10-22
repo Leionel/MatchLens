@@ -10,12 +10,14 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 REPORT_PATH = ROOT / ".agents" / "teamwork" / "orchestrator_1" / "FOOTBALL_INTELLIGENCE_PLATFORMS_2026.md"
+DOCS_REPORT_PATH = ROOT / "docs" / "FOOTBALL_INTELLIGENCE_PLATFORMS_2026.md"
 
 
 @pytest.fixture(scope="module")
 def report_content():
-    assert REPORT_PATH.exists(), f"Target report does not exist at {REPORT_PATH}"
-    content = REPORT_PATH.read_text(encoding="utf-8")
+    target = REPORT_PATH if REPORT_PATH.exists() else DOCS_REPORT_PATH
+    assert target.exists(), f"Target report does not exist at {REPORT_PATH} or {DOCS_REPORT_PATH}"
+    content = target.read_text(encoding="utf-8")
     assert len(content) > 10000, f"Report content too small: {len(content)} chars"
     return content
 
