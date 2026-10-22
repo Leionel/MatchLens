@@ -202,6 +202,8 @@ export type CockpitState = {
   highlights?: any[];
   model_configured: boolean;
   ended: boolean;
+  format_seconds?: number;
+  match_id?: string;
   session_analyses_remaining: number;
 };
 

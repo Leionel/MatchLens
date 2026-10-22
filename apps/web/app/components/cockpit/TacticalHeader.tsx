@@ -46,7 +46,7 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
   const isZh = locale === "zh";
 
   const currentSeconds = state.at || 0;
-  const totalSeconds = 720; // 12-minute match simulation window
+  const totalSeconds = state.format_seconds || 720;
   const activeMoment = state.active_moment;
 
   return (
@@ -92,9 +92,16 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
           <select
             id="cockpit-match-select"
             className="match-selector-select"
-            value={state.scenario || "default"}
+            value={state.match_id === "sb_wc2022_final" ? "sb_wc2022_final" : state.scenario || "default"}
             disabled={busy}
-            onChange={(e) => onControl({ action: "set_scenario", scenario: e.target.value })}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val.startsWith("sb_")) {
+                onControl({ action: "set_match", match_id: val });
+              } else {
+                onControl({ action: "set_scenario", scenario: val });
+              }
+            }}
           >
             {(state.scenarios && state.scenarios.length > 0) ? (
               state.scenarios.map((sc) => (

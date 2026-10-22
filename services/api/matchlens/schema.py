@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class DataCoverageLevel(str, Enum):
     C0_SYNTHETIC = "C0"  # Synthetic scenarios for regression and UI demos
     C1_OPEN_EVENTS = "C1"  # Open public event data (e.g. StatsBomb Open Data)
+    C1_PARTIAL = "C1_PARTIAL"  # Sampled open event sequence (e.g. 12 sample events)
     C2_EVENTS_AND_360 = "C2"  # Event data with freeze-frame spatial context
     C3_COMMERCIAL_LIVE = "C3"  # Commercial real-time event feeds
     C4_OPTICAL_TRACKING = "C4"  # Continuous 25Hz optical tracking

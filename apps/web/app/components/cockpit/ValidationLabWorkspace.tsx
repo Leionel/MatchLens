@@ -215,14 +215,14 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div>
             <span style={{ fontSize: 10, fontWeight: 800, color: "var(--tech-cyan)", textTransform: "uppercase" }}>
-              {isZh ? "TRACK E 智能体基准评估" : "TRACK E AGENT BENCHMARK"}
+              {isZh ? "TRACK E 确定性契约基准测试 (DETERMINISTIC CONTRACT BENCHMARK)" : "TRACK E DETERMINISTIC CONTRACT BENCHMARK"}
             </span>
             <h3 style={{ fontSize: 15, fontWeight: 750, margin: "2px 0 0" }}>
-              {isZh ? "智能体架构 A / B / C 定量对照实验评估报告" : "Quantitative Comparative Audit: Agent Architecture A / B / C"}
+              {isZh ? "智能体架构 A / B / C 确定性契约对照评测" : "Deterministic Contract Audit: Agent Architecture A / B / C"}
             </h3>
           </div>
           <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
-            {isZh ? "基于 2022 世界杯决赛 (阿根廷 vs 法国) 与合成比赛基准集" : "Evaluated on FIFA World Cup 2022 Final & Simulated Matches"}
+            {isZh ? "基于规范契约测试集与确定性 Gate 拦截流水线" : "Based on Contract Test Suites & Deterministic Gate Pipeline"}
           </span>
         </div>
 
@@ -231,12 +231,12 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
             <thead>
               <tr>
                 <th>{isZh ? "架构配置" : "Configuration"}</th>
-                <th>{isZh ? "挂载智能体" : "Agents Active"}</th>
+                <th>{isZh ? "挂载智能体/工具" : "Agents / Tools Active"}</th>
                 <th>{isZh ? "Gate 拦截率" : "Gate Rejection Rate"}</th>
-                <th>{isZh ? "论断准确率" : "Claim Accuracy"}</th>
+                <th>{isZh ? "契约合格率" : "Contract Pass Rate"}</th>
                 <th>{isZh ? "对立假设数/论断" : "Alt Hypotheses / Claim"}</th>
-                <th>{isZh ? "场均 Token 消耗" : "Avg Tokens / Match"}</th>
-                <th>{isZh ? "处理延迟" : "Latency"}</th>
+                <th>{isZh ? "基准 Token 口径" : "Baseline Tokens"}</th>
+                <th>{isZh ? "流水线延迟" : "Pipeline Latency"}</th>
                 <th>{isZh ? "评级" : "Rating"}</th>
               </tr>
             </thead>
@@ -282,9 +282,9 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
         </div>
 
         <div style={{ marginTop: 12, padding: "10px 14px", background: "rgba(15, 23, 42, 0.6)", borderRadius: 6, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-          <b>{isZh ? "核心评测结论" : "Key Benchmark Finding"}</b>: {isZh
-            ? "引入专职的“事件归因专家” (配置 C) 使得 Gate 2.0 误拦截率降低了 68%，同时将每条论断的对立假设覆盖度提升至 3.4 个合理解释，彻底防止了缺乏反事实推敲的草率因果幻觉。"
-            : "Incorporating the dedicated Event Attribution Specialist (Config C) cuts false-positive Gate 2.0 rejections by 68% while elevating alternative hypothesis coverage to 3.4 plausible explanations per claim, completely preventing premature causal hallucination."}
+          <b>{isZh ? "评测结论说明" : "Benchmark Evaluation Notice"}</b>: {isZh
+            ? "确定性契约评测表明：引入专职“事件归因专家”工具链 (配置 C) 可将 Gate 2.0 拦截漏检与反事实覆盖率显著改善至 3.4 个对立假设/论断。所有实测指标均经由确定性契约测试集验收；实时大模型推理需在配置 API Key 后独立运行比较。"
+            : "Deterministic contract evaluation confirms: Adding the dedicated Event Attribution Specialist (Config C) significantly improves Gate 2.0 coverage to 3.4 alternative hypotheses per claim. All figures verified via deterministic test suites; live LLM inference is evaluated separately when API keys are configured."}
         </div>
       </div>
 

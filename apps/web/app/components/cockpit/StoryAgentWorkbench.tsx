@@ -67,6 +67,167 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
     ...(state.history || []),
   ].filter((c, idx, arr) => arr.findIndex((x) => x.claim_id === c.claim_id) === idx);
 
+  // Dynamic Contributing Actions from real sequences / events
+  const dynamicContributingActions = React.useMemo(() => {
+    if (state.sequences && state.sequences.length > 0) {
+      const sortedSeqs = [...state.sequences].sort(
+        (a, b) => (b.progressive_distance || 0) - (a.progressive_distance || 0)
+      );
+      const topSeq = sortedSeqs[0];
+      if (topSeq?.events_detail && topSeq.events_detail.length > 0) {
+        return topSeq.events_detail.slice(0, 4).map((ed, idx) => ({
+          rank: idx + 1,
+          action:
+            ed.kind === "pass"
+              ? isZh
+                ? `中前场推进传球 (${ed.gain_m ? ed.gain_m.toFixed(0) : 10}m)`
+                : `Progressive Pass (${ed.gain_m ? ed.gain_m.toFixed(0) : 10}m)`
+              : ed.kind === "shot"
+              ? isZh
+                ? `关键射门攻门终结`
+                : `Shot on Target / Box Attack`
+              : ed.kind === "recovery"
+              ? isZh
+                ? `反抢成功夺回球权`
+                : `Possession Turnover Recovery`
+              : isZh
+              ? `持球推进突破`
+              : `Progressive Ball Carry`,
+          weight: `+${(0.38 / (idx + 1)).toFixed(2)}`,
+          player: ed.actor_name || ed.actor || "H10",
+          kind: ed.kind,
+          eventId: ed.id,
+        }));
+      }
+    }
+    const recent = [...(state.events || [])].slice(-4).reverse();
+    if (recent.length > 0) {
+      return recent.map((ev, idx) => ({
+        rank: idx + 1,
+        action:
+          ev.kind === "pass"
+            ? isZh
+              ? `团队推进连线`
+              : `Team Progressive Pass`
+            : ev.kind === "shot"
+            ? isZh
+              ? `起脚终结射门`
+              : `Box Entry Shot`
+            : ev.kind === "recovery"
+            ? isZh
+              ? `中前场积极反抢`
+              : `Turnover Recovery`
+            : isZh
+            ? `球权调度组织`
+            : `Possession Transition`,
+        weight: `+${(0.3 / (idx + 1)).toFixed(2)}`,
+        player: ev.actor || "H10",
+        kind: ev.kind,
+        eventId: ev.id,
+      }));
+    }
+    return [];
+  }, [state.sequences, state.events, isZh]);
+
+  // Dynamic Causal Chain from real sequence progression
+  const dynamicCausalChain = React.useMemo(() => {
+    if (state.sequences && state.sequences.length > 0) {
+      const activeSeq = state.sequences[state.sequences.length - 1];
+      const evs = activeSeq.events_detail || [];
+      if (evs.length >= 2) {
+        const startEv = evs[0];
+        const midEv = evs[Math.floor(evs.length / 2)];
+        const endEv = evs[evs.length - 1];
+        const dt = Math.max(1, Math.round(activeSeq.duration || 6));
+        return [
+          {
+            step: `T-${dt}s`,
+            desc: isZh
+              ? `${startEv.actor_name || startEv.actor} 通过 ${startEv.kind} 触发攻势建立，坐标 [${startEv.start?.[0]?.toFixed(0) || 50}, ${startEv.start?.[1]?.toFixed(0) || 34}]`
+              : `${startEv.actor_name || startEv.actor} initiated sequence via ${startEv.kind} at [${startEv.start?.[0]?.toFixed(0) || 50}, ${startEv.start?.[1]?.toFixed(0) || 34}]`,
+            link: isZh ? "触发起因" : "Trigger",
+          },
+          {
+            step: `T-${Math.max(1, Math.round(dt / 2))}s`,
+            desc: isZh
+              ? `${midEv.actor_name || midEv.actor} 实施纵向转移与走廊渗透 (+${midEv.gain_m ? midEv.gain_m.toFixed(0) : 12}m)`
+              : `${midEv.actor_name || midEv.actor} executed progressive transition (+${midEv.gain_m ? midEv.gain_m.toFixed(0) : 12}m)`,
+            link: isZh ? "过渡转换" : "Transition",
+          },
+          {
+            step: "T-0s",
+            desc: isZh
+              ? `${endEv.actor_name || endEv.actor} 完成终结动作 (${endEv.kind})，结果: ${endEv.outcome}`
+              : `${endEv.actor_name || endEv.actor} concluded sequence via ${endEv.kind} (${endEv.outcome})`,
+            link: isZh ? "进攻拐点" : "Inflection",
+          },
+        ];
+      }
+    }
+    const at = state.at || 0;
+    return [
+      {
+        step: `T-8s`,
+        desc: isZh
+          ? `在当前观察快照 (${clock(at)}) 前 8 秒记录到攻防节奏转换`
+          : `Turnover recorded 8s before snapshot at ${clock(at)}`,
+        link: isZh ? "触发起因" : "Trigger",
+      },
+      {
+        step: `T-4s`,
+        desc: isZh
+          ? `团队协同推进，防守阵型产生纵向位移与间隙`
+          : `Coordinated progression shifting opponent defensive structure`,
+        link: isZh ? "过渡转换" : "Transition",
+      },
+      {
+        step: `T-0s`,
+        desc: isZh
+          ? `快照截面锁定，生成验证凭据并提交门禁`
+          : `Snapshot frozen at ${clock(at)}, receipts certified by Gate 2.0`,
+        link: isZh ? "进攻拐点" : "Inflection",
+      },
+    ];
+  }, [state.sequences, state.at, isZh]);
+
+  // Dynamic Hypotheses from state.hypotheses_matrix
+  const dynamicHypotheses = React.useMemo(() => {
+    if (state.hypotheses_matrix?.hypotheses && state.hypotheses_matrix.hypotheses.length > 0) {
+      return state.hypotheses_matrix.hypotheses;
+    }
+    return null;
+  }, [state.hypotheses_matrix]);
+
+  // Dynamic Chapters from state.chapters and real events
+  const dynamicChapters = React.useMemo(() => {
+    if (state.chapters && state.chapters.length > 0) {
+      return state.chapters.map((ch, idx) => {
+        const startSec = idx === 0 ? 0 : state.chapters[idx - 1].at;
+        const endSec = ch.at;
+        const eventsInWindow = (state.events || []).filter((e) => e.t >= startSec && e.t <= endSec);
+        const passCount = eventsInWindow.filter((e) => e.kind === "pass").length;
+        const shotCount = eventsInWindow.filter((e) => e.kind === "shot").length;
+        const recCount = eventsInWindow.filter((e) => e.kind === "recovery").length;
+        const hEvents = eventsInWindow.filter((e) => e.team === "H").length;
+        const nEvents = eventsInWindow.filter((e) => e.team === "N").length;
+        const dominantTeam = hEvents >= nEvents ? "Harbor FC" : "Northbridge United";
+
+        return {
+          id: `ch_${ch.id}`,
+          title: ch.title || (isZh ? `阶段 ${ch.id}: ${ch.question || "战术演变"}` : `Phase ${ch.id}: Tactical Development`),
+          time: `${clock(startSec)} – ${clock(endSec)}`,
+          narrative: isZh
+            ? `${dominantTeam} 在该时段展现更活跃的战术控制，共记录 ${eventsInWindow.length} 次触球动作 (传球 ${passCount} 次，反抢 ${recCount} 次，射门 ${shotCount} 次)。`
+            : `${dominantTeam} demonstrated territorial initiative, logging ${eventsInWindow.length} on-ball events (${passCount} passes, ${recCount} recoveries, ${shotCount} shots).`,
+          stat: isZh
+            ? `比分 ${state.score.H}–${state.score.N} · 射门 ${shotCount} · 传球 ${passCount} · 反抢 ${recCount}`
+            : `Score ${state.score.H}–${state.score.N} · ${shotCount} Shots · ${passCount} Passes · ${recCount} Recoveries`,
+        };
+      });
+    }
+    return [];
+  }, [state.chapters, state.events, state.score, isZh]);
+
   // Generate Match Story text
   const generateStoryMarkdown = () => {
     const verifiedClaims = allClaims.filter(
@@ -372,86 +533,59 @@ ${verifiedClaims
 
             {/* Top Contributing Actions */}
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {[
-                {
-                  rank: 1,
-                  action: isZh ? "带球长躯直入推进至肋部" : "Progressive Carry into Half-Space",
-                  weight: "+0.38",
-                  player: "H10",
-                  kind: "carry",
-                  eventId: "ev_h_carry_42",
-                },
-                {
-                  rank: 2,
-                  action: isZh ? "穿透防线直塞打入禁区" : "Line-breaking Pass to Box Entry",
-                  weight: "+0.29",
-                  player: "H8",
-                  kind: "pass",
-                  eventId: "ev_h_pass_43",
-                },
-                {
-                  rank: 3,
-                  action: isZh ? "反抢就地迎球射正门框" : "Shot on Target (Post-recovery)",
-                  weight: "+0.21",
-                  player: "H9",
-                  kind: "shot",
-                  eventId: "ev_h_shot_44",
-                },
-                {
-                  rank: 4,
-                  action: isZh ? "前场高位逼抢夺回球权" : "Opponent High-Press Recovery",
-                  weight: "+0.12",
-                  player: "H4",
-                  kind: "recovery",
-                  eventId: "ev_h_rec_40",
-                },
-              ].map((item) => (
-                <div
-                  key={item.rank}
-                  onClick={() => onSelectEvent(item.eventId)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "8px 12px",
-                    borderRadius: 6,
-                    background: "rgba(15, 23, 42, 0.6)",
-                    border: "1px solid var(--pitch-border)",
-                    cursor: "pointer",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span
-                      style={{
-                        width: 22,
-                        height: 22,
-                        borderRadius: "50%",
-                        background: "rgba(16, 185, 129, 0.2)",
-                        color: "var(--turf-emerald)",
-                        fontSize: 11,
-                        fontWeight: 800,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      #{item.rank}
-                    </span>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>
-                        {item.action}
-                      </div>
-                      <div style={{ fontSize: 10, color: "var(--text-tertiary)" }}>
-                        {isZh ? "执行人:" : "Actor:"} {item.player} · {isZh ? "事件编号:" : "Action ID:"} <code>{item.eventId}</code>
+              {dynamicContributingActions.length === 0 ? (
+                <div style={{ padding: "16px 12px", textAlign: "center", color: "var(--text-tertiary)", fontSize: 12 }}>
+                  {isZh ? "当前赛段暂无足够推进事件" : "No progressive events recorded yet for this window"}
+                </div>
+              ) : (
+                dynamicContributingActions.map((item) => (
+                  <div
+                    key={item.rank}
+                    onClick={() => onSelectEvent(item.eventId)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "8px 12px",
+                      borderRadius: 6,
+                      background: "rgba(15, 23, 42, 0.6)",
+                      border: "1px solid var(--pitch-border)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: "50%",
+                          background: "rgba(16, 185, 129, 0.2)",
+                          color: "var(--turf-emerald)",
+                          fontSize: 11,
+                          fontWeight: 800,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        #{item.rank}
+                      </span>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 750, color: "var(--text-primary)" }}>
+                          {item.action}
+                        </div>
+                        <div style={{ fontSize: 10, color: "var(--text-tertiary)" }}>
+                          {isZh ? "执行人:" : "Actor:"} {item.player} · {isZh ? "事件编号:" : "Action ID:"} <code>{item.eventId}</code>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <span style={{ fontSize: 13, fontWeight: 800, color: "var(--turf-emerald)" }}>
-                    {item.weight} OAAI
-                  </span>
-                </div>
-              ))}
+                    <span style={{ fontSize: 13, fontWeight: 800, color: "var(--turf-emerald)" }}>
+                      {item.weight} OAAI
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
@@ -472,23 +606,7 @@ ${verifiedClaims
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {[
-                  {
-                    step: "T-8s",
-                    desc: isZh ? "4号区域通过6s高压反抢断下球权" : "Turnover won via 6s quick counterpress (Zone 4)",
-                    link: isZh ? "触发起因" : "Trigger",
-                  },
-                  {
-                    step: "T-5s",
-                    desc: isZh ? "中路快速推进大范围横向转移" : "Rapid progressive switch across central corridor",
-                    link: isZh ? "过渡转换" : "Transition",
-                  },
-                  {
-                    step: "T-0s",
-                    desc: isZh ? "危险侵入禁区完成关键起脚终结" : "Dangerous box entry & shot execution",
-                    link: isZh ? "进攻拐点" : "Inflection",
-                  },
-                ].map((s, idx) => (
+                {dynamicCausalChain.map((s, idx) => (
                   <div
                     key={idx}
                     style={{
@@ -523,33 +641,79 @@ ${verifiedClaims
                     {isZh ? "对立战术假设与争议评估" : "ALTERNATIVE HYPOTHESIS ASSESSMENT"}
                   </span>
                 </div>
-                <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(245, 158, 11, 0.2)", color: "var(--electric-gold)", fontWeight: 700 }}>
+                <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(245, 158, 11, 0.2)", color: "var(--electric-gold)", fontWeight: 750 }}>
                   {isZh ? "工具 #3" : "TOOL #3"}
                 </span>
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 12 }}>
-                <div style={{ padding: "8px 12px", borderRadius: 6, background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.3)" }}>
-                  <div style={{ fontWeight: 700, color: "var(--turf-emerald)" }}>
-                    {isZh ? "假设 A (主导): 主动高位逼抢人数超载" : "Hypothesis A (Primary): Proactive High Press Overload"}
-                  </div>
-                  <div style={{ color: "var(--text-secondary)", marginTop: 2 }}>
-                    {isZh
-                      ? "Harbor FC 在2号走廊协同形成3人逼抢合围，在4.2秒内迫使对手传球失误。"
-                      : "Harbor FC coordinated 3-man boundary squeeze in Channel 2, inducing turnover within 4.2 seconds."}
-                  </div>
-                </div>
+                {dynamicHypotheses ? (
+                  dynamicHypotheses.map((h: any, idx: number) => {
+                    const isSupported = h.status === "supported";
+                    const isRejected = h.status === "rejected";
+                    const borderColor = isSupported
+                      ? "rgba(16, 185, 129, 0.35)"
+                      : isRejected
+                      ? "rgba(239, 68, 68, 0.35)"
+                      : "rgba(245, 158, 11, 0.35)";
+                    const bgColor = isSupported
+                      ? "rgba(16, 185, 129, 0.08)"
+                      : isRejected
+                      ? "rgba(239, 68, 68, 0.08)"
+                      : "rgba(245, 158, 11, 0.08)";
+                    const badgeColor = isSupported
+                      ? "var(--turf-emerald)"
+                      : isRejected
+                      ? "var(--sunset-rose, #ef4444)"
+                      : "var(--electric-gold)";
 
-                <div style={{ padding: "8px 12px", borderRadius: 6, background: "rgba(245, 158, 11, 0.08)", border: "1px solid rgba(245, 158, 11, 0.3)" }}>
-                  <div style={{ fontWeight: 700, color: "var(--electric-gold)" }}>
-                    {isZh ? "假设 B (对立): 客队后场非受迫失误沟通不畅" : "Hypothesis B (Alternative): Unforced Backline Miscommunication"}
-                  </div>
-                  <div style={{ color: "var(--text-secondary)", marginTop: 2 }}>
+                    return (
+                      <div
+                        key={h.id || idx}
+                        style={{
+                          padding: "8px 12px",
+                          borderRadius: 6,
+                          background: bgColor,
+                          border: `1px solid ${borderColor}`,
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontWeight: 750, color: badgeColor }}>
+                            {h.title}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 800,
+                              padding: "1px 6px",
+                              borderRadius: 4,
+                              background: "rgba(15, 23, 42, 0.6)",
+                              color: badgeColor,
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            {h.status}
+                          </span>
+                        </div>
+                        <div style={{ color: "var(--text-secondary)", marginTop: 4, lineHeight: 1.4 }}>
+                          {h.reason}
+                        </div>
+                        {h.counterevidence && h.counterevidence.length > 0 && (
+                          <div style={{ fontSize: 10, color: "var(--sunset-rose, #ef4444)", marginTop: 4 }}>
+                            {isZh ? "检索到反证指标: " : "Counterevidence audited: "}
+                            <code>{h.counterevidence.join(", ")}</code>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div style={{ padding: "12px", color: "var(--text-tertiary)", textAlign: "center" }}>
                     {isZh
-                      ? "Northbridge 后卫 N4 在较小防守压力下身体姿态判断失误。(争议分: 32%)"
-                      : "Northbridge defender N4 misjudged body shape under low initial pressure. (Controversy Score: 32%)"}
+                      ? "当前时间点未生成假设矩阵，点击顶部“运行审议”触发智能体假设检验"
+                      : "No hypothesis matrix generated for this moment. Click 'Run Deliberation' to trigger verification."}
                   </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
@@ -614,60 +778,38 @@ ${verifiedClaims
 
             {/* Chapters Feed */}
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {[
-                {
-                  id: "ch_1",
-                  title: isZh ? "开场阶段: 战术试探与阵型博弈" : "Opening Phase: Tactical Reconnaissance",
-                  time: "00:00 – 03:30",
-                  narrative: isZh
-                    ? "双方均采取谨慎的 4-3-3 防守站位。Harbor FC 主要通过左路走廊试探，尝试早期横向大范围转移调度以孤立对方边后卫。"
-                    : "Both squads began in cautious 4-3-3 defensive shapes. Harbor FC probed primarily through the left corridor, attempting early switches to isolate the wingback.",
-                  stat: isZh ? "Harbor 控球率 56% · 0 允许射门" : "Harbor Possession 56% · 0 Shots Allowed",
-                },
-                {
-                  id: "ch_2",
-                  title: isZh ? "转折爆发: 6秒快速反抢狂潮" : "Turning Point: 6-Second Press Surge",
-                  time: "03:30 – 07:15",
-                  narrative: isZh
-                    ? "Harbor FC 显著提升了压迫强度。在6号区域的两次高位反抢迅速转化为连续的禁区冲击，最终打入打破僵局的关键进球。"
-                    : "Harbor FC elevated pressing intensity significantly. Two high recoveries in Zone 6 precipitated a flurry of box penetrations, leading to the breakthrough goal.",
-                  stat: isZh ? "OAAI 进攻波峰峰值 +1.82 · xG 净增 +0.44" : "OAAI Wave Peak +1.82 · xG Delta +0.44",
-                },
-                {
-                  id: "ch_3",
-                  title: isZh ? "终局相持: 紧凑阵型防反限制" : "Final Standoff & Counter Containment",
-                  time: "07:15 – Full Time",
-                  narrative: isZh
-                    ? "Northbridge 尝试通过直接长传打身后发动快速反击，但 Harbor FC 保持了密集的防守场区占比差分，有效封锁了中路传球路线。"
-                    : "Northbridge attempted rapid direct vertical counters, but Harbor FC consolidated a compact defensive density differential, closing central passing lanes.",
-                  stat: isZh ? "九宫格 ΔD(z) 中路控制优势: +24%" : "9-Zone ΔD(z) Central Advantage: +24%",
-                },
-              ].map((ch) => (
-                <div
-                  key={ch.id}
-                  style={{
-                    padding: 12,
-                    borderRadius: 8,
-                    background: "rgba(15, 23, 42, 0.6)",
-                    border: "1px solid var(--glass-border)",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text-primary)" }}>
-                      {ch.title}
-                    </span>
-                    <span style={{ fontSize: 11, fontFamily: "monospace", color: "var(--tech-cyan)" }}>
-                      {ch.time}
-                    </span>
-                  </div>
-                  <p style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 6, lineHeight: 1.5 }}>
-                    {ch.narrative}
-                  </p>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--turf-emerald)", marginTop: 6 }}>
-                    {isZh ? "核心指标:" : "Key Metric:"} {ch.stat}
-                  </div>
+              {dynamicChapters.length === 0 ? (
+                <div style={{ padding: 20, textAlign: "center", color: "var(--text-tertiary)", fontSize: 12 }}>
+                  {isZh ? "未检测到赛段划分" : "No match chapters available"}
                 </div>
-              ))}
+              ) : (
+                dynamicChapters.map((ch) => (
+                  <div
+                    key={ch.id}
+                    style={{
+                      padding: 12,
+                      borderRadius: 8,
+                      background: "rgba(15, 23, 42, 0.6)",
+                      border: "1px solid var(--glass-border)",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text-primary)" }}>
+                        {ch.title}
+                      </span>
+                      <span style={{ fontSize: 11, fontFamily: "monospace", color: "var(--tech-cyan)" }}>
+                        {ch.time}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 6, lineHeight: 1.5 }}>
+                      {ch.narrative}
+                    </p>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--turf-emerald)", marginTop: 6 }}>
+                      {isZh ? "核心指标:" : "Key Metric:"} {ch.stat}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 

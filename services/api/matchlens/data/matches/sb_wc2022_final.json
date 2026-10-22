@@ -9,12 +9,17 @@
     "away_team": "France",
     "home_score": 3,
     "away_score": 3,
-    "coverage_level": "C1",
+    "coverage_level": "C1_PARTIAL",
     "data_provider": "statsbomb_open_data",
-    "description": "Historic 2022 World Cup Final featuring Argentina tactical dominance in the first 70 minutes followed by Mbappe rapid comeback.",
+    "description": "2022 World Cup Final sample sequence (12 normalized events: Starting XI, Kick-off, early progression chains) for protocol validation and schema compatibility testing.",
     "license_ref": "StatsBomb Open Data Terms (CC BY-NC-SA 4.0)",
     "attribution_text": "Data provided by StatsBomb Open Data (https://github.com/statsbomb/open-data)",
-    "events_count": 12
+    "events_count": 12,
+    "capabilities": [
+      "schema_compatibility",
+      "starting_xi_verification",
+      "sample_spatial_drilldown"
+    ]
   },
   "events": [
     {
