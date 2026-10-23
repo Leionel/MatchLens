@@ -178,9 +178,10 @@ def compute_event_contribution(
         # Base shot weight + goal outcome bonus
         is_goal = outcome == "goal"
         base = cfg.shot_base_weight
-        # Approximate geometric xG based on goal proximity & angle if no explicit xG
-        dist_to_goal = math.sqrt((105.0 - ax_start) ** 2 + (34.0 - start_y) ** 2)
-        approx_xg = max(0.04, min(0.85, math.exp(-dist_to_goal / 14.0)))
+        # Compute pre-shot xG using goal visible angle & distance without outcome leakage
+        from .models.xg import compute_pre_shot_xg
+        shot_eval = compute_pre_shot_xg(x=ax_start, y=start_y, event_id=str(ev.get("id", "")), outcome=outcome)
+        approx_xg = shot_eval.pre_shot_xg
         magnitude = base + (approx_xg * cfg.xg_factor) + (cfg.goal_bonus_weight if is_goal else 0.0)
         explanation = f"Goal ({magnitude:.2f})" if is_goal else f"Shot attempt ({magnitude:.2f})"
 
@@ -191,12 +192,18 @@ def compute_event_contribution(
                 # If event is NormalizedEvent or can be evaluated by xt_model
                 norm_ev = ev["raw"] if isinstance(ev["raw"], NormalizedEvent) else None
                 if norm_ev is not None:
-                    xt_metric = xt_model.evaluate_progression(norm_ev)
-                    if xt_metric.value is not None:
-                        magnitude += max(0.0, xt_metric.value) * cfg.xt_factor
+                    eval_fn = getattr(xt_model, "evaluate_action", None) or getattr(xt_model, "evaluate_progression", None)
+                    xt_metric = eval_fn(norm_ev) if eval_fn else None
+                    if xt_metric is not None and xt_metric.value is not None:
+                        magnitude += max(0.0, float(xt_metric.value)) * cfg.xt_factor
+                    else:
+                        v_start = xt_model.value_at(ax_start, start_y)
+                        v_end = xt_model.value_at(ax_end, end_y)
+                        delta_xt = max(0.0, v_end - v_start)
+                        magnitude += delta_xt * cfg.xt_factor
                 else:
-                    v_start = xt_model.value_at(start_x, start_y)
-                    v_end = xt_model.value_at(end_x, end_y)
+                    v_start = xt_model.value_at(ax_start, start_y)
+                    v_end = xt_model.value_at(ax_end, end_y)
                     delta_xt = max(0.0, v_end - v_start)
                     magnitude += delta_xt * cfg.xt_factor
             except Exception:

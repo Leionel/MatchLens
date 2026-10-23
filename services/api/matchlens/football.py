@@ -982,11 +982,18 @@ def build_player_spotlight(state: dict, team: str | None = None) -> list[dict]:
             recs = [e for e in actor_events if e["kind"] == "recovery"]
             shots = [e for e in actor_events if e["kind"] == "shot"]
             goals = [e for e in shots if e["outcome"] == "goal"]
+            total_touches = len(actor_events)
+            avg_x_pos = (sum(attack_x(t_code, e["start"][0]) for e in actor_events) / total_touches) if total_touches > 0 else 50.0
+            cohort = "Forward" if avg_x_pos > 72.0 else ("Midfielder" if avg_x_pos >= 38.0 else "Defender")
             spotlight.append({
                 "player_id": pid,
                 "name": name,
                 "team": t_code,
                 "team_name": TEAMS[t_code],
+                "touches": total_touches,
+                "position_cohort": cohort,
+                "sample_sufficiency": "sufficient" if total_touches >= 10 else "low_sample_uncalibrated",
+                "percentile_disclaimer": "单场小样本绝对计数，不换算全联盟位置百分位排名以防小样本方差失真。",
                 "passes": len(passes),
                 "progressive_passes": len(prog_passes),
                 "progressive_distance": round(prog_dist, 1),

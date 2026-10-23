@@ -53,6 +53,46 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
   });
 
   const [copiedNotification, setCopiedNotification] = useState("");
+  const [backendStory, setBackendStory] = useState<any>(null);
+  const [backendAttribution, setBackendAttribution] = useState<any>(null);
+
+  const homeTeam = state.teams?.H || "Harbor FC";
+  const awayTeam = state.teams?.N || "Northbridge United";
+  const matchId = state.match_id || "syn_default";
+
+  // Fetch real MatchStoryEngine output
+  React.useEffect(() => {
+    let active = true;
+    fetch(`/api/matches/${matchId}/story?perspective=${perspective}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active && data) {
+          setBackendStory(data);
+        }
+      })
+      .catch((e) => console.warn("Failed to fetch story", e));
+    return () => {
+      active = false;
+    };
+  }, [matchId, perspective]);
+
+  // Fetch real EventAttributionSpecialist output
+  React.useEffect(() => {
+    let active = true;
+    const at = state.at || 600;
+    const start = Math.max(0, at - 180);
+    fetch(`/api/matches/${matchId}/attribution?window_start=${start}&window_end=${at}&team=${state.focus_team || "H"}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active && data) {
+          setBackendAttribution(data);
+        }
+      })
+      .catch((e) => console.warn("Failed to fetch attribution", e));
+    return () => {
+      active = false;
+    };
+  }, [matchId, state.at, state.focus_team]);
 
   const clockText = clock(state.at || 0);
   const activeMoment = state.active_moment || null;
@@ -67,8 +107,25 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
     ...(state.history || []),
   ].filter((c, idx, arr) => arr.findIndex((x) => x.claim_id === c.claim_id) === idx);
 
-  // Dynamic Contributing Actions from real sequences / events
-  const dynamicContributingActions = React.useMemo(() => {
+  // Dynamic Contributing Actions from backend attribution or real sequences / events
+  const dynamicContributingActions = React.useMemo<Array<{
+    rank: number;
+    action: string;
+    weight: string;
+    player: string;
+    kind: string;
+    eventId: string;
+  }>>(() => {
+    if (backendAttribution?.window_decomposition?.top_contributors?.length > 0) {
+      return backendAttribution.window_decomposition.top_contributors.slice(0, 5).map((tc: any, idx: number) => ({
+        rank: idx + 1,
+        action: tc.explanation || (isZh ? `关键进攻贡献 (${tc.kind})` : `Key Action (${tc.kind})`),
+        weight: `${tc.signed_contribution > 0 ? `+${tc.signed_contribution.toFixed(2)}` : tc.signed_contribution.toFixed(2)}`,
+        player: tc.actor || (state.teams?.H ? `${state.teams.H} Player` : "Actor"),
+        kind: tc.kind,
+        eventId: tc.event_id,
+      }));
+    }
     if (state.sequences && state.sequences.length > 0) {
       const sortedSeqs = [...state.sequences].sort(
         (a, b) => (b.progressive_distance || 0) - (a.progressive_distance || 0)
@@ -135,7 +192,7 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
       }));
     }
     return [];
-  }, [state.sequences, state.events, state.teams, isZh]);
+  }, [backendAttribution, state.sequences, state.events, state.teams, isZh]);
 
   // Dynamic Causal Chain from real sequence progression
   const dynamicCausalChain = React.useMemo(() => {
@@ -198,13 +255,22 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
     ];
   }, [state.sequences, state.at, isZh]);
 
-  // Dynamic Hypotheses from state.hypotheses_matrix
+  // Dynamic Hypotheses from backend attribution or state.hypotheses_matrix
   const dynamicHypotheses = React.useMemo(() => {
+    if (backendAttribution?.alternative_hypotheses?.hypotheses?.length > 0) {
+      return backendAttribution.alternative_hypotheses.hypotheses.map((h: any) => ({
+        id: h.hypothesis_id,
+        title: h.name || h.description,
+        status: h.verdict === "supported" ? "supported" : h.verdict === "unsupported" ? "unsupported" : "contingent",
+        reason: h.rationale || h.description,
+        counterevidence: h.counterevidence_events || [],
+      }));
+    }
     if (state.hypotheses_matrix?.hypotheses && state.hypotheses_matrix.hypotheses.length > 0) {
       return state.hypotheses_matrix.hypotheses;
     }
     return null;
-  }, [state.hypotheses_matrix]);
+  }, [backendAttribution, state.hypotheses_matrix]);
 
   // Dynamic Chapters from state.chapters and real events
   const dynamicChapters = React.useMemo(() => {
@@ -218,7 +284,7 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
         const recCount = eventsInWindow.filter((e) => e.kind === "recovery").length;
         const hEvents = eventsInWindow.filter((e) => e.team === "H").length;
         const nEvents = eventsInWindow.filter((e) => e.team === "N").length;
-        const dominantTeam = hEvents >= nEvents ? "Harbor FC" : "Northbridge United";
+        const dominantTeam = hEvents >= nEvents ? homeTeam : awayTeam;
 
         return {
           id: `ch_${ch.id}`,
@@ -234,16 +300,19 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
       });
     }
     return [];
-  }, [state.chapters, state.events, state.score, isZh]);
+  }, [state.chapters, state.events, state.score, isZh, homeTeam, awayTeam]);
 
   // Generate Match Story text
   const generateStoryMarkdown = () => {
+    if (backendStory?.markdown_export) {
+      return backendStory.markdown_export;
+    }
     const verifiedClaims = allClaims.filter(
       (c) => approvedClaimIds[c.claim_id] !== false && (c.verdict === "publish" || c.verdict === "qualify")
     );
 
     return `# MATCHLENS AI MATCH STORY REPORT
-**Match**: Harbor FC (${state.score.H}) vs Northbridge United (${state.score.N})
+**Match**: ${homeTeam} (${state.score.H}) vs ${awayTeam} (${state.score.N})
 **Snapshot**: ${state.snapshot_id || "live-stream"} (at ${clockText})
 **Generated by**: Tri-Agent Deliberation Pipeline (Analyst + Event Attribution + Verifier)
 **Publication Gate**: Gate 2.0 Deterministic Verification (SHA256 Bound)
@@ -251,7 +320,7 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
 ---
 
 ## Executive Summary
-${card?.assertion || "Harbor FC exerted high territorial dominance through half-space penetration and rapid 6-second quick recoveries."}
+${backendStory?.executive_summary || card?.assertion || `${homeTeam} exerted high territorial dominance through half-space penetration and rapid 6-second quick recoveries.`}
 
 ### Verified Tactical Claims (${verifiedClaims.length} Approved):
 ${verifiedClaims
@@ -546,7 +615,7 @@ ${verifiedClaims
                   {isZh ? "当前赛段暂无足够推进事件" : "No progressive events recorded yet for this window"}
                 </div>
               ) : (
-                dynamicContributingActions.map((item) => (
+                dynamicContributingActions.map((item: any) => (
                   <div
                     key={item.rank}
                     onClick={() => onSelectEvent(item.eventId)}

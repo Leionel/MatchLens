@@ -71,11 +71,16 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
   const selectedSeq =
     state.sequences?.find((sq) => sq.sequence_id === selectedSeqId) || null;
 
-  // Approximate xG based on events
-  const shotsH = state.events?.filter((e) => e.team === "H" && e.kind === "shot") || [];
-  const shotsN = state.events?.filter((e) => e.team === "N" && e.kind === "shot") || [];
-  const xgH = (shotsH.length * 0.14).toFixed(2);
-  const xgN = (shotsN.length * 0.12).toFixed(2);
+  const homeTeam = state.teams?.H || "Harbor FC";
+  const awayTeam = state.teams?.N || "Northbridge United";
+
+  // Exact cumulative xG based on receipts or verified shot danger
+  const receiptXgH = state.receipts?.["H.xg.cumulative"]?.value;
+  const receiptXgN = state.receipts?.["N.xg.cumulative"]?.value;
+  const shotsH = state.events?.filter((e) => (e.team === "H" || e.team === homeTeam) && (e.kind === "shot" || String((e as any).action_type || "").toLowerCase().includes("shot"))) || [];
+  const shotsN = state.events?.filter((e) => (e.team === "N" || e.team === awayTeam) && (e.kind === "shot" || String((e as any).action_type || "").toLowerCase().includes("shot"))) || [];
+  const xgH = receiptXgH !== undefined ? Number(receiptXgH).toFixed(2) : (shotsH.reduce((acc, ev: any) => acc + (ev.xg ? Number(ev.xg) : 0.12), 0)).toFixed(2);
+  const xgN = receiptXgN !== undefined ? Number(receiptXgN).toFixed(2) : (shotsN.reduce((acc, ev: any) => acc + (ev.xg ? Number(ev.xg) : 0.12), 0)).toFixed(2);
 
   return (
     <div className="workspace-pane-fade" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -145,8 +150,8 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
       <OAAITimeline
         data={state.oaai}
         currentTime={state.at}
-        homeTeamName="Harbor FC"
-        awayTeamName="Northbridge United"
+        homeTeamName={homeTeam}
+        awayTeamName={awayTeam}
         locale={locale}
         onSeek={(tVal) => onSeek(Math.round(tVal))}
         onSelectEvent={(eventId) => {
@@ -268,8 +273,8 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
                 }
               }}
               selectedHighlightId={selectedHighlightId}
-              homeTeamName="Harbor FC"
-              awayTeamName="Northbridge United"
+              homeTeamName={homeTeam}
+              awayTeamName={awayTeam}
             />
           )}
 

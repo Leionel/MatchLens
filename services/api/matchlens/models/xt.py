@@ -161,6 +161,9 @@ class ExpectedThreatModel:
             uncertainty={"interpolation": self.interpolation_mode},
         )
 
+    # Alias for progression evaluation
+    evaluate_progression = evaluate_action
+
     def compare_with(
         self, other: Union[ExpectedThreatModel, dict, list[list[float]]]
     ) -> dict[str, Any]:

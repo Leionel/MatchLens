@@ -47,6 +47,7 @@ from .football import (
     reduce_match,
 )
 from .oaai import compute_oaai, OAAIConfig
+from .models.xt import ExpectedThreatModel
 from .exploration import (
     analyze_quick_recoveries,
     analyze_action_density_differential,
@@ -147,6 +148,7 @@ class Engine:
         self.scenario_events = {("default", 17): self.events}
         self.real_events: dict[str, list] = {}
         self.exploration_cache: dict[tuple, dict] = {}
+        self.xt_model = ExpectedThreatModel.load_default("16x12")
         self.sessions: dict[str, Session] = {}
         self.rates = RateLimits()
         self.ledger = BudgetLedger(runtime / "budget.sqlite3", int(os.getenv("MATCHLENS_MAX_REQUESTS", "32")), float(os.getenv("MATCHLENS_MAX_RESERVED_USD", "1.0")))
@@ -318,7 +320,7 @@ class Engine:
         else:
             sequences = build_sequences(state)
             tactical = build_tactical_explorer(state, s.focus_team)
-            oaai_data = compute_oaai(state["events"], dead_intervals=state.get("intervals"))
+            oaai_data = compute_oaai(state["events"], dead_intervals=state.get("dead_intervals", []), xt_model=self.xt_model)
             quick_rec = analyze_quick_recoveries(state["events"], window_seconds=6.0, target_team=s.focus_team)
             density_diff = analyze_action_density_differential(state["events"])
             channels = analyze_attacking_channels(state["events"], sequences=sequences, team=s.focus_team)
@@ -947,19 +949,22 @@ async def get_match_exploration(match_id: str, smoothing_mode: Literal["causal",
     channels_h = analyze_attacking_channels(events, team="H")
     channels_n = analyze_attacking_channels(events, team="N")
 
-    # If synthetic match, we can also extract rich sequences
+    # Extract rich sequences, tactical zones, drilldown, and highlights for both synthetic and real matches
     if match_id.startswith("syn_"):
         scenario_key = match_id.replace("syn_", "", 1)
         raw_events = generate_match(scenario=scenario_key)
         state = reduce_match(raw_events, 720)
-        sequences = build_sequences(state)
-        tactical = build_tactical_explorer(state, "H")
-        drilldown = build_spatial_sequence_drilldown(sequences, tactical.get("zone_cells"))
-        highlights = locate_highlights(raw_events, sequences, oaai_data=oaai_res)
     else:
-        sequences = []
-        drilldown = {"zone_to_sequences": {}, "sequence_to_zones": {}}
-        highlights = locate_highlights(events, sequences, oaai_data=oaai_res)
+        meta = MatchCatalog.get_match_meta(match_id)
+        max_duration = (meta.format_seconds if (meta and meta.format_seconds) else (720 if match_id.startswith("syn_") else 5400))
+        team_names = {"H": meta.home_team, "N": meta.away_team} if meta else None
+        state = reduce_match(events, at=max_duration, max_duration=max_duration, is_synthetic=False, team_names=team_names)
+        raw_events = events
+
+    sequences = build_sequences(state)
+    tactical = build_tactical_explorer(state, "H")
+    drilldown = build_spatial_sequence_drilldown(sequences, tactical.get("zone_cells"))
+    highlights = locate_highlights(raw_events, sequences, oaai_data=oaai_res)
 
     return {
         "match_id": match_id,
@@ -970,6 +975,21 @@ async def get_match_exploration(match_id: str, smoothing_mode: Literal["causal",
         "sequences": sequences,
         "spatial_drilldown": drilldown,
         "highlights": highlights,
+    }
+
+
+@app.get("/api/xt/grid")
+async def get_xt_grid(resolution: Literal["16x12", "12x8"] = "16x12"):
+    from .models.xt import ExpectedThreatModel
+    model = ExpectedThreatModel.load_default(resolution)
+    return {
+        "model_name": model.model_name,
+        "model_version": model.model_version,
+        "grid_resolution": {"nx": model.nx, "ny": model.ny},
+        "values": model.values,
+        "pitch_length": model.pitch_length,
+        "pitch_width": model.pitch_width,
+        "metadata": model.metadata,
     }
 
 

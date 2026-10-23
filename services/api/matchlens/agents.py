@@ -70,9 +70,22 @@ class Run:
 
 def instructions(role: str, focus_team: str = "H") -> str:
     t = "N" if focus_team == "N" else "H"
-    common = f"""You are MatchLens, analysing a synthetic football match. You MUST call get_evidence with the supplied snapshot_id at least once in your role's session before your first answer, even when another agent supplied evidence. A schema correction in the same session uses that existing evidence. Only tool evidence is authoritative. Return one JSON object, no markdown.
-Football: possession measures controlled time, entries measure passes crossing attacking x=70m, shots measure attempts. More possession alone is not increased threat. A shot after a recovery is an observed temporal association; it cannot establish pressing, coaching intent or causation. A short window cannot establish a whole-match trend. Goal chains show recorded on-ball events only. This continuous demo has NO HALFTIME or break: never say 'after the break', 'first half' or 'second half'. Say 'current/previous window'. Each complete window is 180 seconds; start/end/as_of are match seconds. Do not restate match length or window duration in prose; the UI shows exact times.
-Prose rules: describe only the selected assertion. No invented names, timings, coordinates, percentages or statistics. Public facts are rendered from the selected typed assertion and frozen receipts; your prose stays in the operator audit. The Verifier must still reject incorrect prose. Never spell any quantity, including 'one', 'eleven', or 'once'; use a referenced metric slot or omit that quantity. All numbers in fan/analyst/reason/limitations prose MUST be slots like {{{{{t}.shots.current}}}} with a matching ref; NEVER write literal digits or spelled-out number words like 'zero', 'twice', 'two shots' there. If you discuss or compare the previous window, you MUST include the corresponding .previous receipts in refs. No xG, pressing, formation, fatigue, coaching intent, 'caused', 'because', 'forced', 'proves' or guarantees in Fan/Analyst text. Use simple English. Fan: one lively useful sentence, at most 45 words. Analyst: evidence comparison and appropriate uncertainty, visibly different from Fan, at most 100 words. Reasons/limitations can explain lack of causal evidence without numbers. Do not put unsupported speculation in published text.
+    common = f"""You are MatchLens AI, an evidence-grounded football intelligence system adhering to the Four-Level Tactical Inference Framework:
+- Level 1 (Observable Facts): Direct counts and raw coordinates of completed passes, recoveries, shots, and goals.
+- Level 2 (Metric Attribution): Mathematical formula decompositions (e.g. OAAI, xT delta, Attacking Activity Index). Not tactical causality.
+- Level 3 (Statistical Association): Multi-event empirical correlation with rival hypothesis testing.
+- Level 4 (Causal Inference): Strictly guarded. Never claim causal tactical impact without 25Hz tracking, off-ball defensive shape, and counterfactual validation.
+
+You MUST call get_evidence with the supplied snapshot_id at least once in your role's session before your first answer, even when another agent supplied evidence. You may also use decompose_window, query_causal_chain, and assess_alternative_hypotheses to inspect event contributions, sequence chains, and rival explanations. Only tool evidence is authoritative. Return one JSON object, no markdown.
+
+Football principles:
+- Possession measures controlled ball time; entries measure passes crossing attacking third (x=70m); shots measure attempts.
+- More possession alone does NOT equal increased attacking threat.
+- A shot following a recovery is an observed temporal association (Level 1/2); it CANNOT prove high-press intent or tactical causation.
+- A short window cannot establish a whole-match tactical trend.
+- Goal chains show recorded on-ball actions only.
+- In continuous demo fixtures with no halftime, say 'current/previous window'. In multi-period matches, respect period boundaries. Each standard comparison window is 180 seconds; start/end/as_of are match seconds.
+- Prose rules: describe only the selected assertion. No invented names, timings, coordinates, percentages or statistics. All quantities in prose MUST be slots like {{{{{t}.shots.current}}}} with a matching ref; NEVER write literal digits or spelled-out number words like 'zero', 'twice', 'two shots'. If you discuss or compare the previous window, you MUST include the corresponding .previous receipts in refs. No ungrounded claims of 'fatigue', 'tactical brilliance', 'caused', 'because', or 'forced' in public text.
 """
     if role == "Analyst":
         task = f"""Investigate the candidate question using the receipts and selected events. Choose ONE useful supported core assertion, or propose a tentative assertion for review if evidence is insufficient. Do not select a verdict.
@@ -132,6 +145,46 @@ class AgentRunner:
             run.audit.append({"type": "tool", "role": role, "name": "get_sequence", "snapshot_id": run.snapshot.id, "sequence_id": sequence_id})
             return json.dumps({"snapshot_id": run.snapshot.id, "sequence": match}, separators=(",", ":"))
 
+        def decompose_window(window_seconds: float = 120.0) -> str:
+            """Decompose top contributing on-ball actions (shots, recoveries, progressive moves) in recent window."""
+            from .attribution import EventAttributionSpecialist
+            at = float(run.snapshot.data.get("as_of", 180))
+            w_start = max(0.0, at - float(window_seconds))
+            res = EventAttributionSpecialist.temporal_window_decomposition(
+                run.snapshot.data.get("events", []),
+                window_start_s=w_start,
+                window_end_s=at,
+                team=run.focus_team,
+            )
+            run.audit.append({"type": "tool", "role": role, "name": "decompose_window", "snapshot_id": run.snapshot.id})
+            return res.model_dump_json()
+
+        def query_causal_chain(target_event_id: str = "", lookback_seconds: float = 30.0) -> str:
+            """Query step-by-step backwards causal chain leading to a critical turn or shot."""
+            from .attribution import EventAttributionSpecialist
+            events = run.snapshot.data.get("events", [])
+            tid = target_event_id or (events[-1].get("id", events[-1].get("event_id", "")) if events else "")
+            res = EventAttributionSpecialist.causal_chain_query(
+                events, target_event_id=str(tid), lookback_seconds=float(lookback_seconds)
+            )
+            run.audit.append({"type": "tool", "role": role, "name": "query_causal_chain", "snapshot_id": run.snapshot.id, "target_event_id": str(tid)})
+            return res.model_dump_json()
+
+        def assess_alternative_hypotheses(primary_hypothesis: str = "") -> str:
+            """Assess candidate alternative rival hypotheses against empirical event receipts."""
+            from .attribution import EventAttributionSpecialist
+            at = float(run.snapshot.data.get("as_of", 180))
+            w_start = max(0.0, at - 180.0)
+            res = EventAttributionSpecialist.alternative_hypothesis_assessment(
+                run.snapshot.data.get("events", []),
+                primary_hypothesis=primary_hypothesis or "possession dominance",
+                window_start_s=w_start,
+                window_end_s=at,
+                team=run.focus_team,
+            )
+            run.audit.append({"type": "tool", "role": role, "name": "assess_alternative_hypotheses", "snapshot_id": run.snapshot.id})
+            return res.model_dump_json()
+
         async def before(request: httpx.Request) -> None:
             raw = request.content
             body = json.loads(raw)
@@ -172,7 +225,7 @@ class AgentRunner:
                 client = OpenAIChatCompletionClient(model="deepseek-flash", async_client=sdk,
                     function_invocation_configuration={"max_iterations": 3, "max_function_calls": 2})
                 agent = Agent(client=client, name=role, instructions=instructions(role, focus_team=run.focus_team),
-                    tools=[get_evidence, get_event_chain, get_sequence], default_options={"response_format": {"type": "json_object"},
+                    tools=[get_evidence, get_event_chain, get_sequence, decompose_window, query_causal_chain, assess_alternative_hypotheses], default_options={"response_format": {"type": "json_object"},
                     "extra_body": {"thinking": {"type": "disabled"}, "max_tokens": MAX_OUTPUT_TOKENS}})
                 session = agent.create_session()
                 response = await agent.run(prompt, session=session)

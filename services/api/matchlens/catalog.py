@@ -39,6 +39,7 @@ class MatchMetadata(BaseModel):
     license_ref: str
     attribution_text: Optional[str] = None
     events_count: Optional[int] = None
+    format_seconds: Optional[int] = None
     capabilities: list[str] = Field(default_factory=list)
 
 
@@ -100,6 +101,9 @@ class MatchCatalog:
             if m.match_id == match_id:
                 return m
         return None
+
+    # Alias for convenience
+    get_match_meta = get_match
 
     @classmethod
     def get_match_context(cls, match_id: str) -> MatchContext:

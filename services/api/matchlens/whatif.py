@@ -149,7 +149,7 @@ class WhatIfSandbox:
         xt_model = ExpectedThreatModel.load_default("16x12")
 
         # 1. Compute baseline factual metrics
-        base_oaai = compute_oaai(events, smoothing_mode="causal")
+        base_oaai = compute_oaai(events, smoothing_mode="causal", xt_model=xt_model)
         timeline = base_oaai.get("timeline", [])
         orig_amp = (
             sum(abs(float(p.get("oaai_value", 0.0))) for p in timeline) / max(1, len(timeline))
@@ -314,7 +314,7 @@ class WhatIfSandbox:
             perturbed_events = [ev for ev in events]
 
         # 3. Compute perturbed OAAI
-        pert_oaai = compute_oaai(perturbed_events, smoothing_mode="causal")
+        pert_oaai = compute_oaai(perturbed_events, smoothing_mode="causal", xt_model=xt_model)
         pert_timeline = pert_oaai.get("timeline", [])
         pert_amp = (
             sum(abs(float(p.get("oaai_value", 0.0))) for p in pert_timeline) / max(1, len(pert_timeline))
