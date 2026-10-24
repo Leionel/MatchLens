@@ -1,7 +1,7 @@
 # MatchLens AI — Next-Generation Architecture V2
 
 **Version**: 2.0
-**Code baseline**: `9abe7e3` (verified at the time of writing)
+**Code baseline**: `3746fee` backend / `ee388ed` web (verified at the time of writing)
 **Status legend**: `[CURRENT]` implemented in code · `[TARGET]` design target ·
 `[MIGRATION]` required transition · `[GAP]` known defect.
 
@@ -86,10 +86,11 @@ there is no account system or per-user draft ownership yet.
 | Agent | server process | call allow-listed tools with bounded args | SQL/Python/network/filesystem |
 | Model provider | external | return prose under schema | write registry directly |
 
-`[CURRENT]` token principals (`auth.py`) and single-worker session isolation.
+`[CURRENT]` token principals (`auth.py`), single-worker session isolation, and
+separate public/producer projections — the producer queue and rundown views
+require a token, while public reads expose only published fields.
 `[TARGET]` account/SSO system with per-user draft, rundown and investigation
-ownership. `[GAP]` public request paths and producer projections still share
-some read endpoints.
+ownership.
 
 ---
 
@@ -182,10 +183,12 @@ flowchart LR
 
 `[CURRENT]` content-addressed revision in `catalog.py`; snapshots and claims
 carry it; caches use it.
-`[MIGRATION]` enforce equality at every read boundary:
-`claim.dataset_revision == snapshot.dataset_revision == rundown.dataset_revision`.
-`[GAP]` Story/Export currently do not reject a claim with a mismatched dataset
-revision at read time. Broadcast rundown checks at build time but not at read.
+`[CURRENT]` equality is enforced at every read boundary through
+`registry.claim_validity(...)`, which compares
+`claim.dataset_revision == snapshot.dataset_revision` and the current revision
+pointer, payload and evidence hash. Story excludes invalid claims, the rundown GET
+revalidates, and export answers `409 rundown_contains_stale_claims` instead of
+publishing stale content.
 
 ### 5.3 Snapshot identity
 
@@ -208,10 +211,12 @@ currently in the dataset revision but not printed as separate fields).
 | `SPARSE_SAMPLE_FIXTURE` | protocol/schema sample | UI/demo only |
 | `INVALID_CORRUPTED` | schema, provider or integrity failure | rejected |
 
-`[CURRENT]` `C0 / C1 / C1_PARTIAL` and observable/time coverage fields.
-`[GAP]` `ingest.py` classifies completeness with
-`observed_end >= format_seconds - 60`; a sparse payload containing only start
-and final events can be mislabeled complete.
+`[CURRENT]` `C0 / C1 / C1_PARTIAL` coverage fields plus the five-state completeness
+verifier (`completeness.py`), which checks period coverage, event identity, clock
+bounds, team mapping and conversion drops. The retired
+`observed_end >= format_seconds - 60` heuristic no longer decides completeness, so
+a payload holding only the opening and final events is labelled
+`SPARSE_SAMPLE_FIXTURE`.
 
 ### 6.2 Dataset Completeness Verification `[TARGET]`
 
@@ -280,19 +285,20 @@ Rules:
 - A provider field absent from the payload is `missing_input`; a field that does
   not apply to the event is `not_applicable`.
 - Missing location excludes spatial terms but does not delete the event.
-- xG with no calibrated model is `not_calibrated` (target; current API reports
+- xG with no calibrated model is `not_calibrated` (the API distinguishes it from
   `not_available`), never a heuristic substitute.
 
-### 7.3 Known defects `[GAP]`
+### 7.3 Formerly open defects (closed at `3746fee`)
 
-1. `_receipt_key("goals", ...)` always returns `goals.match`, so a
-   current/previous request is labeled `current/previous` but uses match data.
-2. The `oaai` branch computes the full timeline and picks the global absolute
-   peak; it ignores team and window.
-3. Charts still call `exploration.py` / `oaai.py` directly in places, so
-   Registry and chart definitions are not yet one service.
-4. OAAI contribution events are not exposed as a recomputable ledger in
-   MetricObservation.
+1. ~~`_receipt_key("goals", ...)` always returned `goals.match`~~ — receipts are
+   keyed `{team}.{metric}.{window}` and goals are counted inside the window.
+2. ~~The `oaai` branch ignored team and window~~ — the query resolves a
+   team-specific smoothed peak within the requested window.
+3. **Partially open**: Match Center receipts and the investigation ledger read
+   the Registry, but story phase chapters still count events directly (`B-04`).
+4. ~~OAAI contributions were not a recomputable ledger~~ —
+   `compute_oaai_contribution_ledger` exposes per-event weight, effective decay
+   and team contribution, reconciled against the raw team intensity.
 
 ### 7.4 Migration `[MIGRATION]`
 
@@ -494,15 +500,19 @@ snapshot/dataset revision may write the registry.
 
 ## 10. Claim and Revision Lifecycle
 
-### 10.1 Current `[CURRENT / GAP]`
+### 10.1 Current `[CURRENT]`
 
 - Claim records are persisted with gate/editorial status.
 - `ClaimRevision` rows exist and are exposed by `/api/claims/history`.
 - `broadcastable` requires gate approved, editorial approved, current lifecycle.
-- **Gap**: `_append_revision()` mutates the previous revision's
-  `status="superseded"`; the revision payload is therefore not fully immutable.
-- **Gap**: a narrowed revision reuses the original statement and evidence scope;
-  it only changes lifecycle status. That is not a new verified conclusion.
+- `_append_revision()` appends a `SupersessionEvent` and moves the current
+  pointer; historical payloads are not rewritten (verified by
+  `test_claim_revision_history_is_append_only`).
+- A narrowed revision requires a changed statement or evidence scope and re-runs
+  the gate; a gate rejection downgrades to `disputed` instead of publishing the
+  broader original wording.
+- **Remaining gap**: records written before the `claim-registry-v2` layout carry
+  no payload hash and need a migration review.
 
 ### 10.2 Target model `[TARGET]`
 
@@ -682,8 +692,10 @@ and saved analysis affect selection, ordering and presentation only. They may no
 alter facts, metric values, claim levels, gate verdicts or editorial status.
 Preferences are stored separately from the claim/evidence store.
 
-`[CURRENT]` workspace/selection state exists in memory; no URL synchronization.
-`[GAP]` Investigation UI still requires manual focus IDs.
+`[CURRENT]` workspace, match, clock, event and sequence selection are synchronized
+to the URL, restored on refresh and followed by back/forward. Selecting an OAAI
+peak seeds an investigation directly, so the journey needs no manually typed IDs;
+the focus-ID field remains as an advanced control.
 
 ---
 
@@ -713,8 +725,9 @@ hashing; epoch guards.
 - Old Story/Investigation responses are rejected by match/snapshot/as-of.
 - Match switch clears session caches, revisions, state.
 
-`[GAP]` Cross-session idempotency keys are global in the registry; a key is not
-scoped per producer/session.
+`[CURRENT]` challenge idempotency records `owner_id` and is looked up per
+owner and match, so a key replayed from a different session is not silently
+reused by that session's history.
 
 ---
 
@@ -805,8 +818,9 @@ demo and tests green.
 - Audit records are append-only; deletion of runs/claims requires an explicit
   retention operation outside the request path.
 
-`[GAP]` token model is not a full account system; cross-session idempotency keys
-need owner scoping; queue/rundown projections need separation.
+`[GAP]` the token model is not a full account system: identity comes from a
+shared producer token rather than named users, so per-user draft ownership and
+re-review workflows remain open (`E-05`, `E-06`).
 
 ---
 
@@ -817,7 +831,7 @@ need owner scoping; queue/rundown projections need separation.
 3. A Snapshot never contains events after `as_of`.
 4. A claim identity includes match + snapshot; claim ID alone is not identity.
 5. A revision payload is immutable; only the current pointer and supersession
-   events move (target; currently `DEF-04`/`DEF-05`).
+   events move (enforced since `3746fee`; pre-v2 records still need migration).
 6. Only the same Run identity may commit a claim.
 7. Editorial approval requires a server-authorized principal.
 8. A withdrawn, superseded or stale-revision claim cannot enter a rundown or
@@ -840,12 +854,12 @@ need owner scoping; queue/rundown projections need separation.
 
 | Layer | Current | Target |
 | --- | --- | --- |
-| Dataset identity | content hash, versions, provider IDs | completeness verifier + per-period receipt |
-| Metrics | registry API + known window bugs | definition/computation/observation separated |
-| Investigation | deterministic fixed plan | typed intent + state machine + tool registry |
+| Dataset identity | content hash + completeness verifier with five states and per-period receipts | pre-v2 record migration; provider-side coverage reconciliation |
+| Metrics | definition/computation/observation separated; team×window receipts | story phase chapters read the same receipts (B-04 residual) |
+| Investigation | typed intent + bounded state machine + tool registry + promotion | agent-planned routing; retry/backoff on tool failure |
 | Agents | Analyst → Verifier | optional bounded Specialist stage, tested |
-| Claims | registry + revisions (prior status mutation) | immutable payload + current pointer |
-| Evidence | graph with gates/challenges | revision and observation nodes, read-time validity |
-| Broadcast | queue/rundown/export | public/producer projections + stale checks |
-| Product | four cockpit workspaces | hub → detail → explorer → studio with URL state |
+| Claims | immutable payload + current pointer + supersession events | free-form claim coverage beyond the five assertions |
+| Evidence | graph with gates/challenges + read-time validity | observation nodes for every metric read |
+| Broadcast | public/producer projections, read-time stale checks, manifest | accounts-based review, re-review lifecycle |
+| Product | hub → match center → explorer → story/producer with URL state | real-device and screen-reader pass; CI browser job |
 | Evaluation | deterministic/contract only | live ablation + real-data research |

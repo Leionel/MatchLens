@@ -1,7 +1,7 @@
 # MatchLens AI — Product Upgrade Roadmap V2
 
 **Version**: 2.0
-**Code baseline**: `9abe7e3`
+**Code baseline**: `3746fee` (backend) / `ee388ed` (web)
 **Status authority**: `CAPABILITY_STATUS.md`
 **Architecture contract**: `NEXT_GENERATION_ARCHITECTURE.md`
 
@@ -34,8 +34,10 @@ agent without an experiment.
 
 ## 2. Current Baseline
 
-At `9abe7e3`, code and executed tests support this split. The capability matrix is
-the authority; “present” is not “verified”.
+At `3746fee` (backend) and `ee388ed` (web), code and executed tests support this split.
+The capability matrix is the authority; “present” is not “verified”. Batch 1, Batch 2
+and the named Batch 3 items are closed; the defects below are recorded with the
+evidence that closed them.
 
 **Verified by executed tests**
 
@@ -81,38 +83,38 @@ Defect IDs use the `DEF-` prefix so they never collide with Track D work items
 
 | ID | Defect | Evidence | Status | Severity |
 | --- | --- | --- | --- | --- |
-| DEF-01 | Goals metric uses match receipt for any window | `metrics.py::_receipt_key` L218-220; query L270 | Confirmed | P0 |
-| DEF-02 | OAAI metric ignores team/window | `metrics.py` OAAI branch L321-328 | Confirmed | P0 |
-| DEF-03 | Ingest completeness uses only observed_end | `ingest.py` L69-73 | Confirmed | P0 |
-| DEF-04 | Revision append mutates prior revision status | `registry.py::_append_revision` L198 | Confirmed | P0 |
-| DEF-05 | Narrowed claim reuses original statement/scope | `registry.py` L217 | Confirmed | P0 |
-| DEF-06 | Investigation question only affects ID | `investigation.py` L280 | Confirmed | P0 |
-| DEF-07 | Invalid focus can degrade to generic metrics | `investigation.py` L144-160 | Confirmed | P1 |
-| DEF-08 | Moment/Sequence IDs conflated | `investigation.py` L152-155 | Confirmed | P1 |
-| DEF-09 | Broadcast queue exposes full claim record | `main.py` L1546-1556 | Confirmed | P1 |
-| DEF-10 | Rundown read does not revalidate current claim | `main.py` L1584-1590 | Confirmed | P0 |
-| DEF-11 | Charts still call old exploration/OAAI paths | `exploration.py`, `oaai.py`; web `page.tsx` L279/L292 | Confirmed | P1 |
-| DEF-12 | Story/export do not explicitly require dataset revision equality | `stories.py` L137-148; `main.py` L1593-1625 | Partially Fixed (requires verification) | P1 |
-| DEF-13 | Investigation UI needs manually typed IDs | `InvestigationPanel.tsx` focus inputs | Confirmed | P1 |
-| DEF-14 | Third Specialist Agent absent | `agents.py` two-stage workflow L312 | Confirmed (not implemented) | Research |
-| DEF-15 | Real data remains a partial fixture | `services/api/matchlens/data/matches/sb_wc2022_final.json` (12 events) | Confirmed (external) | External |
+| DEF-01 | Goals metric uses match receipt for any window | `metrics.py::_receipt_key`; tests `test_goals_metric_respects_team_and_window` | Fixed at `3746fee` | P0 |
+| DEF-02 | OAAI metric ignores team/window | ledger-backed query; tests `test_oaai_metric_respects_team_and_window_and_ledger_recomputes` | Fixed at `3746fee` | P0 |
+| DEF-03 | Ingest completeness uses only observed_end | `completeness.verify_dataset_completeness`; tests `test_import_does_not_mark_end_time_as_complete`, `test_catalog_listing_agrees_with_context_completeness` | Fixed at `3746fee` | P0 |
+| DEF-04 | Revision append mutates prior revision status | `registry._append_revision` appends a `SupersessionEvent`; test `test_claim_revision_history_is_append_only` | Fixed at `3746fee` | P0 |
+| DEF-05 | Narrowed claim reuses original statement/scope | `contracts._revised_observational_card` writes new statement/scope and re-runs the gate | Fixed at `3746fee` | P0 |
+| DEF-06 | Investigation question only affects ID | `investigation.classify_intent` drives metrics, tools and gate preview; tests `test_investigation_intent_changes_plan_and_invalid_focus_is_rejected` | Fixed at `3746fee` | P0 |
+| DEF-07 | Invalid focus can degrade to generic metrics | focus errors raise `ToolError` and end in `FAILED` with `unresolved` reasons | Fixed at `3746fee` | P1 |
+| DEF-08 | Moment/Sequence IDs conflated | typed `scope` per focus type (event/sequence/moment/oaai_point/player/zone/metric) | Fixed at `3746fee` | P1 |
+| DEF-09 | Broadcast queue exposes full claim record | `broadcast.public_claim_projection` vs `producer_claim_projection`; `/api/broadcast/queue/producer` is token-gated | Fixed at `3746fee` | P1 |
+| DEF-10 | Rundown read does not revalidate current claim | GET `/api/broadcast/rundown` revalidates; export returns 409 `rundown_contains_stale_claims`; UI re-reads after an editorial decision | Fixed at `3746fee` | P0 |
+| DEF-11 | Charts still call old exploration/OAAI paths | Match Center quick stats and the investigation ledger read registry receipts; story phase chapters still count events directly | Partially fixed (see B-04) | P1 |
+| DEF-12 | Story/export do not explicitly require dataset revision equality | `registry.claim_validity` compares dataset revision, current pointer, payload and evidence hash at read time; test `test_public_producer_projection_and_stale_rundown` | Fixed at `3746fee` | P1 |
+| DEF-13 | Investigation UI needs manually typed IDs | OAAI peak → `调查这个峰值` → seeded auto-run (`InvestigationSeed`) | Fixed at `ee388ed` | P1 |
+| DEF-14 | Third Specialist Agent absent | `agents.py` two-stage workflow; attribution remains a deterministic tool layer | Open by design (not implemented) | Research |
+| DEF-15 | Real data remains a partial fixture | `sb_wc2022_final.json` (12 events) is now labelled `SPARSE_SAMPLE_FIXTURE` in the hub, context and rail | Open (external data); labelling fixed at `3746fee` | External |
 
 ---
 
 ## 4. Capability Gaps
 
-| Gap | Impact | Closure item |
-| --- | --- | --- |
-| No complete licensed match | no full-match/agent generalization claim | B-01/B-02 |
-| Metrics not one service | chart/ask/story numbers can diverge | B-04/A-01 |
-| Immutable revisions | audit cannot prove historical wording | A-02 |
-| Investigation doesn't understand questions | generic reports, poor agency | C-01/C-03/C-05 |
-| Producer projections | internal approvals visible | A-05 |
-| Read-time validity | withdrawn content can be read from old rundown | A-04 |
-| No URL state | refresh/back/deep link fail | D-03 |
-| No chart→investigation handoff | user copies IDs | C-02 |
-| No live ablation | multi-agent value unproven | F-01 |
-| No calibrated xG/xT | quality metrics not available | B-06/B-07 |
+| Gap | Impact | Closure item | Status |
+| --- | --- | --- | --- |
+| No complete licensed match | no full-match/agent generalization claim | B-01/B-02 | Open — external data |
+| Metrics not one service | chart/ask/story numbers can diverge | B-04/A-01 | Mostly closed; story phase counts remain |
+| Immutable revisions | audit cannot prove historical wording | A-02 | Closed at `3746fee` |
+| Investigation doesn't understand questions | generic reports, poor agency | C-01/C-03/C-05 | Closed at `3746fee` |
+| Producer projections | internal approvals visible | A-05 | Closed at `3746fee` |
+| Read-time validity | withdrawn content can be read from old rundown | A-04 | Closed at `3746fee` |
+| No URL state | refresh/back/deep link fail | D-03 | Closed at `ee388ed` |
+| No chart→investigation handoff | user copies IDs | C-02 | Closed at `ee388ed` |
+| No live ablation | multi-agent value unproven | F-01 | Open — budget/authorization |
+| No calibrated xG/xT | quality metrics not available | B-06/B-07 | Open — research |
 
 ---
 
@@ -338,7 +340,7 @@ research value; they are not a uniform P0 list.
 ### Track A — Trust, Identity & Runtime
 
 #### A-01 — Metrics window and team semantics (P0)
-- **Current Status**: Confirmed defect `DEF-01`/`DEF-02`.
+- **Current Status**: Implemented & Verified at `3746fee` — goals/OAAI resolve per team, window and coverage; xG reports `not_calibrated`.
 - **Goal**: Goals and OAAI respect team, window and coverage; match-only values
   are never returned under a window label.
 - **User Value**: The chart, Ask answer, Investigation and Story show the same
@@ -356,7 +358,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Corrected Metrics Service, tests and migration note.
 
 #### A-02 — Immutable revision payload (P0)
-- **Current Status**: Confirmed defect `DEF-04`/`DEF-05`.
+- **Current Status**: Implemented & Verified at `3746fee` — payloads are append-only; narrowed claims get a new statement/scope and re-pass the gate.
 - **Goal**: Historical revision payloads never change; only the current pointer
   and supersession events move.
 - **User Value**: A challenge history can be trusted; old wording, evidence and
@@ -379,7 +381,7 @@ research value; they are not a uniform P0 list.
   UI lands with the Investigation/Producer workspaces.
 
 #### A-03 — Dataset Completeness Verification (P0)
-- **Current Status**: Confirmed defect `DEF-03`.
+- **Current Status**: Implemented & Verified at `3746fee` — `completeness.py` verifies periods, IDs, clocks, team mapping and drops; five states feed ingest, catalog and hub.
 - **Goal**: Completeness is evidenced by dataset verification, not inferred from
   the last observed event.
 - **User Value**: A sparse sample is never presented as a complete match, and
@@ -399,7 +401,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Verifier, provenance receipt extension and status API/tests.
 
 #### A-04 — Read-time validity (P0)
-- **Current Status**: Partially Fixed (`DEF-10`, `DEF-12`); build-time checks exist.
+- **Current Status**: Implemented & Verified at `3746fee` — story, rundown GET and export revalidate current revision, lifecycle and dataset revision.
 - **Goal**: Withdrawn, superseded or dataset-mismatched claims never publish.
 - **User Value**: A broadcast cannot keep showing a conclusion that was retracted
   after the rundown was built.
@@ -415,7 +417,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Validity function, stale manifest and tests.
 
 #### A-05 — Public/Producer projections (P1)
-- **Current Status**: Confirmed defect `DEF-09`.
+- **Current Status**: Implemented & Verified at `3746fee` — public and producer projections are separate; the producer queue requires a token.
 - **Goal**: Public responses expose only publishable fields; producer responses
   include workflow data behind a principal.
 - **User Value**: Internal approval notes and identities are not leaked, while a
@@ -431,7 +433,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Projection models, endpoints and UI types.
 
 #### A-06 — Idempotency ownership (P1)
-- **Current Status**: Confirmed gap; keys are registry-global.
+- **Current Status**: Implemented & Verified at `3746fee` — challenge idempotency is owner- and match-scoped.
 - **Goal**: Scope idempotency keys to owner, match and key, so sessions cannot
   collide or replay each other's challenges.
 - **User Value**: Two producers can use the same key safely and a retry is
@@ -511,7 +513,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Identity registry and tests.
 
 #### B-04 — Migrate charts to Metrics Registry (P0)
-- **Current Status**: Confirmed divergence `DEF-11`.
+- **Current Status**: Partially implemented at `3746fee`/`ee388ed` — chart receipts read the registry; story phase chapters still count events directly.
 - **Goal**: One definition and one computation path for every chart, Ask, Agent,
   Story and export.
 - **User Value**: A chart value never contradicts the Investigation or Story value.
@@ -526,7 +528,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Migrated endpoints, adapters and tests.
 
 #### B-05 — OAAI contribution ledger (P1)
-- **Current Status**: Planned; no recomputable per-event ledger.
+- **Current Status**: Implemented & Verified at `3746fee` — `compute_oaai_contribution_ledger` plus `/api/oaai/ledger` reproduce weights, decay and team totals.
 - **Goal**: Explain an OAAI peak from actual contribution events.
 - **User Value**: A user can see which actions produced the peak instead of nearby
   unrelated events.
@@ -599,7 +601,7 @@ research value; they are not a uniform P0 list.
 ### Track C — Agentic Investigation
 
 #### C-01 — Typed intent and question routing (P0)
-- **Current Status**: Confirmed defect `DEF-06`/`DEF-07`.
+- **Current Status**: Implemented & Verified at `3746fee` — typed intents with `UNKNOWN` rejection; metric focus routes instead of failing.
 - **Goal**: The question changes the plan or is explicitly rejected.
 - **User Value**: An investigation answers the question asked instead of producing
   the same six-metric report every time.
@@ -614,7 +616,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Typed planner and tests.
 
 #### C-02 — Chart selection handoff (P0)
-- **Current Status**: Confirmed defect `DEF-13`; manual IDs.
+- **Current Status**: Implemented & Verified at `ee388ed` — chart selection seeds an auto-running investigation with no typed IDs.
 - **Goal**: One click from a chart, zone, player, edge or sequence into a scoped
   investigation.
 - **User Value**: No event IDs are copied by hand and the investigation is bound to
@@ -631,7 +633,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Shared selection contract and UI wiring.
 
 #### C-03 — Bounded tool registry (P1)
-- **Current Status**: Tools are embedded in the planner/agents; no unified registry.
+- **Current Status**: Implemented & Verified at `3746fee` — `tools.py` registry with per-tool budgets, receipts and no arbitrary execution.
 - **Goal**: Typed tool calls with budgets, receipts and no arbitrary execution.
 - **User Value**: Every investigation step is auditable and bounded.
 - **Affected Modules**: New tools module, `investigation.py`, `agents.py`.
@@ -645,7 +647,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Tool registry and tests.
 
 #### C-04 — Hypotheses and counterevidence (P1)
-- **Current Status**: Fixed predicates and thresholds.
+- **Current Status**: Implemented & Verified at `3746fee` — hypotheses carry supporting evidence, counterevidence, status and limitations.
 - **Goal**: Evidence-driven candidate explanations with rival tests.
 - **User Value**: The system shows why an explanation is supported and what could
   contradict it.
@@ -660,7 +662,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Hypothesis engine and tests.
 
 #### C-05 — Investigation state machine (P1)
-- **Current Status**: Planned; no persisted state or bounded transitions.
+- **Current Status**: Implemented & Verified at `3746fee` — bounded state machine with persisted plans and cancellation.
 - **Goal**: Bounded planning, querying, review, verification and withdrawal.
 - **User Value**: An investigation completes, retries or withholds predictably
   instead of looping or failing silently.
@@ -706,7 +708,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Experiment report and keep/reject decision.
 
 #### C-08 — Claim promotion (P1)
-- **Current Status**: Not implemented.
+- **Current Status**: Implemented & Verified at `3746fee`/`ee388ed` — confirmed claims register through the real gate and can then be challenged.
 - **Goal**: A user-confirmed investigation becomes a claim through the gate, with
   a challengeable revision history.
 - **User Value**: Analysis can be turned into publishable content without bypassing
@@ -742,7 +744,7 @@ research value; they are not a uniform P0 list.
 ### Track D — Football Product Experience
 
 #### D-01 — Match Hub (P1)
-- **Current Status**: Not implemented.
+- **Current Status**: Implemented & Verified at `ee388ed` — Match Hub lists catalog matches with verified completeness.
 - **Goal**: Discover, fixtures, results, competitions, seasons, teams, players,
   recent and saved entities.
 - **User Value**: A fan can find a match naturally and enter it in one flow.
@@ -757,7 +759,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Match Hub page.
 
 #### D-02 — Match Detail information architecture (P1)
-- **Current Status**: Cockpit is the entry; no match detail page.
+- **Current Status**: Implemented & Verified at `ee388ed` — hub → match detail with shared selection across workspaces.
 - **Goal**: Overview, statistics, timeline, lineups, shots/spatial, tactical, AI
   insights and story.
 - **User Value**: The score and key events are understandable without opening a
@@ -774,7 +776,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Match Detail page.
 
 #### D-03 — URL, deep-link and back state (P1)
-- **Current Status**: Not implemented.
+- **Current Status**: Implemented & Verified at `ee388ed` — workspace/match/at/event/sequence round-trip through the URL, refresh and back.
 - **Goal**: Encode workspace, match, snapshot, team, event, sequence, player, zone,
   investigation and claim in the URL.
 - **User Value**: Refresh, back/forward and shared links restore the same analysis.
@@ -789,7 +791,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: URL state layer.
 
 #### D-04 — Component decomposition (P2)
-- **Current Status**: Large components (`StoryAgentWorkbench`,
+- **Current Status**: Partially implemented at `ee388ed` — Hub, Producer and InvestigationPanel are separate components; `StoryAgentWorkbench` remains large.
   `TacticalLabWorkspace`).
 - **Goal**: Separate data hooks, selectors and presentational components without a
   new framework.
@@ -805,7 +807,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Refactored components.
 
 #### D-05 — Explain-any-chart loop (P1)
-- **Current Status**: Partial.
+- **Current Status**: Implemented & Verified at `ee388ed` — explain-any-chart hands off into a real investigation and ledger.
 - **Goal**: Chart selection → analytics query → evidence ledger → investigation →
   claim/challenge.
 - **User Value**: Any chart can be explained and challenged from the same place.
@@ -834,7 +836,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Personalization layer.
 
 #### D-07 — Responsive and accessibility (P1)
-- **Current Status**: CSS breakpoints only.
+- **Current Status**: Partially implemented at `ee388ed` — narrow-viewport probes at 390px and tablet 820px show no page overflow; real device and screen-reader pass outstanding.
 - **Goal**: Desktop, tablet, mobile, keyboard, focus, contrast and reduced motion.
 - **User Value**: The product is usable on real devices and by keyboard/screen
   reader users.
@@ -849,7 +851,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Responsive/a11y fixes.
 
 #### D-08 — Loading, error, empty and partial states (P2)
-- **Current Status**: Partial.
+- **Current Status**: Implemented & Verified at `ee388ed` — hub loading/error/empty states, withheld and failed investigation states, partial-coverage chips.
 - **Goal**: Explicit states for every workspace.
 - **User Value**: No silent zero or blank panel is mistaken for real data.
 - **Affected Modules**: Workspace components.
@@ -864,7 +866,7 @@ research value; they are not a uniform P0 list.
 ### Track E — Broadcast & Content Production
 
 #### E-01 — Producer workspace (P1)
-- **Current Status**: Approve/reject and export gate exist; no dedicated workspace.
+- **Current Status**: Implemented & Verified at `ee388ed` — producer workspace covers queue, approve/reject, ordering, validation, export and manifest.
 - **Goal**: Editorial queue, review, ordering, notes, preview and re-review in one
   workspace.
 - **User Value**: A producer can complete the content workflow without ad-hoc API
@@ -879,7 +881,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Producer workspace UI.
 
 #### E-02 — Public/Producer projections (P1, shared A-05)
-- **Current Status**: Confirmed leakage `DEF-09`.
+- **Current Status**: Implemented & Verified at `3746fee` — shares the A-05 projections.
 - **Goal**: Separate public and producer response schemas.
 - **User Value**: No internal approval data leaks while producers retain context.
 - **Affected Modules**: `broadcast.py`, `main.py`, web types.
@@ -892,7 +894,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Projection endpoints.
 
 #### E-03 — Export manifest and read-time validity (P1, shared A-04)
-- **Current Status**: Partial.
+- **Current Status**: Implemented & Verified at `3746fee` — export returns a manifest with revision, evidence, dataset revision and approver identity.
 - **Goal**: An export manifest links claim, revision, evidence, dataset revision,
   approver and validity verdict.
 - **User Value**: Every published artifact can be traced and stale content is
@@ -1072,19 +1074,23 @@ research value; they are not a uniform P0 list.
 **Journey**: OAAI peak → contribution ledger → events → investigation →
 competing explanations → agent verification → claim → challenge → revision.
 
+**Status**: the MVP and the promotion/challenge leg are delivered and were walked
+in the served build at `ee388ed`; only live agent planning/verification remains.
+
 | Layer | Done | Missing |
 | --- | --- | --- |
-| Data | Snapshot, OAAI, receipts | contribution ledger per event |
-| API | `/api/investigate`, metrics | typed intent, chart handoff, state machine |
-| Agent | deterministic planner | live agent planning/verification |
-| Claim | registry/revisions (immutability gap) | user-confirmed promotion and new narrowed payload |
-| UI | Investigation tab | click chart to fill focus; revision timeline |
-| Tests | receipts, no-persist preview | chart→investigate E2E, revision UI |
+| Data | Snapshot, OAAI, receipts, recomputable per-event ledger | none for the observed path |
+| API | `/api/investigate`, metrics, `/api/oaai/ledger`, promote/cancel | agent-planned tool selection (`C-06`) |
+| Agent | deterministic planner, two-agent workflow, tool receipts | live verifier receipts under an authorized budget |
+| Claim | registry with immutable revisions | free-form assertion coverage |
+| UI | click chart → seeded investigation, ledger + receipts + gate preview, promotion, revision timeline and challenge modal | evidence-graph trace from a promoted claim |
+| Tests | ledger reconciliation, intent/invalid focus, promotion + withdrawal validity | CI browser job for the click-through |
 
 **MVP**: select an OAAI point in the chart, investigation plan uses that
-snapshot/team/window, shows receipts and gate preview; no retyping.
+snapshot/team/window, shows receipts and gate preview; no retyping. **Done.**
 **Full**: dynamic tool selection, live verifier, claim promotion, challenge,
-immutable revision, evidence graph trace.
+immutable revision, evidence graph trace — promotion, challenge and immutable
+revision are done; dynamic selection and the live verifier are not.
 
 ### Slice 2 — Understand a Real Match
 
@@ -1108,13 +1114,17 @@ player actions and evidence.
 **Journey**: verified insight → producer review → approve → rundown → preview →
 export → provenance.
 
+**Status**: the MVP is delivered and was walked in the served build at
+`ee388ed`, including the withdrawal case (export answered
+`409 rundown_contains_stale_claims`).
+
 | Layer | Done | Missing |
 | --- | --- | --- |
-| API | queue/rundown/export | public/producer projections, read-time validity |
-| Approval | token principal | accounts/SSO, per-user isolation |
-| UI | approve/reject, export gate | dedicated producer workspace, reorder/preview |
-| Revision | lifecycle | immutable payload, stale rundown exclusion |
-| Export | JSON/SVG/Markdown | manifest validation, artifact storage |
+| API | queue/rundown/export with public/producer projections and read-time revalidation | artifact storage for exports |
+| Approval | token principal, owner-scoped idempotency | accounts/SSO, per-user isolation |
+| UI | producer workspace: queue, approve/reject, ordering, validation, preview, export, manifest | overlay/graphic preview for broadcast |
+| Revision | immutable payload, current-pointer checks, stale rundown exclusion | re-review lifecycle (`E-06`) |
+| Export | JSON/SVG/Markdown + manifest with revision, evidence, dataset revision and approver identity | signed artifact retention |
 
 **MVP**: producer approves a current claim, builds an ordered rundown, previews
 and exports with a manifest; withdrawn claim cannot export.
@@ -1204,7 +1214,7 @@ Every track milestone must name at least one Level 3 journey.
 Ordered by correctness risk and dependency centrality. Do not start a dependent
 item before its blocker is green.
 
-### Batch 1 — correctness foundations (next)
+### Batch 1 — correctness foundations (done at `3746fee`)
 
 1. **A-01 Metrics window/team semantics** — fix goals/OAAI, add table tests.
 2. **A-02 Immutable revision payload** — stop mutating prior revision; new
@@ -1219,7 +1229,7 @@ item before its blocker is green.
 7. **B-04 Metrics migration** — chart equivalence against the corrected service.
 8. **A-06 Idempotency ownership** — scope keys before more challenge traffic.
 
-### Batch 2 — investigation product slice
+### Batch 2 — investigation product slice (done at `3746fee`/`ee388ed`)
 
 9. **C-01 Typed intent/question routing** — unknown → scope request.
 10. **C-02 Chart→Investigation handoff** — no manual IDs; chart/snapshot/team
@@ -1231,7 +1241,7 @@ item before its blocker is green.
 15. **F-03 Security and isolation suite** — adversarial matrix after A-02/A-04/
     A-05/A-06.
 
-### Batch 3 — product experience
+### Batch 3 — product experience (done at `ee388ed`, except the D-07 real-device pass)
 
 16. **D-01/D-02 Match Hub + Match Detail** — at least fixtures/results, detail
     overview, match center linkage.
