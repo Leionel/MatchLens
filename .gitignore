@@ -8,7 +8,7 @@ node_modules/
 .next/
 out/
 .pytest_cache/
-.runtime/
+.runtime*/
 *.tsbuildinfo
 .agents/
 
