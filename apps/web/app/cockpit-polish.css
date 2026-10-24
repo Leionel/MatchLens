@@ -311,6 +311,19 @@ details[open] > .mz-summary::before {
   box-shadow: 0 0 6px color-mix(in srgb, var(--turf-emerald) 60%, transparent);
 }
 
+.tactical-pitch-svg .field-lines path,
+.tactical-pitch-svg .field-lines rect,
+.tactical-pitch-svg .field-lines circle {
+  vector-effect: non-scaling-stroke;
+  stroke-width: 1.1px;
+}
+
+.tactical-pitch-svg .tactical-entry-line {
+  vector-effect: non-scaling-stroke;
+  stroke-width: 1.1px;
+  stroke-dasharray: 6px 5px;
+}
+
 /* ---------- focus ---------------------------------------------------------- */
 
 .mz-btn:focus-visible,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Locale, getTranslation } from "../lib/i18n";
 
 export type FootballEvent = {
@@ -182,6 +182,23 @@ export function MatchStage({
   const [stepIndex, setStepIndex] = useState<number | null>(null);
   const [channelMode, setChannelMode] = useState<"overall" | "attacking">("overall");
   const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
+
+  // The pitch SVG is drawn in pitch metres (105 x 68) and stretched to the
+  // pane width, so a fixed SVG-unit font renders at a different pixel size in
+  // every layout. Text and marker sizes are specified in desired CSS pixels
+  // and converted to metres through the measured scale.
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const [stageScale, setStageScale] = useState(6.5);
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const update = () => setStageScale(Math.max(4, el.clientWidth / 105));
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const px = (v: number) => v / stageScale;
 
   const isNorthbridge = focusTeam === "N";
   const teamColor = isNorthbridge ? "var(--cyan-10)" : "var(--amber-9)";
@@ -369,7 +386,7 @@ export function MatchStage({
         </div>
       )}
 
-      <div className="pitch-canvas-wrapper">
+      <div className="pitch-canvas-wrapper" ref={stageRef}>
         <svg
           className="tactical-pitch-svg"
           viewBox="-4 -4 113 76"
@@ -395,19 +412,23 @@ export function MatchStage({
           {/* Pitch background & markings */}
           <rect x="0" y="0" width="105" height="68" className="pitch-turf-bg" rx="1.5" />
 
-          {/* Channel Guidelines (y = 22.67 and y = 45.33) */}
-          <line x1="0" y1="22.67" x2="105" y2="22.67" stroke="color-mix(in srgb, var(--slate-12) 8%, transparent)" strokeDasharray="2 2" />
-          <line x1="0" y1="45.33" x2="105" y2="45.33" stroke="color-mix(in srgb, var(--slate-12) 8%, transparent)" strokeDasharray="2 2" />
-          <text x="3" y="11" fill="color-mix(in srgb, var(--slate-12) 22%, transparent)" fontSize="2.1" fontWeight="600">
-            {isNorthbridge ? "LEFT CHANNEL" : "RIGHT CHANNEL"}
+          {/* Channel bands: right / central / left thirds of the width. The
+              central corridor carries a green tint, the flanks a neutral one,
+              so the three channels read on both themes without any caption. */}
+          <rect x="0" y="0" width="105" height="22.67" fill="color-mix(in srgb, var(--slate-12) 4%, transparent)" />
+          <rect x="0" y="22.67" width="105" height="22.66" fill="color-mix(in srgb, var(--green-9) 7%, transparent)" />
+          <rect x="0" y="45.33" width="105" height="22.67" fill="color-mix(in srgb, var(--slate-12) 4%, transparent)" />
+          <line x1="0" y1="22.67" x2="105" y2="22.67" stroke="color-mix(in srgb, var(--slate-12) 18%, transparent)" strokeDasharray="1.6 1.2" />
+          <line x1="0" y1="45.33" x2="105" y2="45.33" stroke="color-mix(in srgb, var(--slate-12) 18%, transparent)" strokeDasharray="1.6 1.2" />
+          <text x="1.2" y={11} fill="var(--text-tertiary)" fontSize={px(8.5)} fontWeight="600">
+            {isNorthbridge ? (isZh ? "左路" : "LEFT") : (isZh ? "右路" : "RIGHT")}
           </text>
-          <text x="3" y="34.5" fill="color-mix(in srgb, var(--slate-12) 22%, transparent)" fontSize="2.1" fontWeight="600">
-            CENTRAL CHANNEL
+          <text x="1.2" y={33.6} fill="var(--text-tertiary)" fontSize={px(8.5)} fontWeight="600">
+            {isZh ? "中路" : "CENTRAL"}
           </text>
-          <text x="3" y="58" fill="color-mix(in srgb, var(--slate-12) 22%, transparent)" fontSize="2.1" fontWeight="600">
-            {isNorthbridge ? "RIGHT CHANNEL" : "LEFT CHANNEL"}
+          <text x="1.2" y={56.3} fill="var(--text-tertiary)" fontSize={px(8.5)} fontWeight="600">
+            {isNorthbridge ? (isZh ? "右路" : "RIGHT") : (isZh ? "左路" : "LEFT")}
           </text>
-
           {/* Standard Pitch Markings */}
           <g className="field-lines" fill="none">
             <rect x="0" y="0" width="105" height="68" />
@@ -426,8 +447,8 @@ export function MatchStage({
 
           {/* Attacking Entry Line (x = 70m for Harbor, x = 35m for Northbridge) */}
           <path d={`M${entryX} 0V68`} className="tactical-entry-line" />
-          <text x={entryX + 1} y="66" className="tactical-entry-text">
-            {isNorthbridge ? "NBU ENTRY LINE (35M)" : "HFC ENTRY LINE (70M)"}
+          <text x={entryX + px(4)} y="65.5" fill="var(--text-tertiary)" fontSize={px(9)} fontWeight="600">
+            70m
           </text>
 
           {/* Layer 1: Live Action / Selected Sequence Step Playback */}
@@ -461,13 +482,13 @@ export function MatchStage({
                       markerEnd={marker}
                     />
                     {/* Step number badge circle */}
-                    <circle cx={st.start[0]} cy={st.start[1]} r="2.0" fill="var(--slate-1)" stroke={strokeColor} strokeWidth="0.5" />
+                    <circle cx={st.start[0]} cy={st.start[1]} r={px(8.5)} fill="var(--slate-1)" stroke={strokeColor} strokeWidth={px(1)} />
                     <text
                       x={st.start[0]}
-                      y={st.start[1] + 0.65}
+                      y={st.start[1] + px(3)}
                       textAnchor="middle"
-                      fill="var(--white)"
-                      fontSize="1.6"
+                      fill="var(--text-primary)"
+                      fontSize={px(9)}
                       fontWeight="700"
                     >
                       {st.seq_step}
@@ -476,10 +497,10 @@ export function MatchStage({
                     {isCurrentStep && st.gain_m !== 0 && (
                       <text
                         x={(st.start[0] + st.end[0]) / 2}
-                        y={(st.start[1] + st.end[1]) / 2 - 1.2}
+                        y={(st.start[1] + st.end[1]) / 2 - px(5)}
                         textAnchor="middle"
                         fill="var(--green-11)"
-                        fontSize="1.6"
+                        fontSize={px(9.5)}
                         fontWeight="700"
                       >
                         {st.gain_m > 0 ? `+${st.gain_m}m` : `${st.gain_m}m`}
@@ -552,10 +573,10 @@ export function MatchStage({
                     {isEdgeHovered && (
                       <text
                         x={(fromNode.avg_x + toNode.avg_x) / 2}
-                        y={(fromNode.avg_y + toNode.avg_y) / 2 - 1.5}
+                        y={(fromNode.avg_y + toNode.avg_y) / 2 - px(5)}
                         textAnchor="middle"
                         fill="var(--green-11)"
-                        fontSize="2.0"
+                        fontSize={px(10)}
                         fontWeight="700"
                       >
                         {edge.count} passes
@@ -564,22 +585,22 @@ export function MatchStage({
                   </g>
                 );
               })}
-              {tactical.nodes.map((node) => (
-                <g key={node.player_id} transform={`translate(${node.avg_x}, ${node.avg_y})`}>
-                  <circle
-                    r={Math.min(4.4, 2.0 + node.touches * 0.09)}
-                    fill="var(--slate-1)"
-                    stroke={teamColor}
-                    strokeWidth="0.7"
-                  />
-                  <text y="0.6" textAnchor="middle" fill="var(--white)" fontSize="2.0" fontWeight="700">
-                    {node.player_id}
-                  </text>
-                  <text y="4.8" textAnchor="middle" fill="var(--text-secondary)" fontSize="1.7">
-                    {node.name.split(" ")[1]} ({node.touches})
-                  </text>
-                </g>
-              ))}
+              {tactical.nodes.map((node) => {
+                const nodeR = px(Math.min(21, 11 + node.touches * 0.35));
+                return (
+                  <g key={node.player_id} transform={`translate(${node.avg_x}, ${node.avg_y})`}>
+                    <circle
+                      r={nodeR}
+                      fill={`color-mix(in srgb, ${teamColor} 16%, var(--slate-1))`}
+                      stroke={teamColor}
+                      strokeWidth={px(1.4)}
+                    />
+                    <text y={nodeR + px(11)} textAnchor="middle" fill="var(--text-primary)" fontSize={px(10)} fontWeight="600">
+                      {node.name.split(" ").slice(-1)[0]} ({node.touches})
+                    </text>
+                  </g>
+                );
+              })}
             </g>
           )}
 
@@ -600,9 +621,9 @@ export function MatchStage({
                   strokeWidth={p.is_entry ? 1.0 : 0.7}
                   markerEnd={p.is_entry ? "url(#arrow-emerald)" : isNorthbridge ? "url(#arrow-northbridge)" : "url(#arrow-harbor)"}
                 />
-                <circle cx={p.start[0]} cy={p.start[1]} r="1.1" fill={p.is_entry ? "var(--green-11)" : teamColor} />
+                <circle cx={p.start[0]} cy={p.start[1]} r={px(3)} fill={p.is_entry ? "var(--green-11)" : teamColor} />
                 {p.is_entry && (
-                  <circle cx={p.end[0]} cy={p.end[1]} r="1.8" fill="none" stroke="var(--green-11)" strokeWidth="0.6" />
+                  <circle cx={p.end[0]} cy={p.end[1]} r={px(6)} fill="none" stroke="var(--green-11)" strokeWidth={px(1.2)} />
                 )}
               </g>
             ))}
@@ -628,18 +649,15 @@ export function MatchStage({
                   style={{ cursor: "pointer" }}
                 >
                   <circle
-                    r={rec.is_high ? 2.6 : 1.8}
+                    r={px(rec.is_high ? 7 : 5)}
                     fill={rec.is_high ? "var(--green-11)" : teamColor}
                     fillOpacity={0.88}
                     stroke="var(--slate-1)"
-                    strokeWidth="0.4"
+                    strokeWidth={px(1)}
                   />
                   {rec.is_high && (
-                    <circle r="3.4" fill="none" stroke="var(--green-11)" strokeWidth="0.4" strokeDasharray="1 1" />
+                    <circle r={px(10)} fill="none" stroke="var(--green-11)" strokeWidth={px(1)} strokeDasharray="1 1" />
                   )}
-                  <text y="-3.0" textAnchor="middle" fill="var(--slate-12)" fontSize="1.8">
-                    {rec.id}
-                  </text>
                 </g>
               ))}
             </g>
@@ -701,20 +719,20 @@ export function MatchStage({
                     {isTraversedBySeq && (
                       <g>
                         <rect
-                          x={cell.x_min + 1.2}
-                          y={cell.y_min + 1.2}
-                          width="9.5"
-                          height="2.8"
-                          rx="0.4"
+                          x={cell.x_min + px(5)}
+                          y={cell.y_min + px(5)}
+                          width={px(52)}
+                          height={px(13)}
+                          rx={px(4)}
                           fill="var(--cyan-10)"
                           fillOpacity="0.9"
                         />
                         <text
-                          x={cell.x_min + 5.9}
-                          y={cell.y_min + 3.1}
+                          x={cell.x_min + px(31)}
+                          y={cell.y_min + px(14)}
                           textAnchor="middle"
-                          fill="var(--white)"
-                          fontSize="1.5"
+                          fill="var(--slate-1)"
+                          fontSize={px(8.5)}
                           fontWeight="800"
                         >
                           TRAVERSED
@@ -724,19 +742,19 @@ export function MatchStage({
                     {isZoneFiltered && (
                       <g>
                         <rect
-                          x={cell.x_max - 10.7}
-                          y={cell.y_min + 1.2}
-                          width="9.5"
-                          height="2.8"
-                          rx="0.4"
+                          x={cell.x_max - px(57)}
+                          y={cell.y_min + px(5)}
+                          width={px(52)}
+                          height={px(13)}
+                          rx={px(4)}
                           fill="var(--green-9)"
                         />
                         <text
-                          x={cell.x_max - 5.9}
-                          y={cell.y_min + 3.1}
+                          x={cell.x_max - px(31)}
+                          y={cell.y_min + px(14)}
                           textAnchor="middle"
-                          fill="var(--white)"
-                          fontSize="1.5"
+                          fill="var(--slate-1)"
+                          fontSize={px(8.5)}
                           fontWeight="800"
                         >
                           FILTERED
@@ -745,33 +763,33 @@ export function MatchStage({
                     )}
                     <text
                       x={cell.x_min + width / 2}
-                      y={cell.y_min + height / 2 - 2.5}
+                      y={cell.y_min + height / 2 - px(7)}
                       textAnchor="middle"
                       fill="var(--text-secondary)"
-                      fontSize="1.7"
+                      fontSize={px(9)}
                       fontWeight="600"
                     >
                       {cell.name.toUpperCase()}
                     </text>
                     <text
                       x={cell.x_min + width / 2}
-                      y={cell.y_min + height / 2 + 2.0}
+                      y={cell.y_min + height / 2 + px(8)}
                       textAnchor="middle"
-                      fill="var(--white)"
-                      fontSize="3.8"
+                      fill="var(--text-primary)"
+                      fontSize={px(16)}
                       fontWeight="800"
                     >
                       {cell.percentage}%
                     </text>
                     <text
                       x={cell.x_min + width / 2}
-                      y={cell.y_min + height / 2 + 5.5}
+                      y={cell.y_min + height / 2 + px(20)}
                       textAnchor="middle"
                       fill="var(--turf-emerald)"
-                      fontSize="1.6"
+                      fontSize={px(8.5)}
                       fontWeight="600"
                     >
-                      {cell.count} on-ball actions
+                      {cell.count} {isZh ? "次触球" : "on-ball actions"}
                     </text>
                   </g>
                 );
@@ -787,19 +805,19 @@ export function MatchStage({
                   <circle
                     cx={pt[0]}
                     cy={pt[1]}
-                    r="1.8"
+                    r={px(4.5)}
                     fill={teamColor}
                     fillOpacity={0.9}
-                    stroke="var(--white)"
-                    strokeWidth="0.5"
+                    stroke="var(--slate-1)"
+                    strokeWidth={px(1)}
                   />
                   <circle
                     cx={pt[0]}
                     cy={pt[1]}
-                    r="3.2"
+                    r={px(9)}
                     fill="none"
                     stroke={teamColor}
-                    strokeWidth="0.4"
+                    strokeWidth={px(1)}
                     strokeDasharray="1 1"
                   />
                 </g>
@@ -813,19 +831,19 @@ export function MatchStage({
               <circle
                 cx={activeBallPoint[0]}
                 cy={activeBallPoint[1]}
-                r="3.5"
+                r={px(9)}
                 fill="none"
                 stroke="var(--turf-emerald)"
-                strokeWidth="0.5"
+                strokeWidth={px(1)}
                 className="ball-sonar-ring"
               />
               <circle
                 cx={activeBallPoint[0]}
                 cy={activeBallPoint[1]}
-                r="1.6"
-                fill="var(--white)"
+                r={px(4)}
+                fill="var(--text-primary)"
                 stroke="var(--slate-1)"
-                strokeWidth="0.5"
+                strokeWidth={px(1)}
               />
             </>
           )}
