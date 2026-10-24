@@ -188,13 +188,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
       </div>
 
       {/* Main Grid: Left Stage (5 Layers) & Right Explorer */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1.25fr 0.75fr",
-          gap: 16,
-        }}
-      >
+      <div className="tactical-stage-grid">
         {/* Left Column: Full-featured 2D Pitch Stage */}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div className="glass-panel" style={{ padding: 14 }}>
@@ -599,13 +593,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
       </div>
 
       {/* Bottom Exploration Cards: 9-Zone Density Differential & 6s Quick Recoveries */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 16,
-        }}
-      >
+      <div className="tactical-explore-grid">
         <div className="glass-panel" style={{ padding: 14 }}>
           <ActionDensityDifferential
             data={state.density_differential}

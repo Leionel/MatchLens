@@ -30,6 +30,12 @@ interface MatchCenterWorkspaceProps {
   onSelectChannel: (ch: string | null) => void;
   onToggleSmoothingMode: (mode: "causal" | "bilateral") => void;
   onOpenInspector: (payload: InspectorPayload) => void;
+  onInvestigateMoment: (payload: {
+    focus_type: "oaai_point";
+    focus_id: string;
+    at: number;
+    team: "H" | "N";
+  }) => void;
 }
 
 const clock = (s: number) =>
@@ -59,6 +65,7 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
   onSelectChannel,
   onToggleSmoothingMode,
   onOpenInspector,
+  onInvestigateMoment,
 }) => {
   const t = getTranslation(locale);
   const isZh = locale === "zh";
@@ -114,7 +121,15 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
         </span>
         <span>
           {isZh ? "射门" : "Shots"}{" "}
-          <b>{state.events?.filter((e) => e.kind === "shot").length || 0}</b>
+          <b>
+            {state.receipts?.["H.shots.current"]?.value ?? "—"} / {state.receipts?.["N.shots.current"]?.value ?? "—"}
+          </b>
+        </span>
+        <span>
+          {isZh ? "进球" : "Goals"}{" "}
+          <b>
+            {state.receipts?.["H.goals.current"]?.value ?? "—"} / {state.receipts?.["N.goals.current"]?.value ?? "—"}
+          </b>
         </span>
         <span>
           {isZh ? "事件" : "Events"} <b>{state.events?.length || 0}</b>
@@ -148,16 +163,18 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
         }}
         onToggleSmoothingMode={onToggleSmoothingMode}
         activeSmoothingMode={activeSmoothingMode}
+        onInvestigateChangePoint={(cp) =>
+          onInvestigateMoment({
+            focus_type: "oaai_point",
+            focus_id: cp.change_point_id,
+            at: Math.round(cp.at),
+            team: cp.leading_team === "N" ? "N" : cp.leading_team === "H" ? "H" : state.focus_team || "H",
+          })
+        }
       />
 
       {/* 3. Core Match Stage & Event Stream Split */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1.2fr 0.8fr",
-          gap: 16,
-        }}
-      >
+      <div className="match-split-grid">
         {/* Left Column: 2D Pitch Stage & Corridors */}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div className="glass-panel" style={{ padding: 14 }}>

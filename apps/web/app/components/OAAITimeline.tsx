@@ -56,6 +56,7 @@ interface OAAITimelineProps {
   awayTeamName?: string;
   onSeek?: (t: number) => void;
   onSelectEvent?: (eventId: string) => void;
+  onInvestigateChangePoint?: (changePoint: OAAIChangePoint) => void;
   onToggleSmoothingMode?: (mode: "causal" | "bilateral") => void;
   activeSmoothingMode?: "causal" | "bilateral";
   locale?: Locale;
@@ -68,6 +69,7 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
   awayTeamName = "Northbridge United",
   onSeek,
   onSelectEvent,
+  onInvestigateChangePoint,
   onToggleSmoothingMode,
   activeSmoothingMode = "causal",
   locale = "zh",
@@ -485,22 +487,41 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setSelectedChangePoint(null)}
-              style={{
-                minHeight: "auto",
-                padding: "3px 8px",
-                fontSize: 12,
-                background: "color-mix(in srgb, var(--slate-12) 8%, transparent)",
-                border: "none",
-                borderRadius: 4,
-                color: "var(--text-secondary)",
-                cursor: "pointer",
-              }}
-            >
-              ✕
-            </button>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button
+                type="button"
+                onClick={() => onInvestigateChangePoint?.(selectedChangePoint)}
+                style={{
+                  minHeight: 30,
+                  padding: "4px 10px",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  background: "var(--turf-emerald)",
+                  border: "none",
+                  borderRadius: 6,
+                  color: "var(--green-3)",
+                  cursor: "pointer",
+                }}
+              >
+                {isZh ? "调查这个峰值" : "Investigate this peak"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedChangePoint(null)}
+                style={{
+                  minHeight: "auto",
+                  padding: "3px 8px",
+                  fontSize: 12,
+                  background: "color-mix(in srgb, var(--slate-12) 8%, transparent)",
+                  border: "none",
+                  borderRadius: 4,
+                  color: "var(--text-secondary)",
+                  cursor: "pointer",
+                }}
+              >
+                {isZh ? "关闭" : "Close"}
+              </button>
+            </div>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 8 }}>

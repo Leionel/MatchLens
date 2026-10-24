@@ -209,7 +209,7 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
+            gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))",
             gap: 10,
             marginBottom: 14,
             padding: "10px 14px",
@@ -255,7 +255,7 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: `repeat(${cols}, 1fr)`,
+            gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
             gap: 3,
             padding: 10,
             background: "color-mix(in srgb, var(--slate-1) 80%, transparent)",
@@ -473,7 +473,7 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(150px, 100%), 1fr))",
               gap: 8,
               padding: "10px 14px",
               background: "color-mix(in srgb, var(--green-9) 8%, transparent)",
@@ -510,7 +510,7 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
           </div>
         )}
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(300px, 100%), 1fr))", gap: 14 }}>
           <div style={{ padding: 12, background: "color-mix(in srgb, var(--slate-1) 60%, transparent)", borderRadius: 8, border: "0.5px solid var(--pitch-border)" }}>
             <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>
               {isZh ? `模拟减少后场关键防守失误率: ${counterfactualTurnoverReduced}%` : `Simulated Reduction in Defensive Turnover Rate: ${counterfactualTurnoverReduced}%`}

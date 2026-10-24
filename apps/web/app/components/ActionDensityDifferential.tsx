@@ -139,7 +139,7 @@ export const ActionDensityDifferential: React.FC<ActionDensityDifferentialProps>
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
+          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
           gap: "8px",
           background: "color-mix(in srgb, var(--slate-1) 60%, transparent)",
           padding: "10px",

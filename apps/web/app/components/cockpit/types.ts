@@ -1,4 +1,20 @@
-export type WorkspaceId = "match_center" | "tactical_lab" | "story_agent" | "validation_lab";
+export type WorkspaceId =
+  | "match_hub"
+  | "match_center"
+  | "tactical_lab"
+  | "story_agent"
+  | "producer"
+  | "validation_lab";
+
+export type InvestigationSeed = {
+  requestId: string;
+  matchId: string;
+  team: "H" | "N";
+  at: number;
+  focusType: "moment" | "oaai_point" | "event" | "metric" | "sequence" | "player" | "zone" | "chart";
+  focusId: string | null;
+  question?: string;
+};
 
 export type PerspectiveId = "coach" | "media" | "fan";
 
@@ -189,6 +205,12 @@ export type CockpitState = {
   score: { H: number; N: number };
   score_basis?: "observed_prefix" | "official_final";
   official_score?: { H: number | null; N: number | null } | null;
+  completeness?: {
+    status: string;
+    confidence?: number;
+    known_missing_segments?: string[];
+    coverage_by_period?: any[];
+  } | null;
   coverage?: {
     format_seconds: number;
     observed_start: number | null;

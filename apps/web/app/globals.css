@@ -1595,6 +1595,51 @@ code, .header-clock-display, .rail-meta, .rail-label, .workspace-tab-index {
   bottom: -7px;
 }
 
+/* Producer workspace: review queue and rundown/export columns */
+.producer-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  align-items: start;
+}
+
+/* Match center: pitch stage + event stream split */
+.match-split-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: 16px;
+  align-items: start;
+}
+
+/* Tactical lab: pitch stage + explorer, and the bottom exploration cards */
+.tactical-stage-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
+  gap: 16px;
+  align-items: start;
+}
+.tactical-explore-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+/* Deliberation pipeline: four stages separated by arrows */
+.pipeline-stage-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .match-split-grid,
+  .tactical-stage-grid,
+  .tactical-explore-grid,
+  .pipeline-stage-grid { grid-template-columns: minmax(0, 1fr); }
+  .pipeline-stage-grid .collab-step-arrow { display: none; }
+}
+
 /* Scoreboard refinements */
 .score-official {
   margin-top: 6px;
@@ -1618,6 +1663,7 @@ code, .header-clock-display, .rail-meta, .rail-label, .workspace-tab-index {
   .cockpit-header-inner { gap: 10px; }
   .workspace-tabs-bar { position: static; }
   .header-slider { width: 120px; }
+  .producer-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 860px) {
@@ -1638,6 +1684,10 @@ code, .header-clock-display, .rail-meta, .rail-label, .workspace-tab-index {
   .workspace-tabs-container { gap: 4px; padding-bottom: 2px; }
   .workspace-tab-item { padding: 8px 11px; }
   .workspace-tab-badge { display: none; }
+  /* Touch targets: transport controls must stay tappable with a thumb. */
+  .header-speed-pill { min-height: 34px; padding: 0 12px; }
+  .header-scrubber-cluster > button { height: 34px; min-width: 34px; }
+  .header-slider { height: 28px; }
   .broadcast-scoreboard { padding: 14px; }
   .scoreboard-fixture {
     grid-template-columns: 1fr;

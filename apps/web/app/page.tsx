@@ -9,6 +9,7 @@ import {
   Evidence,
   Receipt,
   PossessionSequence,
+  InvestigationSeed,
 } from "./components/cockpit/types";
 import { TacticalHeader } from "./components/cockpit/TacticalHeader";
 import { WorkspaceTabs } from "./components/cockpit/WorkspaceTabs";
@@ -17,10 +18,26 @@ import { MatchCenterWorkspace } from "./components/cockpit/MatchCenterWorkspace"
 import { TacticalLabWorkspace } from "./components/cockpit/TacticalLabWorkspace";
 import { StoryAgentWorkbench } from "./components/cockpit/StoryAgentWorkbench";
 import { ValidationLabWorkspace } from "./components/cockpit/ValidationLabWorkspace";
+import { MatchHubWorkspace } from "./components/cockpit/MatchHubWorkspace";
+import { ProducerWorkspace } from "./components/cockpit/ProducerWorkspace";
 import { InspectorDrawer } from "./components/cockpit/InspectorDrawer";
 import { TacticalGuideModal } from "./components/cockpit/TacticalGuideModal";
 import { MatchRecap } from "./components/MatchRecap";
 import { Locale, getTranslation } from "./lib/i18n";
+
+const WORKSPACE_IDS: WorkspaceId[] = [
+  "match_hub",
+  "match_center",
+  "tactical_lab",
+  "story_agent",
+  "producer",
+  "validation_lab",
+];
+
+function workspaceFromSearch(search: string): WorkspaceId | null {
+  const raw = new URLSearchParams(search).get("workspace");
+  return WORKSPACE_IDS.includes(raw as WorkspaceId) ? (raw as WorkspaceId) : null;
+}
 
 async function api<T>(path: string, body?: object): Promise<T> {
   const response = await fetch(`/api/${path}`, {
@@ -51,7 +68,7 @@ export default function MatchLensCockpit() {
   const [busy, setBusy] = useState(false);
 
   // Multi-Pane Cockpit Navigation & Perspective
-  const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>("match_center");
+  const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>("match_hub");
   const [perspective, setPerspective] = useState<PerspectiveId>("coach");
 
   // Selection & Drilldown Cross-Workspace State
@@ -62,6 +79,8 @@ export default function MatchLensCockpit() {
   const [selectedHighlightId, setSelectedHighlightId] = useState<string | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
   const [activeSmoothingMode, setActiveSmoothingMode] = useState<"causal" | "bilateral">("causal");
+  const [investigationSeed, setInvestigationSeed] = useState<InvestigationSeed | null>(null);
+  const urlRestored = useRef(false);
 
   // Collapsible Inspector Sidecar Drawer
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -245,6 +264,123 @@ export default function MatchLensCockpit() {
     }
   };
 
+  const selectMatch = async (matchId: string, workspace?: WorkspaceId) => {
+    setError("");
+    setBusy(true);
+    try {
+      const next = await api<CockpitState>("control", { action: "set_match", match_id: matchId });
+      commit(next);
+      setActiveWorkspace(workspace || "match_center");
+      setSelectedEventId("");
+      setSelectedSeqId("");
+      setSelectedPlayerId(null);
+      setSelectedZoneId(null);
+      setInvestigationSeed(null);
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set("workspace", workspace || "match_center");
+        url.searchParams.set("match", matchId);
+        window.history.pushState({}, "", url);
+      } catch {}
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const selectWorkspace = (workspace: WorkspaceId) => {
+    setActiveWorkspace(workspace);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("workspace", workspace);
+      window.history.pushState({}, "", url);
+    } catch {}
+  };
+
+  const investigateMoment = (payload: {
+    focus_type: "oaai_point";
+    focus_id: string;
+    at: number;
+    team: "H" | "N";
+  }) => {
+    setInvestigationSeed({
+      requestId: `chart-${payload.focus_id}-${Date.now()}`,
+      matchId: state?.match_id || "syn_default",
+      team: payload.team,
+      at: payload.at,
+      focusType: "oaai_point",
+      focusId: payload.focus_id,
+      question: locale === "zh" ? "为什么这个时刻的进攻活动发生变化？" : "What produced this attacking activity change?",
+    });
+    setActiveWorkspace("story_agent");
+  };
+
+  // Restore workspace, match, clock and selection from a deep link once the
+  // first session state is available.
+  useEffect(() => {
+    if (!state || urlRestored.current) return;
+    urlRestored.current = true;
+    const params = new URLSearchParams(window.location.search);
+    const workspace = workspaceFromSearch(window.location.search);
+    if (workspace) {
+      setActiveWorkspace(workspace);
+    }
+    const match = params.get("match");
+    const at = params.get("at");
+    const event = params.get("event");
+    const sequence = params.get("sequence");
+    const restore = async () => {
+      if (match && match !== state.match_id) {
+        await selectMatch(match, workspace || "match_center");
+      }
+      if (at && Number.isFinite(Number(at))) {
+        await control({ action: "seek", at: Number(at) });
+      }
+      if (event) setSelectedEventId(event);
+      if (sequence) setSelectedSeqId(sequence);
+    };
+    void restore();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.match_id]);
+
+  // Keep the URL refreshable without overwriting it during deep-link restore.
+  useEffect(() => {
+    if (!state || !urlRestored.current) return;
+    const url = new URL(window.location.href);
+    const anchor = state.paused || state.ended ? state.at : (state.snapshot_as_of ?? state.at);
+    url.searchParams.set("workspace", activeWorkspace);
+    if (state.match_id) url.searchParams.set("match", state.match_id);
+    url.searchParams.set("at", String(anchor));
+    if (selectedEventId) url.searchParams.set("event", selectedEventId);
+    else url.searchParams.delete("event");
+    if (selectedSeqId) url.searchParams.set("sequence", selectedSeqId);
+    else url.searchParams.delete("sequence");
+    window.history.replaceState({}, "", url);
+  }, [activeWorkspace, state?.match_id, state?.at, state?.paused, state?.snapshot_as_of, selectedEventId, selectedSeqId]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const workspace = workspaceFromSearch(window.location.search);
+      if (workspace) {
+        setActiveWorkspace(workspace);
+      }
+      const match = params.get("match");
+      if (match && state && match !== state.match_id) {
+        void selectMatch(match, workspace || "match_center");
+      }
+      const at = params.get("at");
+      if (at && Number.isFinite(Number(at))) {
+        void control({ action: "seek", at: Number(at) });
+      }
+      setSelectedEventId(params.get("event") || "");
+      setSelectedSeqId(params.get("sequence") || "");
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [state?.match_id]);
+
   const inspect = async (id: string, snapshotId?: string) => {
     const request = ++inspectionRequest.current;
     const target = snapshotId || state?.snapshot_id;
@@ -331,7 +467,7 @@ export default function MatchLensCockpit() {
       {state && (
         <WorkspaceTabs
           activeWorkspace={activeWorkspace}
-          onSelectWorkspace={(ws) => setActiveWorkspace(ws)}
+          onSelectWorkspace={selectWorkspace}
           state={state}
           locale={locale}
         />
@@ -392,7 +528,15 @@ export default function MatchLensCockpit() {
           </div>
         ) : (
           <>
-            {/* WORKSPACE 1: 🏟️ Match Center */}
+            {activeWorkspace === "match_hub" && (
+              <MatchHubWorkspace
+                currentMatchId={state.match_id}
+                locale={locale}
+                onSelectMatch={(matchId) => void selectMatch(matchId)}
+              />
+            )}
+
+            {/* WORKSPACE 1: Match Center */}
             {activeWorkspace === "match_center" && (
               <MatchCenterWorkspace
                 state={state}
@@ -414,10 +558,11 @@ export default function MatchLensCockpit() {
                 onSelectChannel={(ch) => setSelectedChannel(ch)}
                 onToggleSmoothingMode={handleToggleSmoothingMode}
                 onOpenInspector={handleOpenInspector}
+                onInvestigateMoment={investigateMoment}
               />
             )}
 
-            {/* WORKSPACE 2: 🧭 Tactical & Spatial Lab */}
+            {/* WORKSPACE 2: Tactical & Spatial Lab */}
             {activeWorkspace === "tactical_lab" && (
               <TacticalLabWorkspace
                 state={state}
@@ -450,10 +595,15 @@ export default function MatchLensCockpit() {
                 onSelectEvent={(id) => setSelectedEventId(id)}
                 onOpenInspector={handleOpenInspector}
                 onCommitState={(next) => commit(next)}
+                investigationSeed={investigationSeed}
               />
             )}
 
-            {/* WORKSPACE 4: 📊 Validation Lab */}
+            {activeWorkspace === "producer" && (
+              <ProducerWorkspace state={state} locale={locale} />
+            )}
+
+            {/* WORKSPACE 4: Validation Lab */}
             {activeWorkspace === "validation_lab" && (
               <ValidationLabWorkspace
                 state={state}

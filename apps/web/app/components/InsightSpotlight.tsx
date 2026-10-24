@@ -192,12 +192,12 @@ export function InsightSpotlight({
               </span>
             </div>
             <h3 className="candidate-title">
-              {activeChapter?.question || activeMoment?.question || "No moment selected yet."}
+              {activeChapter?.question || activeMoment?.question || (isZh ? "尚未选择时刻。" : "No moment selected yet.")}
             </h3>
             <p className="candidate-desc">
               {activeMoment?.summary ||
                 activeChapter?.title ||
-                "Press play to detect possession and attacking changes."}
+                (isZh ? "播放比赛以检测控球与进攻变化。" : "Press play to detect possession and attacking changes.")}
             </p>
           </div>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { CockpitState, PerspectiveId, InspectorPayload, Card } from "./types";
+import { CockpitState, PerspectiveId, InspectorPayload, Card, InvestigationSeed } from "./types";
 import { Locale, getTranslation } from "../../lib/i18n";
 import { InsightSpotlight } from "../InsightSpotlight";
 import { InvestigationPanel } from "./InvestigationPanel";
@@ -17,6 +17,8 @@ interface StoryAgentWorkbenchProps {
   onSelectEvent: (eventId: string) => void;
   onOpenInspector: (payload: InspectorPayload) => void;
   onCommitState?: (nextState: any) => void;
+  investigationSeed?: InvestigationSeed | null;
+  onClaimPromoted?: (claim: any) => void;
 }
 
 const clock = (s: number) =>
@@ -37,6 +39,8 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
   onSelectEvent,
   onOpenInspector,
   onCommitState,
+  investigationSeed = null,
+  onClaimPromoted,
 }) => {
   const t = getTranslation(locale);
   const isZh = locale === "zh";
@@ -52,7 +56,14 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
   const [backendAttribution, setBackendAttribution] = useState<any>(null);
   const [producerToken, setProducerToken] = useState("");
   const [storyRefresh, setStoryRefresh] = useState(0);
+  const [spotlightClaim, setSpotlightClaim] = useState<Card | null>(null);
   const [editorialError, setEditorialError] = useState("");
+
+  React.useEffect(() => {
+    if (investigationSeed?.requestId) {
+      setWorkbenchTab("investigation");
+    }
+  }, [investigationSeed?.requestId]);
 
   const homeTeam = state.teams?.H || "Harbor FC";
   const awayTeam = state.teams?.N || "Northbridge United";
@@ -122,10 +133,12 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
     verdict: c.gate_status,
     fan: "",
     analyst: c.statement || "",
-    refs: c.evidence_scope?.metric_ids || [],
-    scope: "match",
+    refs: c.evidence_scope?.event_ids?.length
+      ? c.evidence_scope.event_ids
+      : c.evidence_scope?.metric_ids || [],
+    scope: c.evidence_scope?.window_seconds ? `${c.evidence_scope.window_seconds}s` : "match",
     reason: (c.gate_violations || []).join("; "),
-    limitations: [],
+    limitations: c.counterevidence || [],
     snapshot_id: backendStory?.snapshot_id || "",
     as_of: c.as_of || 0,
     claim_level: c.claim_level,
@@ -449,14 +462,7 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
         </div>
 
         {/* 4 Pipeline Stages */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr auto 1fr auto 1fr auto 1fr",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
+        <div className="pipeline-stage-grid">
           {/* Stage 1: Analyst Agent */}
           <div
             className={`collab-step-card ${
@@ -559,6 +565,7 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
           display: "flex",
           borderBottom: "0.5px solid var(--glass-border)",
           gap: 6,
+          flexWrap: "wrap",
         }}
       >
         <button
@@ -615,7 +622,7 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
           <InsightSpotlight
             mode={mode}
             onModeChange={setMode}
-            card={card}
+            card={spotlightClaim || card}
             result={result}
             pending={pending}
             pendingStatus={state.analysis?.status}
@@ -1042,6 +1049,19 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
                           </div>
                         </div>
 
+                        {gateApproved && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSpotlightClaim(cl);
+                              setWorkbenchTab("deliberation");
+                            }}
+                            style={{ fontSize: 12, fontWeight: 700, padding: "2px 6px", borderRadius: 4, border: "0.5px solid var(--pitch-border)", background: "transparent", color: "var(--text-secondary)", cursor: "pointer" }}
+                          >
+                            {isZh ? "质疑与修订" : "Challenge"}
+                          </button>
+                        )}
+
                         {gateApproved && producerToken && (
                           <div style={{ display: "flex", gap: 4 }}>
                             <button
@@ -1098,7 +1118,16 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
       )}
 
       {workbenchTab === "investigation" && (
-        <InvestigationPanel state={state} locale={locale} />
+        <InvestigationPanel
+          state={state}
+          locale={locale}
+          seed={investigationSeed}
+          onSelectEvent={onSelectEvent}
+          onClaimPromoted={(claim) => {
+            setStoryRefresh((n) => n + 1);
+            onClaimPromoted?.(claim);
+          }}
+        />
       )}
 
       {/* TAB D: Publication Publication Gate & Data Sufficiency Audit */}

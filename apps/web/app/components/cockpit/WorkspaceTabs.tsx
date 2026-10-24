@@ -26,6 +26,12 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
 
   const tabs: { id: WorkspaceId; index: string; label: string; countBadge: string }[] = [
     {
+      id: "match_hub",
+      index: "00",
+      label: isZh ? "比赛库" : "Match Hub",
+      countBadge: isZh ? "选择" : "Browse",
+    },
+    {
       id: "match_center",
       index: "01",
       label: t.workspaceMatchCenter,
@@ -44,8 +50,14 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
       countBadge: isZh ? "注册表" : "Registry",
     },
     {
-      id: "validation_lab",
+      id: "producer",
       index: "04",
+      label: isZh ? "制作人" : "Producer",
+      countBadge: isZh ? "发布" : "Publish",
+    },
+    {
+      id: "validation_lab",
+      index: "05",
       label: t.workspaceValidationLab,
       countBadge: "xT CONTRACT",
     },
