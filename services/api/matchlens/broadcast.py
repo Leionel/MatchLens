@@ -131,9 +131,12 @@ def producer_claim_projection(record: ClaimRecord) -> dict[str, Any]:
 
 
 class BroadcastStore:
+    MANIFEST_HISTORY_MAX = 50
+
     def __init__(self, path: Path | str | None = None):
         self.path = Path(path) if path else None
         self.rundowns: dict[str, Rundown] = {}
+        self.manifests: list[ExportManifest] = []
         self._load()
 
     def _load(self) -> None:
@@ -144,17 +147,38 @@ class BroadcastStore:
             for raw in data.get("rundowns", []):
                 rundown = Rundown.model_validate(raw)
                 self.rundowns[f"{rundown.match_id}:{rundown.snapshot_id}"] = rundown
+            manifests = data.get("manifests", [])
+            if isinstance(manifests, list):
+                self.manifests = [ExportManifest.model_validate(raw) for raw in manifests]
         except Exception:
             self.rundowns = {}
+            self.manifests = []
 
     def _save(self) -> None:
         if not self.path:
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"version": "rundown-v2", "rundowns": [r.model_dump() for r in self.rundowns.values()]}
+        payload = {
+            "version": "rundown-v2",
+            "rundowns": [r.model_dump() for r in self.rundowns.values()],
+            "manifests": [m.model_dump() for m in self.manifests],
+        }
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
         tmp.replace(self.path)
+
+    def record_manifest(self, manifest: ExportManifest) -> ExportManifest:
+        """Persist one export manifest into the bounded history (newest first)."""
+        self.manifests.insert(0, manifest)
+        self.manifests = self.manifests[: self.MANIFEST_HISTORY_MAX]
+        self._save()
+        return manifest
+
+    def manifest_history(self, match_id: str, snapshot_id: str) -> list[ExportManifest]:
+        return [
+            m for m in self.manifests
+            if m.match_id == match_id and m.snapshot_id == snapshot_id
+        ]
 
     def build(
         self,
