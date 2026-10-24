@@ -329,11 +329,6 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
             <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>
               {isZh ? "制作人工作区" : "Producer workspace"}
             </h2>
-            <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 4 }}>
-              {isZh
-                ? "审核已通过 Gate 的结论，编排 Rundown，预览并导出带 Manifest 的内容。"
-                : "Review gate-approved claims, order a rundown, preview and export with a manifest."}
-            </p>
           </div>
           <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)", minWidth: 260 }}>
             {isZh ? "制作人令牌" : "Producer token"}
@@ -462,10 +457,7 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
           </div>
           {selected.length > 0 && (
             <div style={{ display: "grid", gap: 6 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-                <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
-                  {isZh ? "Rundown 顺序" : "Rundown order"}
-                </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "baseline", gap: 8 }}>
                 <button
                   type="button"
                   className="mz-btn"

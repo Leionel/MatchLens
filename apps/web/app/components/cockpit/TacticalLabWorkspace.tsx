@@ -126,9 +126,6 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
             <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>
               {t.tacticalLabTitle}
             </div>
-            <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
-              {t.tacticalLabSubtitle}
-            </div>
           </div>
         </div>
 

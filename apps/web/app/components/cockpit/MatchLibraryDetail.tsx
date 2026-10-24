@@ -129,17 +129,6 @@ export const MatchLibraryDetail: React.FC<MatchLibraryDetailProps> = ({
         {tab === "overview" && (
           <>
             <Row
-              label={isZh ? "赛事" : "Competition"}
-              value={
-                <>
-                  {competitionLabel(match.competition, isZh)}
-                  <span className="ml-detail-sub">{match.competition}</span>
-                </>
-              }
-            />
-            <Row label={isZh ? "年份" : "Season"} value={match.season} />
-            <Row label={isZh ? "轮次" : "Round"} value={stageLabel(match.stage, isZh)} />
-            <Row
               label={isZh ? "事件数" : "Events"}
               value={`${match.events_count ?? 0}`}
             />

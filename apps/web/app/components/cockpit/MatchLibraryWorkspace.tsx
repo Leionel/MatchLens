@@ -122,14 +122,8 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
       <section className="ml-header">
         <div className="ml-header-text">
           <h2 className="ml-title">{isZh ? "比赛库" : "Match Library"}</h2>
-          <p className="ml-subtitle">
-            {isZh
-              ? "按赛事类型和年份进入比赛。覆盖不足的比赛会明确标注。"
-              : "Enter a match by competition and year. Incomplete coverage is labeled explicitly."}
-          </p>
         </div>
         <label className="ml-search">
-          <span className="ml-search-label">{isZh ? "搜索球队、赛事或赛季" : "Search team, competition or season"}</span>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}

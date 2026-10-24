@@ -569,7 +569,7 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
             padding: "6px 10px",
             borderRadius: 6,
             fontSize: 11,
-            color: "var(--text-tertiary)",
+            color: "var(--text-secondary)",
             background: registry.registry_comparable
               ? "color-mix(in srgb, var(--green-9) 8%, transparent)"
               : "color-mix(in srgb, var(--amber-9) 10%, transparent)",

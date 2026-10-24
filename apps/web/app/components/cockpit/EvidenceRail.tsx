@@ -65,9 +65,7 @@ export const EvidenceRail: React.FC<EvidenceRailProps> = ({ state, locale = "zh"
             <span className="rail-warning">
               {isZh ? "官方终场" : "OFFICIAL FT"} {official!.H}–{official!.N}
             </span>
-          ) : (
-            <span>{isZh ? "与官方终场一致或未提供" : "Matches official score or not supplied"}</span>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -81,8 +79,7 @@ export const EvidenceRail: React.FC<EvidenceRailProps> = ({ state, locale = "zh"
         </div>
         <div className="rail-meta">
           <span>
-            {coverage?.event_count ?? state.events?.length ?? 0} {isZh ? "条事件" : ((coverage?.event_count ?? state.events?.length ?? 0) === 1 ? "event" : "events")} {" "}
-            {ctx.coordinate_frame === "team_relative" ? (isZh ? "进攻方向标准化" : "attack-relative") : isZh ? "固定坐标" : "fixed frame"}
+            {coverage?.event_count ?? state.events?.length ?? 0} {isZh ? "条事件" : ((coverage?.event_count ?? state.events?.length ?? 0) === 1 ? "event" : "events")}
           </span>
         </div>
       </div>

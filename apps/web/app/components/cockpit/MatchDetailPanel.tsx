@@ -651,9 +651,7 @@ export const MatchDetailPanel: React.FC<MatchDetailPanelProps> = ({ matchId, loc
       className="mz-enter"
       data-testid="match-detail-panel"
       style={{
-        border: "1px solid var(--turf-emerald)",
         borderRadius: 10,
-        background: "color-mix(in srgb, var(--slate-1) 88%, transparent)",
         padding: 16,
         display: "grid",
         gap: 12,
@@ -717,7 +715,7 @@ export const MatchDetailPanel: React.FC<MatchDetailPanelProps> = ({ matchId, loc
 
           <div style={{ display: "grid", gap: 14 }}>
             {tab === "overview" && meta && ctx && (
-              <Section title={isZh ? "概览" : "Overview"} note={meta.license_ref}>
+              <Section title={isZh ? "概览" : "Overview"}>
                 <div style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)" }}>
                   <span>{isZh ? "数据来源" : "Data provider"}: {meta.data_provider} ({meta.provenance_kind})</span>
                   <span>{isZh ? "完整度" : "Completeness"}: {ctx.completeness_status || "—"}</span>

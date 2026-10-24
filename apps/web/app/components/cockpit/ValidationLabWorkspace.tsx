@@ -159,9 +159,6 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
             <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>
               {t.validationLabTitle}
             </div>
-            <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
-              {t.validationLabSubtitle}
-            </div>
           </div>
         </div>
 
@@ -333,11 +330,8 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
       <details className="glass-panel" style={{ padding: 18 }} data-testid="model-governance">
         <summary className="mz-summary" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <div>
-            <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-cyan)", textTransform: "uppercase" }}>
-              {isZh ? "模型治理" : "Model Governance"}
-            </span>
-            <h3 style={{ fontSize: 16, fontWeight: 750, margin: "2px 0 0" }}>
-              {isZh ? "xG / xT / OAAI 模型来源、训练协议与评测接口" : "xG / xT / OAAI provenance, training protocol and evaluation"}
+            <h3 style={{ fontSize: 16, fontWeight: 750, margin: 0 }}>
+              {isZh ? "模型治理：xG / xT / OAAI 来源、训练协议与评测" : "Model governance: xG / xT / OAAI provenance and evaluation"}
             </h3>
           </div>
           <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>

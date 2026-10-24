@@ -78,9 +78,6 @@ export const HighlightLocator: React.FC<HighlightLocatorProps> = ({
               {t.highlightLocatorTitle}
             </h3>
           </div>
-          <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 4 }}>
-            {t.highlightLocatorSubtitle}
-          </p>
         </div>
 
         <span
