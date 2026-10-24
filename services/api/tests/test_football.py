@@ -133,7 +133,7 @@ def test_r1_all_six_scenarios_and_both_team_intelligence():
     assert assertion_supported("goal_sequence", ca_snap, team="N")
     assert not assertion_supported("goal_sequence", ca_snap, team="H")
     fan_n, analyst_n = evidence_summary("goal_sequence", ca_snap, team="N")
-    assert "Northbridge scored" in fan_n and "Northbridge has 1 recorded goal" in analyst_n
+    assert "Northbridge United scored" in fan_n and "Northbridge United has 1 recorded goal" in analyst_n
     ca_moments = detect_moments(reduce_match(ca_events, 720))
     assert any(m["team"] == "N" and m["assertion"] == "goal_sequence" for m in ca_moments)
 

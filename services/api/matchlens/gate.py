@@ -212,6 +212,11 @@ def publication_gate_2_0(
                 f"Level {claim_level} claims require an explicit verification method."
             )
 
+    # 2b. An empty evidence scope cannot pass: no event and no metric reference
+    # means the claim is unfalsifiable against the snapshot.
+    if not event_ids and not metric_ids:
+        rule_violations.append("Claim has no event or metric evidence references.")
+
     # 3. Reference ID verification against match events
     known_event_ids: set[str] = set()
     for ev in match_events:

@@ -16,6 +16,25 @@ from .football import PLAYERS, TEAMS, attack_x, channel_name
 from .oaai import OAAIConfig, compute_oaai, _normalize_event_view
 
 
+def _atk_x(ev: dict, team: str, point: str = "start") -> Optional[float]:
+    coords = ev.get(point)
+    if not coords or coords[0] is None:
+        return None
+    return float(coords[0]) if ev.get("frame") == "team_relative" else attack_x(team, float(coords[0]))
+
+
+def _chan(ev: dict, team: str, point: str = "start") -> Optional[str]:
+    coords = ev.get(point)
+    if not coords or coords[1] is None:
+        return None
+    y = float(coords[1])
+    if 22.67 <= y <= 45.33:
+        return "center"
+    if ev.get("frame") == "team_relative":
+        return "left" if y > 45.33 else "right"
+    return channel_name(team, y)
+
+
 # Pitch dimensions & 9-zone definition (3 thirds x 3 channels)
 PITCH_LENGTH = 105.0
 PITCH_WIDTH = 68.0
@@ -119,9 +138,14 @@ def analyze_quick_recoveries(
 
                     # Check if team re-gains possession
                     if cand["team"] == team and cand["kind"] in ("recovery", "pass", "shot"):
-                        ax = attack_x(team, cand["start"][0])
-                        ch = channel_name(team, cand["start"][1])
-                        third = "attacking" if ax >= 70.0 else ("middle" if ax >= 35.0 else "defensive")
+                        ax = _atk_x(cand, team)
+                        ch = _chan(cand, team)
+                        third = (
+                            "unknown" if ax is None
+                            else "attacking" if ax >= 70.0
+                            else "middle" if ax >= 35.0
+                            else "defensive"
+                        )
 
                         recovery_item = {
                             "recovery_event_id": cand["id"],
@@ -132,10 +156,10 @@ def analyze_quick_recoveries(
                             "actor": cand["actor"],
                             "actor_name": PLAYERS.get(team, {}).get(cand["actor"], cand["actor"]),
                             "location": cand["start"],
-                            "attack_x": round(ax, 1),
+                            "attack_x": round(ax, 1) if ax is not None else None,
                             "channel": ch,
                             "third": third,
-                            "is_high_recovery": ax >= 70.0,
+                            "is_high_recovery": ax is not None and ax >= 70.0,
                         }
                         recoveries_found.append(recovery_item)
                         loss_record["recovered"] = True
@@ -146,11 +170,14 @@ def analyze_quick_recoveries(
         rec_count = len(recoveries_found)
         rate = round((rec_count / total_losses * 100.0), 1) if total_losses > 0 else 0.0
 
-        third_counts = {"attacking": 0, "middle": 0, "defensive": 0}
-        channel_counts = {"left": 0, "center": 0, "right": 0}
+        third_counts = {"attacking": 0, "middle": 0, "defensive": 0, "unknown": 0}
+        channel_counts = {"left": 0, "center": 0, "right": 0, "unknown": 0}
         for r in recoveries_found:
             third_counts[r["third"]] += 1
-            channel_counts[r["channel"]] += 1
+            if r["channel"]:
+                channel_counts[r["channel"]] += 1
+            else:
+                channel_counts["unknown"] += 1
 
         results_by_team[team] = {
             "team": team,
@@ -189,7 +216,10 @@ def analyze_action_density_differential(
     - Identifies high-density overlap zones
     - Strictly disclaims physical duels or pitch control.
     """
-    norm_events = [_normalize_event_view(e) for e in events if _normalize_event_view(e)["kind"] != "end"]
+    norm_events = [
+        e for e in (_normalize_event_view(e) for e in events)
+        if e["kind"] != "end" and e.get("start") is not None
+    ]
     home_events = [e for e in norm_events if e["team"] == "H"]
     away_events = [e for e in norm_events if e["team"] == "N"]
 
@@ -260,6 +290,9 @@ def analyze_attacking_channels(
     events: Sequence[Any],
     sequences: Optional[list[dict]] = None,
     team: str = "H",
+    *,
+    team_name: Optional[str] = None,
+    coordinate_frame: str = "fixed",
 ) -> dict:
     """Analyzes left, center, and right attacking channels for progression penetration and penalty box conversion.
 
@@ -282,8 +315,16 @@ def analyze_attacking_channels(
         for seq in sequences:
             if seq.get("team") != team:
                 continue
-            start_y = seq.get("start_coords", [52.5, 34.0])[1]
-            ch = channel_name(team, start_y)
+            start_coords = seq.get("start_coords")
+            if not start_coords or start_coords[1] is None:
+                continue
+            start_y = start_coords[1]
+            frame = "team_relative" if seq.get("coordinate_frame") == "team_relative" else "fixed"
+            ch = (
+                "center" if 22.67 <= start_y <= 45.33
+                else ("left" if start_y > 45.33 else "right") if frame == "team_relative"
+                else channel_name(team, start_y)
+            )
             channels_data[ch]["attacks_count"] += 1
             channels_data[ch]["progression_meters"] += float(seq.get("progressive_distance", 0.0))
             if seq.get("entered_final_third", False):
@@ -294,8 +335,10 @@ def analyze_attacking_channels(
             has_box = False
             has_shot = False
             for step in details:
+                if not step.get("end"):
+                    continue
                 ex, ey = step["end"]
-                ax_end = attack_x(team, ex)
+                ax_end = ex if step.get("coordinate_frame") == "team_relative" else attack_x(team, ex)
                 if ax_end >= 88.5 and 13.84 <= ey <= 54.16:
                     has_box = True
                 if step.get("kind") == "shot":
@@ -307,15 +350,19 @@ def analyze_attacking_channels(
     else:
         # Fallback to discrete event stream aggregation
         for ev in norm_events:
-            start_y = ev["start"][1]
-            ch = channel_name(team, start_y)
+            ch = _chan(ev, team)
+            if ch is None:
+                continue
             channels_data[ch]["attacks_count"] += 1
-            ax_s = attack_x(team, ev["start"][0])
-            ax_e = attack_x(team, ev["end"][0])
+            ax_s = _atk_x(ev, team, "start")
+            ax_e = _atk_x(ev, team, "end")
+            if ax_s is None or ax_e is None:
+                continue
             channels_data[ch]["progression_meters"] += max(0.0, ax_e - ax_s)
             if ax_s <= 70.0 < ax_e:
                 channels_data[ch]["final_third_entries"] += 1
-            if ax_e >= 88.5 and 13.84 <= ev["end"][1] <= 54.16:
+            end = ev.get("end")
+            if ax_e >= 88.5 and end and end[1] is not None and 13.84 <= end[1] <= 54.16:
                 channels_data[ch]["box_touches"] += 1
             if ev["kind"] == "shot":
                 channels_data[ch]["shots"] += 1
@@ -338,8 +385,8 @@ def analyze_attacking_channels(
 
     return {
         "team": team,
-        "team_name": TEAMS.get(team, team),
-        "attack_direction": "right" if team == "H" else "left",
+        "team_name": team_name or TEAMS.get(team, team),
+        "attack_direction": "team_relative" if coordinate_frame == "team_relative" else ("right" if team == "H" else "left"),
         "channels": formatted_channels,
         "disclaimer": "进攻通道渗透与禁区触球转化率；通道以进攻方向划分 (Level 1 观察统计)。",
     }
@@ -379,14 +426,19 @@ def build_spatial_sequence_drilldown(
         details = seq.get("events_detail", [])
         if details:
             for step in details:
+                if not step.get("start") or not step.get("end"):
+                    continue
                 p1 = tuple(step["start"])
                 p2 = tuple(step["end"])
                 for c in cells:
                     if _segment_intersects_zone(p1, p2, c):
                         traversed_zones.add(c["cell_id"])
         else:
-            p1 = tuple(seq.get("start_coords", (0.0, 0.0)))
-            p2 = tuple(seq.get("end_coords", (0.0, 0.0)))
+            if not seq.get("start_coords") or not seq.get("end_coords"):
+                sequence_to_zones[seq_id] = []
+                continue
+            p1 = tuple(seq["start_coords"])
+            p2 = tuple(seq["end_coords"])
             for c in cells:
                 if _segment_intersects_zone(p1, p2, c):
                     traversed_zones.add(c["cell_id"])
@@ -415,6 +467,8 @@ def locate_highlights(
     sequences: list[dict],
     oaai_data: Optional[dict] = None,
     max_highlights: int = 6,
+    *,
+    team_names: Optional[dict[str, str]] = None,
 ) -> list[dict]:
     """Automatically locates core match attacking waves and candidate highlights.
 
@@ -428,13 +482,14 @@ def locate_highlights(
     norm_events.sort(key=lambda e: (e["t"], e["id"]))
 
     seq_map = {sq["sequence_id"]: sq for sq in sequences}
+    names = team_names or TEAMS
 
     # 1. Goal Sequences (Highest priority)
     for sq in sequences:
         if sq.get("outcome") == "goal":
             candidates.append({
                 "highlight_id": f"HL-{len(candidates)+1:02d}",
-                "title": f"Goal Wave: {TEAMS.get(sq['team'], sq['team'])} Goal Execution",
+                "title": f"Goal Wave: {names.get(sq["team"], sq["team"])} Goal Execution",
                 "team": sq["team"],
                 "start_t": sq["start_t"],
                 "end_t": sq["end_t"],
@@ -444,7 +499,7 @@ def locate_highlights(
                 "associated_sequence_ids": [sq["sequence_id"]],
                 "key_event_ids": sq.get("event_ids", []),
                 "claim_level": 1,  # Level 1 Observable Fact
-                "description": f"{TEAMS.get(sq['team'], sq['team'])} completed a scoring sequence with {sq.get('pass_count', 0)} passes gaining {sq.get('territory_gained', 0)}m.",
+                "description": f"{names.get(sq["team"], sq["team"])} completed a scoring sequence with {sq.get('pass_count', 0)} passes gaining {sq.get('territory_gained', 0)}m.",
             })
 
     # 2. Key Shot Attempts
@@ -452,7 +507,7 @@ def locate_highlights(
         if sq.get("outcome") == "shot_saved" and sq.get("sequence_id") not in [c["associated_sequence_ids"][0] for c in candidates if c.get("associated_sequence_ids")]:
             candidates.append({
                 "highlight_id": f"HL-{len(candidates)+1:02d}",
-                "title": f"Shot Chance: {TEAMS.get(sq['team'], sq['team'])} Target Effort",
+                "title": f"Shot Chance: {names.get(sq["team"], sq["team"])} Target Effort",
                 "team": sq["team"],
                 "start_t": sq["start_t"],
                 "end_t": sq["end_t"],
@@ -479,7 +534,7 @@ def locate_highlights(
             team = cp.get("leading_team", "H")
             candidates.append({
                 "highlight_id": f"HL-{len(candidates)+1:02d}",
-                "title": f"Activity Surge ({TEAMS.get(team, team)} Momentum Shift)",
+                "title": f"Activity Surge ({names.get(team, team)} Momentum Shift)",
                 "team": team,
                 "start_t": max(0.0, cp_t - 25.0),
                 "end_t": cp_t + 5.0,

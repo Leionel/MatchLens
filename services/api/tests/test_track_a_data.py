@@ -481,8 +481,9 @@ def test_statsbomb_red_yellow_cards_and_player_deficit():
     summary = adapter.get_discipline_summary()
     assert summary["yellow_cards_count"] == 1
     assert summary["red_cards_count"] == 2
-    assert summary["team_player_counts"]["Team Alpha"] == 10
-    assert summary["team_player_counts"]["Team Beta"] == 10
+    # Canonical identity is the provider team ID, never a display name.
+    assert summary["team_player_counts"]["1"] == 10
+    assert summary["team_player_counts"]["2"] == 10
     assert len(summary["expulsions"]) == 2
 
 
@@ -518,8 +519,8 @@ def test_statsbomb_non_standard_penalty_shootout():
     assert shootout_summary["is_shootout"] is True
     assert shootout_summary["total_kicks"] == 12
     assert shootout_summary["sudden_death_reached"] is True
-    assert "ARG" in shootout_summary["team_shootout_goals"]
-    assert "FRA" in shootout_summary["team_shootout_goals"]
+    assert "1" in shootout_summary["team_shootout_goals"]
+    assert "2" in shootout_summary["team_shootout_goals"]
 
 
 def test_statsbomb_missing_and_corrupt_coordinates_resilience():

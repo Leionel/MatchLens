@@ -37,6 +37,7 @@ class ActionType(str, Enum):
     DUEL = "Duel"
     GOALKEEPER = "Goal Keeper"
     RESTART = "Restart"
+    PERIOD_END = "Period End"
     BAD_BEHAVIOUR = "Bad Behaviour"
     OWN_GOAL = "Own Goal"
     OTHER = "Other"
@@ -68,9 +69,13 @@ class NormalizedEvent(BaseModel):
     clock_seconds: float
     clock_basis: Literal["period_elapsed", "match_elapsed"] = "match_elapsed"
     team_id: str
+    provider_team_id: Optional[str] = None
+    provider_team_name: Optional[str] = None
     attack_direction: Literal["left_to_right", "right_to_left"] = "left_to_right"
     possession_id: Optional[str] = None
     possession_changed: Optional[bool] = None
+    sequence_id: Optional[str] = None
+    is_shootout: Optional[bool] = None
     player_id: Optional[str] = None
     player_name: Optional[str] = None
     jersey_number: Optional[int] = None
@@ -145,6 +150,18 @@ class MatchContext(BaseModel):
     capabilities: list[str]
     data_version: str
     partial_notice: Optional[str] = None
+    competition: Optional[str] = None
+    season: Optional[str] = None
+    label: Optional[str] = None
+    # Explicit provider identity mapping. Never inferred from name substrings.
+    home_provider_team_id: Optional[str] = None
+    away_provider_team_id: Optional[str] = None
+    coordinate_frame: Literal["fixed", "team_relative"] = "fixed"
+    continuous_coverage: bool = False
+    event_count: int = 0
+    score_basis: Literal["observed_prefix", "official_final"] = "observed_prefix"
+    official_home_score: Optional[int] = None
+    official_away_score: Optional[int] = None
 
 
 class TypedMetricReceipt(BaseModel):

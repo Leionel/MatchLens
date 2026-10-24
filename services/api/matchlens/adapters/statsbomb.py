@@ -33,6 +33,8 @@ class StatsBombAdapter:
 
     def __init__(self, match_id: str = "sb_match"):
         self.match_id = match_id
+        # Avoid "sb_sb_wc2022_final_..." double prefixes.
+        self.event_prefix = match_id if match_id.startswith("sb_") else f"sb_{match_id}"
         self.team_player_counts: dict[str, int] = {}
         self.red_cards: list[dict[str, Any]] = []
         self.yellow_cards: list[dict[str, Any]] = []
@@ -128,7 +130,8 @@ class StatsBombAdapter:
             "Goal Keeper": ActionType.GOALKEEPER,
             "Starting XI": ActionType.RESTART,
             "Half Start": ActionType.RESTART,
-            "Half End": ActionType.RESTART,
+            "Half End": ActionType.PERIOD_END,
+            "Period End": ActionType.PERIOD_END,
             "Own Goal Against": ActionType.OWN_GOAL,
             "Own Goal For": ActionType.OWN_GOAL,
             "Bad Behaviour": ActionType.BAD_BEHAVIOUR,
@@ -188,7 +191,10 @@ class StatsBombAdapter:
         type_dict = raw.get("type", {})
         type_name = type_dict.get("name", "") if isinstance(type_dict, dict) else str(type_dict)
 
-        if type_name in ("Own Goal Against", "Own Goal For") or action_type == ActionType.OWN_GOAL:
+        if type_name == "Own Goal For":
+            # The recorded team is the beneficiary, so the goal is credited to it.
+            return "own_goal_for"
+        if type_name == "Own Goal Against" or action_type == ActionType.OWN_GOAL:
             return "own_goal"
 
         if action_type == ActionType.PASS:
@@ -239,7 +245,11 @@ class StatsBombAdapter:
         clock_sec = self.parse_clock_seconds(period, minute, second, timestamp)
 
         team = raw.get("team", {})
-        team_id = str(team.get("name") or team.get("id") or "Team")
+        provider_team_id = str(team.get("id")) if team.get("id") is not None else None
+        provider_team_name = str(team.get("name")) if team.get("name") is not None else None
+        # Canonical provider identity is the numeric ID. Display names are
+        # retained separately and never used to infer home/away.
+        team_id = provider_team_id or provider_team_name or "unknown_team"
         if team_id not in self.team_player_counts:
             self.team_player_counts[team_id] = 11
 
@@ -270,7 +280,7 @@ class StatsBombAdapter:
         card = self.parse_card(raw)
         if card:
             card_record = {
-                "event_id": f"sb_{self.match_id}_{idx:05d}",
+                "event_id": f"{self.event_prefix}_{idx:05d}",
                 "clock_seconds": clock_sec,
                 "team_id": team_id,
                 "player_id": player_id,
@@ -288,13 +298,13 @@ class StatsBombAdapter:
         # Own goal tracking
         is_og = (
             action_type == ActionType.OWN_GOAL
-            or outcome == "own_goal"
+            or outcome in ("own_goal", "own_goal_for")
             or bool(raw.get("is_own_goal"))
         )
-        if is_og:
+        if is_og and outcome != "own_goal_for":
             outcome = "own_goal"
             self.own_goals.append({
-                "event_id": f"sb_{self.match_id}_{idx:05d}",
+                "event_id": f"{self.event_prefix}_{idx:05d}",
                 "clock_seconds": clock_sec,
                 "team_id": team_id,
                 "player_name": player_name,
@@ -328,16 +338,19 @@ class StatsBombAdapter:
         )
 
         return NormalizedEvent(
-            event_id=f"sb_{self.match_id}_{idx:05d}",
+            event_id=f"{self.event_prefix}_{idx:05d}",
             match_id=self.match_id,
             source=source,
             period=period,
             clock_seconds=clock_sec,
             clock_basis="match_elapsed",
             team_id=team_id,
+            provider_team_id=provider_team_id,
+            provider_team_name=provider_team_name,
             attack_direction="left_to_right",  # StatsBomb standardizes attack L-to-R for all events
             possession_id=possession_id,
             possession_changed=possession_changed,
+            is_shootout=bool(period >= 5),
             player_id=player_id,
             player_name=player_name,
             action_type=action_type,

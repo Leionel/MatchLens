@@ -1,15 +1,16 @@
-"""Track C: A/B/C Agent Benchmark Harness.
+"""Deterministic publication-pipeline benchmark (no synthetic LLM metrics).
 
-Compares three agent system configurations on identical match data:
-- Config A: Dual Agent (Analyst + Verifier with baseline slot checks)
-- Config B: Dual Agent + 3 Specialized Attribution Tools
-- Config C: Tri Agent (Analyst + Verifier + Event Attribution Specialist & Gate 2.0)
+The three configurations are *pipeline configurations*, not three agents:
 
-Generates genuine quantitative audit metrics:
-- Gate interception rate (block rate on invalid claims)
-- Claim accuracy (fraction of accepted claims that are genuinely valid)
-- Alternative hypothesis coverage
-- Token consumption and execution latency
+- A_reference_only: checks that cited event IDs exist.
+- B_gate20: runs the real Gate 2.0 rule engine (wording, assumptions,
+  verification method, metric namespace, model version).
+- C_gate20_plus_tools: B plus the real deterministic attribution tools.
+
+No configuration dispatches a language model. Live-model accuracy, token cost
+and model latency are therefore reported as Not Run, never estimated. The
+claim labels used here are a small hand-authored contract fixture; agreement
+with those labels is *contract agreement*, not empirical model accuracy.
 """
 from __future__ import annotations
 
@@ -18,70 +19,106 @@ from typing import Any, Literal, Optional, Sequence
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from .catalog import MatchCatalog
-from .attribution import (
-    EventAttributionSpecialist,
-    temporal_window_decomposition,
-    causal_chain_query,
-    alternative_hypothesis_assessment,
-)
-from .gate import publication_gate_2_0, check_level_wording
-from .schema import NormalizedEvent, VerifiedClaim
+from .gate import publication_gate_2_0
+from .schema import NormalizedEvent
+
+
+ConfigId = Literal["A_reference_only", "B_gate20", "C_gate20_plus_tools"]
 
 
 class AgentBenchmarkMetrics(BaseModel):
-    """Auditable quantitative metrics for an evaluated agent configuration."""
+    """Auditable metrics for one deterministic pipeline configuration."""
     model_config = ConfigDict(extra="ignore")
 
-    config: Literal["A_dual_agent", "B_dual_agent_plus_tools", "C_triple_agent_specialist"]
+    config: ConfigId
     benchmark_type: Literal["deterministic_contract", "live_agent_empirical"] = "deterministic_contract"
+    status: Literal["executed", "not_run"] = "executed"
     total_claims_evaluated: int
-    gate_block_rate: float
-    accuracy_rate: float
-    alternative_hypothesis_coverage: float
-    token_cost_usd_est: float
-    latency_ms_est: float
+    valid_count: int
+    invalid_count: int
+    accepted_count: int
+    blocked_count: int
+    invalid_block_rate: Optional[float] = None
+    valid_acceptance_rate: Optional[float] = None
+    false_accept_rate: Optional[float] = None
+    contract_agreement_rate: Optional[float] = None
+    latency_ms_measured: Optional[float] = None
+    token_cost_usd: Optional[float] = None
+    token_source: Literal["not_run", "live_usage"] = "not_run"
+    alternative_hypothesis_tool_executed: bool = False
     is_live_model_evaluation: bool = False
     empirical_accuracy_measured: bool = False
-    latency_source: Literal["measured_contract_execution", "live_model_dispatch", "estimated_model_budget"] = "measured_contract_execution"
-    token_source: Literal["zero_deterministic", "live_usage", "estimated_budget"] = "estimated_budget"
+    data_provenance: str = "Deterministic Contract Benchmark (executed rule engine)"
     notes: Optional[str] = None
 
-    # Aliases for specification compliance
+    # Compatibility aliases: all computed from executed results, never constants.
     @computed_field
     @property
-    def gate_interception_rate(self) -> float:
-        return self.gate_block_rate
+    def gate_interception_rate(self) -> Optional[float]:
+        return self.invalid_block_rate
 
     @computed_field
     @property
-    def claim_accuracy(self) -> float:
-        return self.accuracy_rate
+    def gate_block_rate(self) -> Optional[float]:
+        return self.invalid_block_rate
 
     @computed_field
     @property
-    def avg_latency_ms(self) -> float:
-        return self.latency_ms_est
+    def accuracy_rate(self) -> Optional[float]:
+        return self.contract_agreement_rate
 
     @computed_field
     @property
-    def avg_token_consumption(self) -> int:
-        return int(self.token_cost_usd_est / 0.000002)
+    def gate_pass_rate(self) -> Optional[float]:
+        return round(self.accepted_count / self.total_claims_evaluated, 4) if self.total_claims_evaluated else None
+
+    @computed_field
+    @property
+    def alternative_hypothesis_coverage(self) -> Optional[float]:
+        # No per-claim alternative assessment is executed; the ratio is not measured.
+        return None
+
+    @computed_field
+    @property
+    def avg_latency_ms(self) -> Optional[float]:
+        return self.latency_ms_measured
+
+    @computed_field
+    @property
+    def latency_ms_est(self) -> Optional[float]:
+        return self.latency_ms_measured
+
+    @computed_field
+    @property
+    def token_cost_usd_est(self) -> Optional[float]:
+        return self.token_cost_usd
+
+    @computed_field
+    @property
+    def avg_token_consumption(self) -> Optional[int]:
+        return None
 
 
 class AgentBenchmarkSuiteResult(BaseModel):
-    """Complete comparative audit report across all 3 agent configurations."""
+    """Complete deterministic pipeline report plus explicit live-model status."""
     model_config = ConfigDict(extra="ignore")
 
     benchmark_id: str
     match_id: str
     benchmark_type: Literal["deterministic_contract", "live_agent_empirical"] = "deterministic_contract"
     configurations: list[AgentBenchmarkMetrics]
+    dataset: dict[str, Any] = Field(default_factory=dict)
+    live_model_status: Literal["not_run", "run"] = "not_run"
     recommendation: str
     summary: str
 
 
 def _build_candidate_claims(events: list[NormalizedEvent]) -> list[dict[str, Any]]:
-    """Builds a realistic test set of valid and invalid claims grounded in real match events."""
+    """Hand-authored contract fixtures with declared expected labels.
+
+    These labels are test-fixture ground truth, not model outputs and not an
+    empirical validation set.
+    """
     if not events:
         return []
 
@@ -89,16 +126,15 @@ def _build_candidate_claims(events: list[NormalizedEvent]) -> list[dict[str, Any
     ev_1 = events[min(2, len(events) - 1)].event_id
     ev_mid = events[len(events) // 2].event_id
 
-    ev_x = events[0].x if events[0].x is not None else 50.0
-    ev_y = events[0].y if events[0].y is not None else 34.0
+    ev_x = events[0].x if events[0].x is not None else 0.0
+    ev_y = events[0].y if events[0].y is not None else 0.0
+    location_note = "location recorded" if events[0].x is not None else "location not recorded"
 
-    # Construct test candidates with known ground truth
     candidates = [
-        # 1. Valid Level 1 observation
         {
             "claim_id": "c1_valid_obs",
             "claim_level": 1,
-            "text": f"In window 0-300s, event {ev_0} was recorded at pitch coordinate ({ev_x:.1f}, {ev_y:.1f}).",
+            "text": f"Event {ev_0} is a recorded on-ball action ({location_note}).",
             "evidence_scope": {"event_ids": [ev_0], "metric_ids": ["possession"]},
             "assumptions": [],
             "counterevidence": [],
@@ -106,7 +142,6 @@ def _build_candidate_claims(events: list[NormalizedEvent]) -> list[dict[str, Any
             "metric_versions": {"oaai": "1.0.0"},
             "ground_truth_valid": True,
         },
-        # 2. Flawed Level 1 with causal wording overreach
         {
             "claim_id": "c2_causal_overreach_l1",
             "claim_level": 1,
@@ -116,33 +151,30 @@ def _build_candidate_claims(events: list[NormalizedEvent]) -> list[dict[str, Any
             "counterevidence": [],
             "verification_method": "direct_event_check",
             "metric_versions": {"oaai": "1.0.0"},
-            "ground_truth_valid": False,  # Violates Level 1 prose rule
+            "ground_truth_valid": False,
         },
-        # 3. Valid Level 2 metric decomposition
         {
             "claim_id": "c3_valid_l2_decomp",
             "claim_level": 2,
-            "text": f"Window 0-300s cumulative delta_xT was evaluated across sequence from {ev_0} to {ev_1}.",
+            "text": f"Window cumulative delta_xT was evaluated across the sequences containing {ev_0} and {ev_1}.",
             "evidence_scope": {"event_ids": [ev_0, ev_1], "metric_ids": ["delta_xt", "xG"]},
-            "assumptions": ["Bilinear interpolation on 16x12 grid"],
+            "assumptions": ["Bilinear interpolation on a 16x12 grid"],
             "counterevidence": [],
             "verification_method": "xt_bilinear_model",
             "metric_versions": {"delta_xt": "1.0.0"},
             "ground_truth_valid": True,
         },
-        # 4. Flawed Level 3 missing assumptions and verification methods
         {
             "claim_id": "c4_missing_assumptions_l3",
             "claim_level": 3,
-            "text": f"High recoveries observed at {ev_mid} indicate a deliberate tactical pressing plan by coach.",
+            "text": f"High recoveries observed near {ev_mid} indicate a deliberate tactical pressing plan by the coach.",
             "evidence_scope": {"event_ids": [ev_mid], "metric_ids": ["high_recoveries"]},
-            "assumptions": [],  # Missing mandatory assumptions!
+            "assumptions": [],
             "counterevidence": [],
-            "verification_method": "",  # Missing verification method!
+            "verification_method": "",
             "metric_versions": {"oaai": "1.0.0"},
             "ground_truth_valid": False,
         },
-        # 5. Flawed claim with hallucinated/nonexistent event ID
         {
             "claim_id": "c5_hallucinated_ref",
             "claim_level": 1,
@@ -152,37 +184,34 @@ def _build_candidate_claims(events: list[NormalizedEvent]) -> list[dict[str, Any
             "counterevidence": [],
             "verification_method": "direct_event_check",
             "metric_versions": {"oaai": "1.0.0"},
-            "ground_truth_valid": False,  # Nonexistent reference
+            "ground_truth_valid": False,
         },
-        # 6. Contested claim with active counterevidence
         {
             "claim_id": "c6_contested_counterevidence",
             "claim_level": 2,
-            "text": f"Sustained attacking pressure in final third near {ev_1} forced consecutive chances.",
+            "text": f"Sustained attacking pressure in the final third near {ev_1} preceded consecutive chances.",
             "evidence_scope": {"event_ids": [ev_1], "metric_ids": ["entries", "shots"]},
             "assumptions": ["Continuous possession sequence"],
             "counterevidence": [f"{ev_0}_unforced_error", "misplaced_pass_3"],
             "verification_method": "sequence_attribution",
             "metric_versions": {"oaai": "1.0.0"},
-            "ground_truth_valid": False,  # Must be downgraded/contested, not approved
+            "ground_truth_valid": False,
         },
-        # 7. Valid Level 3 with full assumptions and verification method
         {
             "claim_id": "c7_valid_l3_hypothesis",
             "claim_level": 3,
-            "text": f"Transition shot following recovery at {ev_0} reflects positive spatial progression tendency.",
+            "text": f"Transition shots following recoveries near {ev_0} reflect positive spatial progression tendency.",
             "evidence_scope": {"event_ids": [ev_0, ev_1], "metric_ids": ["transition_shots"]},
-            "assumptions": ["Observed within 180s window baseline", "Sample size N>=10 sequences"],
+            "assumptions": ["Observed within a 180s window baseline", "Sample size N>=10 sequences"],
             "counterevidence": [],
             "verification_method": "bootstrap_significance_test",
             "metric_versions": {"oaai": "1.0.0"},
             "ground_truth_valid": True,
         },
-        # 8. Flawed claim with invalid model version
         {
             "claim_id": "c8_invalid_version",
             "claim_level": 2,
-            "text": f"Decomposition using legacy metric model at {ev_0}.",
+            "text": f"Decomposition using a legacy metric model at {ev_0}.",
             "evidence_scope": {"event_ids": [ev_0], "metric_ids": ["oaai"]},
             "assumptions": ["Legacy weights"],
             "counterevidence": [],
@@ -194,188 +223,160 @@ def _build_candidate_claims(events: list[NormalizedEvent]) -> list[dict[str, Any
     return candidates
 
 
+def _coverage_or_unknown(match_id: str) -> str:
+    try:
+        return MatchCatalog.get_match_context(match_id).data_coverage
+    except Exception:
+        return "unknown"
+
+
+def _reference_only_verdict(claim: dict[str, Any], known_event_ids: set[str]) -> str:
+    refs = [str(ref) for ref in claim.get("evidence_scope", {}).get("event_ids", [])]
+    if not refs:
+        return "rejected"
+    return "approved" if all(ref in known_event_ids for ref in refs) else "rejected"
+
+
 class AgentBenchmarkHarness:
-    """Automated benchmark comparing Config A, B, and C with genuine evaluation."""
+    """Runs deterministic publication-pipeline configurations on real events."""
 
     def __init__(self, match_id: str = "syn_default"):
         self.match_id = match_id
         self.events = MatchCatalog.load_normalized_events(match_id)
 
     def run(self, num_trials: int = 15) -> AgentBenchmarkSuiteResult:
-        """Runs the comparative benchmark suite across Config A, B, and C."""
         candidates = _build_candidate_claims(self.events)
-        total_claims = len(candidates)
-        invalid_count = sum(1 for c in candidates if not c["ground_truth_valid"])
-        valid_count = sum(1 for c in candidates if c["ground_truth_valid"])
-
-        # -------------------------------------------------------------
-        # 1. Config A: Dual Agent (Analyst + Verifier)
-        # -------------------------------------------------------------
-        # Config A only verifies basic string syntax and basic refs.
-        # It misses causal language in Level 1 and does not evaluate alternative hypotheses.
-        t0 = time.perf_counter()
-        config_a_blocked = 0
-        config_a_accepted_valid = 0
-        config_a_accepted_total = 0
-
-        for c in candidates:
-            # Baseline verifier: only catches blatant nonexistent IDs if length > 12 or prefix 'fake'
-            is_blocked = any("fake" in ref for ref in c["evidence_scope"]["event_ids"])
-            if is_blocked:
-                config_a_blocked += 1
-            else:
-                config_a_accepted_total += 1
-                if c["ground_truth_valid"]:
-                    config_a_accepted_valid += 1
-
-        t_a = max(0.5, (time.perf_counter() - t0) * 1000.0)
-        acc_a = (config_a_accepted_valid / config_a_accepted_total) if config_a_accepted_total > 0 else 0.0
-        block_rate_a = (config_a_blocked / invalid_count) if invalid_count > 0 else 0.0
-
-        metrics_a = AgentBenchmarkMetrics(
-            config="A_dual_agent",
-            benchmark_type="deterministic_contract",
-            total_claims_evaluated=total_claims,
-            gate_block_rate=round(block_rate_a, 2),
-            accuracy_rate=round(acc_a, 2),
-            alternative_hypothesis_coverage=0.0,  # No attribution tools
-            token_cost_usd_est=0.008,
-            latency_ms_est=round(t_a, 2),
-            is_live_model_evaluation=False,
-            empirical_accuracy_measured=False,
-            latency_source="measured_contract_execution",
-            token_source="estimated_budget",
-            notes="Deterministic contract check without attribution tools.",
-        )
-
-        # -------------------------------------------------------------
-        # 2. Config B: Dual Agent + 3 Attribution Tools
-        # -------------------------------------------------------------
-        # Has access to tools, evaluates rival hypotheses, catches metric mismatch
-        t0 = time.perf_counter()
-        config_b_blocked = 0
-        config_b_accepted_valid = 0
-        config_b_accepted_total = 0
-        config_b_alts_evaluated = 0
-
-        # Execute genuine tools on real event stream
-        decomp = temporal_window_decomposition(self.events, window_start=0.0, window_end=300.0, team="H")
-        alt_res = alternative_hypothesis_assessment(self.events, primary_hypothesis="Pressing", window_start=0.0, window_end=300.0, team="H")
-
-        for c in candidates:
-            # Catches fake IDs and model version mismatch
-            has_fake_id = any("fake" in ref for ref in c["evidence_scope"]["event_ids"])
-            has_bad_ver = any(v != "1.0.0" for v in c.get("metric_versions", {}).values())
-
-            # Evaluate alternative hypothesis if Level 2+
-            if c["claim_level"] >= 2:
-                config_b_alts_evaluated += 1
-
-            if has_fake_id or has_bad_ver:
-                config_b_blocked += 1
-            else:
-                config_b_accepted_total += 1
-                if c["ground_truth_valid"]:
-                    config_b_accepted_valid += 1
-
-        t_b = max(t_a + 0.5, (time.perf_counter() - t0) * 1000.0)
-        acc_b = (config_b_accepted_valid / config_b_accepted_total) if config_b_accepted_total > 0 else 0.0
-        block_rate_b = (config_b_blocked / invalid_count) if invalid_count > 0 else 0.0
-        alt_coverage_b = config_b_alts_evaluated / max(1, sum(1 for c in candidates if c["claim_level"] >= 2))
-
-        metrics_b = AgentBenchmarkMetrics(
-            config="B_dual_agent_plus_tools",
-            benchmark_type="deterministic_contract",
-            total_claims_evaluated=total_claims,
-            gate_block_rate=round(block_rate_b, 2),
-            accuracy_rate=round(acc_b, 2),
-            alternative_hypothesis_coverage=round(alt_coverage_b, 2),
-            token_cost_usd_est=0.013,
-            latency_ms_est=round(t_b, 2),
-            is_live_model_evaluation=False,
-            empirical_accuracy_measured=False,
-            latency_source="measured_contract_execution",
-            token_source="estimated_budget",
-            notes="Deterministic contract check with sequence queries & temporal decomposition tools.",
-        )
-
-        # -------------------------------------------------------------
-        # 3. Config C: Tri Agent (Analyst + Verifier + Specialist & Gate 2.0)
-        # -------------------------------------------------------------
-        # Specialist verifies decomposition & rival hypotheses; Gate 2.0 strictly intercepts:
-        # - Causal wording in Level 1
-        # - Missing assumptions in Level 3
-        # - Unmatched IDs & model versions
-        # - Downgrades claims with counterevidence
-        t0 = time.perf_counter()
-        config_c_blocked = 0
-        config_c_accepted_valid = 0
-        config_c_accepted_total = 0
-        config_c_alts_evaluated = 0
-
-        specialist = EventAttributionSpecialist(self.match_id, self.events)
-        decomp_c = specialist.decompose_window(0.0, 300.0, "H")
-        alt_c = specialist.assess_alternatives(0.0, 300.0, "H")
-
-        for c in candidates:
-            # Run genuine Gate 2.0 validation
-            verdict = publication_gate_2_0(
-                claim=c,
-                match_events=self.events,
-                active_model_version="1.0.0",
+        if not candidates:
+            return AgentBenchmarkSuiteResult(
+                benchmark_id=f"bm-{self.match_id}-empty",
+                match_id=self.match_id,
+                configurations=[],
+                dataset={"event_count": 0, "fixture_claims": 0},
+                live_model_status="not_run",
+                recommendation="No claims could be constructed from an empty event stream.",
+                summary="Deterministic pipeline benchmark not run: empty event stream.",
             )
-            if c["claim_level"] >= 2:
-                config_c_alts_evaluated += 1
 
-            if verdict.status in ("rejected", "disputed"):
-                config_c_blocked += 1
-            else:
-                config_c_accepted_total += 1
-                if c["ground_truth_valid"]:
-                    config_c_accepted_valid += 1
+        known_event_ids = {event.event_id for event in self.events}
+        total = len(candidates)
+        valid_count = sum(1 for c in candidates if c["ground_truth_valid"])
+        invalid_count = total - valid_count
 
-        t_c = max(t_b + 0.5, (time.perf_counter() - t0) * 1000.0)
-        acc_c = (config_c_accepted_valid / config_c_accepted_total) if config_c_accepted_total > 0 else 1.0
-        block_rate_c = (config_c_blocked / invalid_count) if invalid_count > 0 else 1.0
-        alt_coverage_c = config_c_alts_evaluated / max(1, sum(1 for c in candidates if c["claim_level"] >= 2))
+        def metrics(
+            config: ConfigId,
+            verdicts: dict[str, str],
+            latency_ms: float,
+            *,
+            alt_executed: bool = False,
+            notes: str = "",
+        ) -> AgentBenchmarkMetrics:
+            accepted = [c for c in candidates if verdicts[c["claim_id"]] == "approved"]
+            blocked = [c for c in candidates if verdicts[c["claim_id"]] != "approved"]
+            accepted_valid = sum(1 for c in accepted if c["ground_truth_valid"])
+            accepted_invalid = len(accepted) - accepted_valid
+            blocked_invalid = sum(1 for c in blocked if not c["ground_truth_valid"])
+            agreement = (accepted_valid + blocked_invalid) / total
+            return AgentBenchmarkMetrics(
+                config=config,
+                total_claims_evaluated=total,
+                valid_count=valid_count,
+                invalid_count=invalid_count,
+                accepted_count=len(accepted),
+                blocked_count=len(blocked),
+                invalid_block_rate=round(blocked_invalid / invalid_count, 4) if invalid_count else None,
+                valid_acceptance_rate=round(accepted_valid / valid_count, 4) if valid_count else None,
+                false_accept_rate=round(accepted_invalid / invalid_count, 4) if invalid_count else None,
+                contract_agreement_rate=round(agreement, 4),
+                latency_ms_measured=round(latency_ms, 3),
+                token_cost_usd=None,
+                token_source="not_run",
+                alternative_hypothesis_tool_executed=alt_executed,
+                is_live_model_evaluation=False,
+                empirical_accuracy_measured=False,
+                notes=notes,
+            )
 
-        metrics_c = AgentBenchmarkMetrics(
-            config="C_triple_agent_specialist",
-            benchmark_type="deterministic_contract",
-            total_claims_evaluated=total_claims,
-            gate_block_rate=round(block_rate_c, 2),
-            accuracy_rate=round(min(1.0, acc_c), 2),
-            alternative_hypothesis_coverage=round(alt_coverage_c, 2),
-            token_cost_usd_est=0.019,
-            latency_ms_est=round(t_c, 2),
-            is_live_model_evaluation=False,
-            empirical_accuracy_measured=False,
-            latency_source="measured_contract_execution",
-            token_source="estimated_budget",
-            notes="Deterministic contract check with Gate 2.0 and rival hypothesis specialist.",
-        )
+        # --- A: reference existence only -------------------------------------
+        t0 = time.perf_counter()
+        verdicts_a = {c["claim_id"]: _reference_only_verdict(c, known_event_ids) for c in candidates}
+        time_a = (time.perf_counter() - t0) * 1000.0
 
+        # --- B: real Gate 2.0 -------------------------------------------------
+        t0 = time.perf_counter()
+        verdicts_b = {}
+        for c in candidates:
+            verdict = publication_gate_2_0(c, self.events, active_model_version="1.0.0")
+            verdicts_b[c["claim_id"]] = "approved" if verdict.status == "approved" else "rejected"
+        time_b = (time.perf_counter() - t0) * 1000.0
+
+        # --- C: Gate 2.0 plus real attribution tools --------------------------
+        from .attribution import EventAttributionSpecialist
+
+        t0 = time.perf_counter()
+        specialist = EventAttributionSpecialist(self.match_id, self.events)
+        specialist.decompose_window(0.0, 300.0, "H")
+        specialist.assess_alternatives(0.0, 300.0, "H")
+        verdicts_c = {}
+        for c in candidates:
+            verdict = publication_gate_2_0(c, self.events, active_model_version="1.0.0")
+            verdicts_c[c["claim_id"]] = "approved" if verdict.status == "approved" else "rejected"
+        time_c = (time.perf_counter() - t0) * 1000.0
+
+        configurations = [
+            metrics(
+                "A_reference_only",
+                verdicts_a,
+                time_a,
+                notes="Only event-ID existence is checked; causal wording and assumptions are not evaluated.",
+            ),
+            metrics(
+                "B_gate20",
+                verdicts_b,
+                time_b,
+                notes="Real Gate 2.0 rules: wording, Level 3 assumptions, metric namespace, model version.",
+            ),
+            metrics(
+                "C_gate20_plus_tools",
+                verdicts_c,
+                time_c,
+                alt_executed=True,
+                notes="Gate 2.0 plus real decomposition and alternative-hypothesis tool execution. Not an additional agent.",
+            ),
+        ]
+
+        by_id = {m.config: m for m in configurations}
         summary = (
-            f"Benchmark on {self.match_id}: Configuration C (Tri Agent with Event Attribution Specialist & Gate 2.0) "
-            f"achieved {metrics_c.accuracy_rate * 100:.0f}% verified claim accuracy and {metrics_c.alternative_hypothesis_coverage * 100:.0f}% "
-            f"rival hypothesis coverage, while successfully intercepting {metrics_c.gate_block_rate * 100:.0f}% of invalid/overreaching assertions."
+            f"Deterministic contract benchmark on {self.match_id} "
+            f"({total} hand-authored fixture claims: {valid_count} labelled valid, {invalid_count} labelled invalid). "
+            f"A blocked {by_id['A_reference_only'].invalid_block_rate:.0%} of labelled-invalid claims; "
+            f"B blocked {by_id['B_gate20'].invalid_block_rate:.0%}; "
+            f"C blocked {by_id['C_gate20_plus_tools'].invalid_block_rate:.0%}. "
+            "These are rule-execution agreement rates, not LLM accuracy. "
+            "Live-model A/B/C evaluation: NOT RUN."
+            if invalid_count else
+            "Deterministic contract benchmark executed; fixture contains no labelled-invalid claims."
         )
-
-        recommendation = (
-            "Configuration C is strictly recommended for production publication pipelines: "
-            "it eliminates unverified causal speculation while maintaining auditable Level 1–2 evidence bindings."
-        )
-
         return AgentBenchmarkSuiteResult(
-            benchmark_id=f"bm-{self.match_id}-track-c",
+            benchmark_id=f"bm-{self.match_id}-deterministic",
             match_id=self.match_id,
-            configurations=[metrics_a, metrics_b, metrics_c],
-            recommendation=recommendation,
+            configurations=configurations,
+            dataset={
+                "event_count": len(self.events),
+                "fixture_claims": total,
+                "label_source": "hand-authored contract fixtures (not empirical ground truth)",
+                "coverage": _coverage_or_unknown(self.match_id),
+                "live_model_metrics": "not_run",
+            },
+            live_model_status="not_run",
+            recommendation=(
+                "Use Gate 2.0 (B/C) as the deterministic publication contract. "
+                "No claim of live-agent superiority is supported by this run."
+            ),
             summary=summary,
         )
 
 
 def run_agent_benchmark_harness(match_id: str = "syn_default", num_trials: int = 15) -> AgentBenchmarkSuiteResult:
-    """Executes the automated A/B/C agent benchmark harness."""
+    """Executes the deterministic publication-pipeline benchmark (no model dispatch)."""
     harness = AgentBenchmarkHarness(match_id=match_id)
     return harness.run(num_trials=num_trials)

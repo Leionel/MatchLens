@@ -420,45 +420,18 @@ ScientificValidationEngine = ScientificEvaluationBenchmark
 # Quantitative Agent Benchmark Evaluator (A/B/C Configurations)
 # ---------------------------------------------------------------------------
 
-class AgentBenchmarkMetrics(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    config: Literal["A_dual_agent", "B_dual_agent_plus_tools", "C_triple_agent_specialist"]
-    benchmark_type: Literal["deterministic_contract", "live_agent_empirical"] = "deterministic_contract"
-    total_claims_evaluated: int
-    gate_pass_rate: float
-    gate_block_rate: float
-    accuracy_rate: float
-    alternative_hypothesis_coverage: float
-    token_cost_usd_est: float
-    latency_ms_est: float
-    is_live_model_evaluation: bool = False
-    empirical_accuracy_measured: bool = False
-    data_provenance: str = "Deterministic Contract Benchmark (rule execution on event stream)"
-    notes: Optional[str] = None
-
-
-class AgentBenchmarkSuiteResult(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    benchmark_id: str
-    match_id: str
-    benchmark_type: Literal["deterministic_contract", "live_agent_empirical"] = "deterministic_contract"
-    configurations: list[AgentBenchmarkMetrics]
-    recommendation: str
-    summary: str
+# The former "agent benchmark" constants (0.375/0.625 accuracy, fixed token
+# and latency numbers) were removed in the third-pass audit. The evaluator now
+# delegates to the executed deterministic pipeline benchmark.
+from .benchmark import (  # noqa: E402
+    AgentBenchmarkMetrics,
+    AgentBenchmarkSuiteResult,
+    AgentBenchmarkHarness,
+)
 
 
 class AgentBenchmarkEvaluator:
-    """Automated benchmark runner for multi-agent configurations.
-    
-    Supports two strictly isolated evaluation frameworks:
-    1. Deterministic Contract Benchmark:
-       - Evaluates event ID validity, metric ID integrity, Gate 2.0 filtering,
-         temporal chain continuity, and alternative hypothesis attribution tools.
-       - Runs directly against frozen event streams without synthesizing LLM outputs.
-    2. Real Agent Comparative Evaluation:
-       - Requires live model dispatches to evaluate empirical LLM reasoning, token budgets,
-         and wall-clock latencies.
-    """
+    """Runs deterministic publication-pipeline configurations (no model calls)."""
 
     @classmethod
     def evaluate_match(
@@ -468,161 +441,52 @@ class AgentBenchmarkEvaluator:
         num_windows: int = 5,
         seed: int = 42,
     ) -> AgentBenchmarkSuiteResult:
-        """Runs quantitative Deterministic Contract Benchmark across match event stream."""
         from .catalog import MatchCatalog
 
         if events is None:
-            events = MatchCatalog.load_normalized_events(match_id)
+            harness = AgentBenchmarkHarness(match_id=match_id)
+        else:
+            normalized: list[NormalizedEvent] = []
+            for ev in events:
+                if isinstance(ev, NormalizedEvent):
+                    normalized.append(ev)
+                else:
+                    from .schema import ActionType, RawSourceRecord
+                    act = str(_extract_action(ev))
+                    action = (
+                        ActionType.SHOT if "shot" in act
+                        else ActionType.RECOVERY if "recovery" in act
+                        else ActionType.CARRY if "carry" in act
+                        else ActionType.PASS
+                    )
+                    normalized.append(NormalizedEvent(
+                        event_id=_extract_id(ev, f"ev_{len(normalized)}"),
+                        match_id=match_id,
+                        source=RawSourceRecord(
+                            provider="caller_supplied",
+                            provider_event_id=_extract_id(ev, f"raw_{len(normalized)}"),
+                            schema_version="1.0.0",
+                            license_ref="caller_supplied",
+                        ),
+                        period=int(_get_field(ev, "period", 1) or 1),
+                        clock_seconds=_extract_time(ev),
+                        team_id=_extract_team(ev),
+                        action_type=action,
+                        x=_get_field(ev, "x"),
+                        y=_get_field(ev, "y"),
+                        end_x=_get_field(ev, "end_x"),
+                        end_y=_get_field(ev, "end_y"),
+                    ))
+            harness = AgentBenchmarkHarness.__new__(AgentBenchmarkHarness)
+            harness.match_id = match_id
+            harness.events = normalized
 
-        rnd = random.Random(seed)
-        total_evs = len(events)
-        # Convert raw events into NormalizedEvent instances if needed
-        normalized: list[NormalizedEvent] = []
-        for ev in events:
-            if isinstance(ev, NormalizedEvent):
-                normalized.append(ev)
-            elif isinstance(ev, dict):
-                act_str = _extract_action(ev)
-                act_enum = ActionType.PASS
-                if "shot" in act_str:
-                    act_enum = ActionType.SHOT
-                elif "recovery" in act_str:
-                    act_enum = ActionType.RECOVERY
-                elif "carry" in act_str:
-                    act_enum = ActionType.CARRY
-                from .schema import RawSourceRecord
-                normalized.append(NormalizedEvent(
-                    event_id=_extract_id(ev, f"ev_{len(normalized)}"),
-                    match_id=match_id,
-                    period=int(_get_field(ev, "period", 1)),
-                    source=RawSourceRecord(
-                        provider="benchmark_eval",
-                        provider_event_id=_extract_id(ev, f"raw_{len(normalized)}"),
-                        schema_version="1.0.0",
-                        license_ref="internal_benchmark",
-                    ),
-                    clock_seconds=_extract_time(ev),
-                    team_id=_extract_team(ev),
-                    action_type=act_enum,
-                    x=float(_get_field(ev, "x", 50.0)),
-                    y=float(_get_field(ev, "y", 34.0)),
-                    end_x=float(_get_field(ev, "end_x", _get_field(ev, "x", 50.0))),
-                    end_y=float(_get_field(ev, "end_y", _get_field(ev, "y", 34.0))),
-                ))
-
-        from .benchmark import _build_candidate_claims
-        candidates = _build_candidate_claims(normalized)
-        if not candidates:
-            # Fallback benchmark suite if event stream lacks minimum anchors
-            candidates = [
-                {"claim_id": "c1", "claim_level": 1, "text": "Observation", "evidence_scope": {"event_ids": ["ev_0"], "metric_ids": ["possession"]}, "assumptions": [], "counterevidence": [], "verification_method": "direct", "metric_versions": {"oaai": "1.0.0"}, "ground_truth_valid": True},
-                {"claim_id": "c2", "claim_level": 1, "text": "Causal claim causes turnover", "evidence_scope": {"event_ids": ["ev_0"], "metric_ids": ["oaai"]}, "assumptions": [], "counterevidence": [], "verification_method": "direct", "metric_versions": {"oaai": "1.0.0"}, "ground_truth_valid": False},
-                {"claim_id": "c3", "claim_level": 2, "text": "Metric decomposition", "evidence_scope": {"event_ids": ["ev_0"], "metric_ids": ["delta_xt"]}, "assumptions": ["grid"], "counterevidence": [], "verification_method": "xt", "metric_versions": {"delta_xt": "1.0.0"}, "ground_truth_valid": True},
-                {"claim_id": "c4", "claim_level": 3, "text": "Hypothesis missing assumptions", "evidence_scope": {"event_ids": ["ev_0"], "metric_ids": ["high_recoveries"]}, "assumptions": [], "counterevidence": [], "verification_method": "", "metric_versions": {"oaai": "1.0.0"}, "ground_truth_valid": False},
-                {"claim_id": "c5", "claim_level": 1, "text": "Fake ID ev-fake-99999", "evidence_scope": {"event_ids": ["ev-fake-99999"], "metric_ids": ["possession"]}, "assumptions": [], "counterevidence": [], "verification_method": "direct", "metric_versions": {"oaai": "1.0.0"}, "ground_truth_valid": False},
-                {"claim_id": "c6", "claim_level": 2, "text": "Contested counterevidence", "evidence_scope": {"event_ids": ["ev_0"], "metric_ids": ["entries"]}, "assumptions": ["window"], "counterevidence": ["unforced_error"], "verification_method": "seq", "metric_versions": {"oaai": "1.0.0"}, "ground_truth_valid": False},
-                {"claim_id": "c7", "claim_level": 3, "text": "Valid Level 3 hypothesis", "evidence_scope": {"event_ids": ["ev_0"], "metric_ids": ["transition_shots"]}, "assumptions": ["window_180s", "sample_size"], "counterevidence": [], "verification_method": "bootstrap", "metric_versions": {"oaai": "1.0.0"}, "ground_truth_valid": True},
-                {"claim_id": "c8", "claim_level": 2, "text": "Bad version", "evidence_scope": {"event_ids": ["ev_0"], "metric_ids": ["oaai"]}, "assumptions": ["weights"], "counterevidence": [], "verification_method": "model", "metric_versions": {"oaai": "0.1.0-deprecated"}, "ground_truth_valid": False},
-            ]
-
-        claims_per_config = len(candidates)
-        invalid_count = sum(1 for c in candidates if not c.get("ground_truth_valid"))
-
-        # Evaluate deterministic contract compliance across the 3 agent configurations
-        # Config A: Dual Agent (Analyst + Verifier without attribution tools; causal overreach intercepted by Gate)
-        block_a = 0.375
-        pass_a = round(1.0 - block_a, 3)
-        acc_a = 0.625
-        alt_cov_a = 0.0
-        lat_a = round(420.0 + 10.0 * (rnd.random() - 0.5), 1)
-        cost_a = round(0.008, 4)
-
-        config_a = AgentBenchmarkMetrics(
-            config="A_dual_agent",
-            benchmark_type="deterministic_contract",
-            total_claims_evaluated=claims_per_config,
-            gate_pass_rate=pass_a,
-            gate_block_rate=block_a,
-            accuracy_rate=acc_a,
-            alternative_hypothesis_coverage=alt_cov_a,
-            token_cost_usd_est=cost_a,
-            latency_ms_est=lat_a,
-            is_live_model_evaluation=False,
-            empirical_accuracy_measured=False,
-            data_provenance="Deterministic Contract Benchmark (rule/receipt execution)",
-            notes="Evaluated without temporal attribution tools; ungrounded causal leaps intercepted by Gate.",
-        )
-
-        # Config B: Dual Agent + Tools (TemporalWindowDecomposition & CausalChainQuery)
-        block_b = 0.250
-        pass_b = round(1.0 - block_b, 3)
-        acc_b = 0.750
-        alt_cov_b = 0.44
-        lat_b = round(680.0 + 15.0 * (rnd.random() - 0.5), 1)
-        cost_b = round(0.012, 4)
-
-        config_b = AgentBenchmarkMetrics(
-            config="B_dual_agent_plus_tools",
-            benchmark_type="deterministic_contract",
-            total_claims_evaluated=claims_per_config,
-            gate_pass_rate=pass_b,
-            gate_block_rate=block_b,
-            accuracy_rate=acc_b,
-            alternative_hypothesis_coverage=alt_cov_b,
-            token_cost_usd_est=cost_b,
-            latency_ms_est=lat_b,
-            is_live_model_evaluation=False,
-            empirical_accuracy_measured=False,
-            data_provenance="Deterministic Contract Benchmark (with sequence & attribution tools)",
-            notes="Attribution tools provide temporal receipts, narrowing unsupported assertions into valid observations.",
-        )
-
-        # Config C: Triple Agent Specialist (+ Event Attribution Specialist & Alternative Hypotheses)
-        block_c = 0.125
-        pass_c = round(1.0 - block_c, 3)
-        acc_c = 0.875
-        alt_cov_c = 0.86
-        lat_c = round(950.0 + 20.0 * (rnd.random() - 0.5), 1)
-        cost_c = round(0.018, 4)
-
-        config_c = AgentBenchmarkMetrics(
-            config="C_triple_agent_specialist",
-            benchmark_type="deterministic_contract",
-            total_claims_evaluated=claims_per_config,
-            gate_pass_rate=pass_c,
-            gate_block_rate=block_c,
-            accuracy_rate=acc_c,
-            alternative_hypothesis_coverage=alt_cov_c,
-            token_cost_usd_est=cost_c,
-            latency_ms_est=lat_c,
-            is_live_model_evaluation=False,
-            empirical_accuracy_measured=False,
-            data_provenance="Deterministic Contract Benchmark (with rival hypothesis evaluation)",
-            notes="Specialist tests alternative rival hypotheses (e.g. unforced vs pressing), achieving maximum contract compliance.",
-        )
-
-        summary = (
-            f"A/B/C Multi-Agent Benchmark (Deterministic Contract Evaluation) on {match_id}: "
-            f"Config C (Specialist) achieved {config_c.gate_pass_rate:.1%} contract gate pass rate and "
-            f"{config_c.alternative_hypothesis_coverage:.1%} rival hypothesis coverage (Gate block rate: {config_c.gate_block_rate:.1%}). "
-            f"Outperforms Config B by +{config_c.gate_pass_rate - config_b.gate_pass_rate:.1%} contract pass rate. "
-            f"NOTICE: These are deterministic contract verification metrics on recorded events; not live LLM accuracy claims."
-        )
-
-        recommendation = (
-            "Configuration C (Triple Agent with Event Attribution Specialist) delivers statistically significant "
-            "attribution rigor and controversy resolution, satisfying Publication Gate 2.0 requirements."
-        )
-
-        return AgentBenchmarkSuiteResult(
-            benchmark_id=f"bm-{match_id}-{seed}",
-            match_id=match_id,
-            configurations=[config_a, config_b, config_c],
-            recommendation=recommendation,
-            summary=summary,
-        )
+        result = harness.run(num_trials=num_windows)
+        result.dataset["seed_argument"] = seed
+        result.dataset["num_windows_argument"] = num_windows
+        return result
 
 
 def run_agent_benchmark_evaluation(match_id: str = "syn_default") -> AgentBenchmarkSuiteResult:
-    """Convenience helper to evaluate agent benchmark on given match."""
+    """Convenience helper for the deterministic pipeline benchmark."""
     return AgentBenchmarkEvaluator.evaluate_match(match_id=match_id)

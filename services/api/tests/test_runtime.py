@@ -197,7 +197,7 @@ def test_r2_interactive_challenge_and_ask_the_match_api(client):
 
     # 1. Test POST /api/challenge (causal interpretation challenge)
     ch_payload = {
-        "claim_id": "claim-possession",
+        "claim_id": "claim-possession-without-penetration-h",
         "snapshot_id": snap_id,
         "challenge_type": "challenge_causal_interpretation",
         "team": "H",
@@ -205,10 +205,21 @@ def test_r2_interactive_challenge_and_ask_the_match_api(client):
     ch_res = client.post("/api/challenge", json=ch_payload)
     assert ch_res.status_code == 200
     ch_data = ch_res.json()
-    assert ch_data["result"]["outcome"] == "narrowed"
+    # possession_without_penetration is a Level 2 observational claim: a causal
+    # challenge cannot narrow it into a different factual assertion.
+    assert ch_data["result"]["outcome"] == "maintained"
     assert len(ch_data["revisions"]) == 1
     assert ch_data["revisions"][0]["challenge_type"] == "challenge_causal_interpretation"
-    assert ch_data["state"]["revisions"][0]["outcome"] == "narrowed"
+    assert ch_data["state"]["revisions"][0]["outcome"] == "maintained"
+
+    causal = client.post("/api/challenge", json={
+        "claim_id": "claim-recoveries-followed-by-shots-h",
+        "snapshot_id": snap_id,
+        "challenge_type": "challenge_causal_interpretation",
+        "team": "H",
+    })
+    assert causal.status_code == 200
+    assert causal.json()["result"]["outcome"] == "narrowed"
 
     # 2. Test POST /api/ask (Ask the Match)
     ask_res = client.post("/api/ask", json={"intent_id": "possession_vs_penetration", "team": "H"})

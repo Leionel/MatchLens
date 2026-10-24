@@ -203,34 +203,164 @@ def generate_match(seed: int = 17, scenario: str = "default") -> tuple[Event, ..
     return tuple(result)
 
 
+def _field(e: Any, name: str, default: Any = None) -> Any:
+    if isinstance(e, dict):
+        return e.get(name, default)
+    return getattr(e, name, default)
+
+
+def _location_pair(e: Any, start_name: str, end_name: str) -> tuple[float | None, float | None]:
+    """Return a coordinate pair without ever substituting a synthetic centre."""
+    x = _field(e, start_name)
+    y = _field(e, "y" if start_name == "x" else "end_y")
+    if x is None or y is None:
+        return None, None
+    try:
+        fx, fy = float(x), float(y)
+    except (TypeError, ValueError):
+        return None, None
+    if not (0.0 <= fx <= 105.0 and 0.0 <= fy <= 68.0):
+        raise ValueError("coordinate_bounds")
+    return fx, fy
+
+
+def _normalized_kind(raw_action: str, outcome: str) -> str:
+    action = raw_action.lower().replace("actiontype.", "").replace("_", " ")
+    outcome = outcome.lower().replace("_", " ")
+    if "own goal" in action or "own goal" in outcome:
+        return "own_goal"
+    if "shot" in action:
+        return "shot"
+    if "pass" in action:
+        return "pass"
+    if "carry" in action:
+        return "carry"
+    if any(k in action for k in ("recovery", "interception", "tackle")):
+        return "recovery"
+    if any(k in action for k in ("starting xi", "half start", "kick off", "restart")):
+        return "restart"
+    if any(k in action for k in ("half end", "period end", "match end")):
+        return "period_end"
+    if any(k in action for k in ("dispossessed", "clearance")):
+        return "turnover"
+    if "foul" in action or "bad behaviour" in action or "card" in action:
+        return "foul"
+    return "other"
+
+
+def _map_provider_team(
+    raw: str,
+    *,
+    team_map: dict[str, str] | None,
+    home_team_id: str | None,
+    away_team_id: str | None,
+) -> str:
+    # Already-canonical events (synthetic or catalog-canonicalized provider
+    # events) keep their code; provider IDs are never literally "H"/"N".
+    if raw in ("H", "N"):
+        return raw
+    if team_map and raw in team_map:
+        return team_map[raw]
+    if home_team_id is not None and raw == home_team_id:
+        return "H"
+    if away_team_id is not None and raw == away_team_id:
+        return "N"
+    raise ValueError(f"unmapped_provider_team: {raw}")
+
+
 def reduce_match(
     events: tuple[Event, ...] | list[Any],
     at: int,
     max_duration: int = 720,
     is_synthetic: bool = True,
     team_names: dict[str, str] | None = None,
+    *,
+    team_map: dict[str, str] | None = None,
+    home_team_id: str | None = None,
+    away_team_id: str | None = None,
+    coordinate_frame: Literal["fixed", "team_relative"] | None = None,
+    continuous_coverage: bool | None = None,
+    max_gap_seconds: float = 15.0,
+    official_score: dict[str, int] | None = None,
 ) -> dict:
+    """Reduce events to an observable as-of match state.
+
+    The reducer is a possession state machine. Controlled time belongs to the
+    possession that owns it; a new possession ID is only minted at a restart,
+    an observed turnover, a goal restart, a provider possession change, or a
+    data discontinuity. Missing coordinates stay missing (never 52.5/34.0).
+    """
     if not 0 <= at <= max(720, max_duration):
         raise ValueError("clock_out_of_bounds")
-    owner = holder = None
-    ball = (52.5, 34.0)
+    frame: Literal["fixed", "team_relative"] = coordinate_frame or (
+        "fixed" if is_synthetic else "team_relative"
+    )
+    continuous = (is_synthetic and max_duration == 720) if continuous_coverage is None else continuous_coverage
+    team_names = team_names or dict(TEAMS)
+
+    owner: str | None = None
+    holder: str | None = None
+    ball: tuple[float, float] | None = (52.5, 34.0) if is_synthetic else None
     score = {"H": 0, "N": 0}
-    possession = 0
-    last_t = -1
-    pending_restart: str | None = "H"
+    shootout_score = {"H": 0, "N": 0}
+    goals: list[dict] = []
+    last_t: float = -1.0
+    last_period: int | None = None
+    pending_restart: str | None = "H" if is_synthetic else None
+    pending_after_shot = False
     ended = False
-    enriched, intervals = [], []
+    enriched: list[dict] = []
+    intervals: list[dict] = []
+    possessions: list[dict] = []
+    unobserved: list[dict] = []
+    current: dict | None = None
+    possession_no = 0
+
+    def open_possession(team: str, t: float, reason: str) -> None:
+        nonlocal current, possession_no
+        possession_no += 1
+        current = {
+            "possession_id": possession_no,
+            "team": team,
+            "start_t": t,
+            "end_t": t,
+            "event_ids": [],
+            "start_reason": reason,
+            "provider_possession_ids": [],
+        }
+        possessions.append(current)
+
+    def close_possession(t: float, reason: str) -> None:
+        nonlocal current
+        if not current:
+            return
+        end = max(current["start_t"], t)
+        current["end_t"] = end
+        current["end_reason"] = reason
+        intervals.append({
+            "start": current["start_t"],
+            "end": end,
+            "team": current["team"],
+            "event_id": current["event_ids"][-1] if current["event_ids"] else None,
+            "possession_id": current["possession_id"],
+            "basis": "possession_state_machine",
+        })
+        current = None
+
+    def mark_unobserved(start: float, end: float, reason: str) -> None:
+        if end > start:
+            unobserved.append({"start": start, "end": end, "reason": reason})
+
     for e in events:
-        t = getattr(e, "t", None)
-        if t is None:
-            t = getattr(e, "clock_seconds", None)
-        if t is None and isinstance(e, dict):
-            t = e.get("t", e.get("clock_seconds", 0))
-        t_val = float(t) if t is not None else 0.0
+        t_raw = _field(e, "t")
+        if t_raw is None:
+            t_raw = _field(e, "clock_seconds", 0)
+        t_val = float(t_raw) if t_raw is not None else 0.0
         if t_val > at:
             break
+
         if is_synthetic and isinstance(e, Event):
-            if e.seq != len(enriched)+1 or e.id != f"E{e.seq:04d}" or e.t <= last_t or ended:
+            if e.seq != len(enriched) + 1 or e.id != f"E{e.seq:04d}" or e.t <= last_t or ended:
                 raise ValueError("event_order_or_id")
             for x, y in (e.start, e.end):
                 if not (0 <= x <= 105 and 0 <= y <= 68):
@@ -239,128 +369,290 @@ def reduce_match(
                 raise ValueError("actor_or_ball_discontinuity")
             if e.kind != "pass" and e.receiver is not None or e.kind != "shot" and e.outcome != "complete":
                 raise ValueError("illegal_event_payload")
-            if enriched and owner is not None:
-                intervals.append({"start": last_t, "end": e.t, "team": owner,
-                                  "event_id": enriched[-1]["id"]})
+            kind = e.kind
+            raw_action = e.kind
+            t_mapped = e.team
+            raw_actor = e.actor
+            raw_outcome = e.outcome
+            start = [float(e.start[0]), float(e.start[1])]
+            end = [float(e.end[0]), float(e.end[1])]
+            located = True
+            provider_pid = None
+            is_shootout = False
+            row = {
+                **e.model_dump(mode="json"),
+                "actor_name": PLAYERS[e.team].get(e.actor, e.actor),
+                "located": True,
+                "period": 1,
+                "is_shootout": False,
+                "provider_team_id": None,
+                "provider_possession_id": None,
+            }
+        else:
+            eid = str(_field(e, "event_id") or _field(e, "id") or f"E{len(enriched)+1:04d}")
+            raw_action = str(_field(e, "action_type") or _field(e, "kind") or "")
+            raw_outcome = str(_field(e, "outcome") or "complete")
+            raw_team = str(_field(e, "team_id") or _field(e, "team") or "")
+            t_mapped = _map_provider_team(
+                raw_team, team_map=team_map, home_team_id=home_team_id, away_team_id=away_team_id
+            )
+            raw_actor = str(_field(e, "player_name") or _field(e, "actor") or "Unknown")
+            x, y = _location_pair(e, "x", "end_x")
+            end_x, end_y = _location_pair(e, "end_x", "end_y")
+            start = [x, y] if x is not None and y is not None else None
+            end = [end_x, end_y] if end_x is not None and end_y is not None else None
+            located = start is not None
+            kind = _normalized_kind(raw_action, raw_outcome)
+            provider_pid = _field(e, "possession_id")
+            period = int(_field(e, "period") or 1)
+            is_shootout = bool(_field(e, "is_shootout")) or period >= 5
+            row = {
+                "id": eid,
+                "seq": len(enriched) + 1,
+                "t": int(t_val) if float(t_val).is_integer() else t_val,
+                "kind": kind,
+                "team": t_mapped,
+                "actor": raw_actor,
+                "actor_name": raw_actor,
+                "receiver": _field(e, "receiver"),
+                "start": start,
+                "end": end,
+                "outcome": raw_outcome,
+                "period": period,
+                "attack_direction": (
+                    "left_to_right" if frame == "team_relative"
+                    else ("left_to_right" if t_mapped == "H" else "right_to_left")
+                ),
+                "located": located,
+                "provider_team_id": _field(e, "provider_team_id") or raw_team,
+                "provider_possession_id": provider_pid,
+                "is_shootout": is_shootout,
+                "source": _field(e, "source").model_dump(mode="json") if hasattr(_field(e, "source"), "model_dump") else _field(e, "source"),
+            }
+
+        period = int(row.get("period") or _field(e, "period") or 1)
+        # --- order / coverage guards -------------------------------------------------
+        if not is_synthetic and t_val < last_t:
+            raise ValueError("event_order")
+        if is_synthetic and ended:
+            raise ValueError("event_order_or_id")
+
+        # --- explicit period transition closes control; break is unobserved -------
+        if last_period is not None and period != last_period:
+            close_possession(last_t, "period_end")
+            mark_unobserved(last_t, t_val, "period_break")
+            owner = holder = None
+            pending_after_shot = False
+            pending_restart = None
+
+        gap = t_val - last_t if last_t >= 0 else 0.0
+        data_gap = gap > max_gap_seconds
+        period_changed = last_period is not None and period != last_period
+        if data_gap:
+            if current:
+                close_possession(last_t, "data_gap")
+            mark_unobserved(last_t, t_val, "data_gap")
+            owner = holder = None
+            pending_after_shot = False
+        elif gap > 0 and current is None and last_t >= 0 and not period_changed:
+            # Dead ball or uncovered transition between two states.
+            mark_unobserved(last_t, t_val, "dead_ball")
+
+        # --- synthetic legality checks ----------------------------------------------
+        if is_synthetic and isinstance(e, Event):
             if pending_restart:
                 if e.kind != "restart" or e.team != pending_restart or e.end != (52.5, 34.0):
                     raise ValueError("illegal_restart")
                 pending_restart = None
-                owner, holder = e.team, e.actor
-                possession += 1
             elif e.kind == "restart":
                 raise ValueError("unexpected_restart")
             elif e.kind == "recovery":
                 if e.team != other(owner) or e.start != e.end or e.receiver or e.outcome != "complete":
                     raise ValueError("illegal_recovery")
-                owner, holder = e.team, e.actor
-                possession += 1
-            else:
-                if e.team != owner or e.actor != holder:
+            elif e.kind != "end":
+                if e.team != owner or (holder is not None and e.actor != holder):
                     raise ValueError("non_owner_action")
                 if e.kind == "pass":
                     if e.receiver not in PLAYERS[e.team] or e.receiver == holder or e.outcome != "complete":
                         raise ValueError("illegal_pass")
-                    holder = e.receiver
                 elif e.kind == "shot":
                     if e.outcome not in ("saved", "goal") or e.receiver:
                         raise ValueError("illegal_shot")
-                    if e.outcome == "goal":
-                        if attack_x(e.team, e.end[0]) != 105 or abs(e.end[1]-34) > 3.66:
-                            raise ValueError("goal_outside_goal_mouth")
-                        score[e.team] += 1
-                        pending_restart = other(e.team)
-                        owner = holder = None
-                    else:
-                        owner = other(e.team)
-                        holder = owner+"1"
-                        possession += 1
+                    if e.outcome == "goal" and (
+                        attack_x(e.team, e.end[0]) != 105 or abs(e.end[1] - 34) > 3.66
+                    ):
+                        raise ValueError("goal_outside_goal_mouth")
                 elif e.kind == "end":
                     if e.t != 720 or e.start != e.end:
                         raise ValueError("illegal_end")
-                    ended = True
-            ball, last_t = e.end, e.t
-            enriched.append({**e.model_dump(mode="json"), "possession_id": possession,
-                             "owner_after": owner, "holder_after": holder})
-        else:
-            eid = (
-                getattr(e, "event_id", None)
-                or getattr(e, "id", None)
-                or (e.get("event_id") if isinstance(e, dict) else None)
-                or (e.get("id") if isinstance(e, dict) else f"E{len(enriched)+1:04d}")
-            )
-            raw_action = str(
-                getattr(e, "action_type", None)
-                or getattr(e, "kind", None)
-                or (e.get("action_type") if isinstance(e, dict) else "")
-                or (e.get("kind") if isinstance(e, dict) else "")
-            ).lower()
-            raw_team = str(
-                getattr(e, "team_id", None)
-                or getattr(e, "team", None)
-                or (e.get("team_id") if isinstance(e, dict) else "")
-                or (e.get("team") if isinstance(e, dict) else "H")
-            )
-            if team_names:
-                if raw_team in (team_names.get("H"), "H"):
-                    t_mapped = "H"
-                elif raw_team in (team_names.get("N"), "N"):
-                    t_mapped = "N"
-                else:
-                    t_mapped = "H" if "arg" in raw_team.lower() or "home" in raw_team.lower() else "N"
-            else:
-                t_mapped = "H" if raw_team == "H" or "arg" in raw_team.lower() else "N"
 
-            raw_actor = str(
-                getattr(e, "player_name", None)
-                or getattr(e, "actor", None)
-                or (e.get("player_name") if isinstance(e, dict) else "")
-                or (e.get("actor") if isinstance(e, dict) else "P1")
-            )
-            raw_x = getattr(e, "x", None) or (e.get("x") if isinstance(e, dict) else 52.5)
-            raw_y = getattr(e, "y", None) or (e.get("y") if isinstance(e, dict) else 34.0)
-            raw_end_x = getattr(e, "end_x", None) or (e.get("end_x") if isinstance(e, dict) else raw_x)
-            raw_end_y = getattr(e, "end_y", None) or (e.get("end_y") if isinstance(e, dict) else raw_y)
-            raw_outcome = str(
-                getattr(e, "outcome", None)
-                or (e.get("outcome") if isinstance(e, dict) else "complete")
-            )
+        # --- possession boundary decision -------------------------------------------
+        terminal = kind in ("period_end", "foul", "turnover", "end")
+        if terminal:
+            close_possession(t_val, kind)
+            owner = holder = None
+            if kind == "end":
+                ended = True
+                owner, holder = t_mapped, raw_actor
+            if kind == "period_end":
+                pending_after_shot = False
+        elif kind == "shot":
+            if current is None:
+                open_possession(t_mapped, t_val, "shot_without_buildup")
+            owner, holder = t_mapped, raw_actor
+        elif kind == "restart":
+            close_possession(t_val, "restart")
+            open_possession(t_mapped, t_val, "goal_restart" if pending_restart else "restart")
+            owner, holder = t_mapped, raw_actor
+            pending_restart = None
+            pending_after_shot = False
+        elif kind == "recovery":
+            if current is not None and current["team"] != t_mapped:
+                close_possession(t_val, "turnover")
+                open_possession(t_mapped, t_val, "observed_gain")
+            elif current is None:
+                open_possession(t_mapped, t_val, "observed_gain")
+            elif provider_pid is not None and current["provider_possession_ids"] and str(provider_pid) != str(current["provider_possession_ids"][-1]):
+                close_possession(t_val, "provider_possession_change")
+                open_possession(t_mapped, t_val, "provider_possession_change")
+            owner, holder = t_mapped, raw_actor
+        else:  # pass / carry / other
+            boundary = None
+            if current is None:
+                boundary = "after_shot" if pending_after_shot else "observed_event"
+            elif t_mapped != current["team"]:
+                boundary = "observed_team_change"
+            elif provider_pid is not None and current["provider_possession_ids"] and str(provider_pid) != str(current["provider_possession_ids"][-1]):
+                boundary = "provider_possession_change"
+            if boundary:
+                close_possession(t_val, boundary)
+                open_possession(t_mapped, t_val, boundary)
+            owner, holder = t_mapped, (_field(e, "receiver") or raw_actor if kind == "pass" else raw_actor)
+            pending_after_shot = False
 
-            kind = (
-                "shot" if "shot" in raw_action
-                else ("recovery" if any(k in raw_action for k in ("recovery", "tackle", "interception"))
-                      else ("restart" if any(k in raw_action for k in ("start", "kick", "xi"))
-                            else "pass"))
-            )
-            if kind == "shot" and "goal" in raw_outcome.lower():
+        event_possession_id = (
+            current["possession_id"] if current is not None
+            else (possessions[-1]["possession_id"] if possessions else None)
+        )
+        if current is not None:
+            current["event_ids"].append(row["id"])
+            if provider_pid is not None:
+                current["provider_possession_ids"].append(str(provider_pid))
+
+        # --- score / state transition ------------------------------------------------
+        if kind == "own_goal":
+            own_goal_for = "own goal for" in raw_outcome.lower().replace("_", " ")
+            credited = t_mapped if own_goal_for else other(t_mapped)
+            if not is_shootout:
+                score[credited] += 1
+                goals.append({"event_id": row["id"], "team": credited, "t": t_val, "own_goal": True})
+            close_possession(t_val, "own_goal")
+            owner = holder = None
+            pending_restart = credited
+        elif kind == "shot":
+            goal = "goal" in raw_outcome.lower()
+            if goal and is_shootout:
+                shootout_score[t_mapped] += 1
+            elif goal:
                 score[t_mapped] += 1
+                goals.append({"event_id": row["id"], "team": t_mapped, "t": t_val, "own_goal": False})
+            close_possession(t_val, "goal" if goal else "shot")
+            # A saved/missed shot does not hand control to the shooter. Under
+            # continuous coverage the goalkeeper side takes over from the save
+            # instant; with partial coverage that interval stays unknown until
+            # the next recorded touch.
+            if not goal and continuous:
+                open_possession(other(t_mapped), t_val, "shot_rebound")
+            owner = other(t_mapped) if not goal else None
+            holder = None
+            pending_restart = other(t_mapped) if goal and not is_shootout else None
+            pending_after_shot = False if (not goal and continuous) else not goal
 
-            owner = t_mapped
-            holder = raw_actor
-            ball = (float(raw_end_x or 52.5), float(raw_end_y or 34.0))
-            if enriched:
-                intervals.append({"start": int(last_t), "end": int(t_val), "team": owner, "event_id": enriched[-1]["id"]})
-            last_t = int(t_val)
-            possession += 1
-            enriched.append({
-                "id": str(eid),
-                "seq": len(enriched) + 1,
-                "t": int(t_val),
-                "kind": kind,
-                "team": t_mapped,
-                "actor": raw_actor,
-                "receiver": getattr(e, "receiver", None) or (e.get("receiver") if isinstance(e, dict) else None),
-                "start": [float(raw_x or 52.5), float(raw_y or 34.0)],
-                "end": [float(raw_end_x or 52.5), float(raw_end_y or 34.0)],
-                "outcome": raw_outcome,
-                "possession_id": possession,
-                "owner_after": owner,
-                "holder_after": holder,
-            })
-    if enriched and last_t < at and owner:
-        intervals.append({"start": int(last_t), "end": at, "team": owner, "event_id": enriched[-1]["id"]})
-    return {"at": at, "score": score, "owner": owner, "holder": holder, "ball": list(ball),
-            "events": enriched, "intervals": intervals, "ended": ended}
+        row["possession_id"] = event_possession_id
+        row["possessor_after"] = current["team"] if current is not None else None
+        row["owner_after"] = owner
+        row["holder_after"] = holder
+        row["coordinate_frame"] = frame
+        enriched.append(row)
+
+        if located and end is not None:
+            ball = (end[0], end[1])
+        last_t = t_val
+        last_period = period
+
+    # --- tail handling ------------------------------------------------------------
+    if current is not None:
+        if continuous:
+            close_possession(max(last_t, min(at, max_duration)), "observation_end")
+        else:
+            close_possession(last_t, "last_observed_event")
+    if last_t >= 0 and at > last_t:
+        if current is None and not continuous:
+            mark_unobserved(last_t, at, "coverage_end")
+        elif continuous and not ended:
+            mark_unobserved(last_t, at, "coverage_end")
+
+    controlled = sum(i["end"] - i["start"] for i in intervals)
+    dead = [g for g in unobserved if g["reason"] in ("dead_ball", "period_break")]
+    duration = max(1, max_duration)
+    first_t = float(enriched[0]["t"]) if enriched else 0.0
+    observed_span = max(0.0, last_t - first_t) if enriched else 0.0
+    if continuous:
+        time_coverage = round(min(1.0, (controlled + sum(g["end"] - g["start"] for g in dead)) / max(1, at or 1)), 4)
+    else:
+        time_coverage = round(min(1.0, observed_span / duration), 4)
+    return {
+        "at": at,
+        "score": score,
+        "score_basis": "observed_prefix",
+        "official_score": official_score,
+        "shootout_score": shootout_score,
+        "goals": goals,
+        "owner": owner,
+        "holder": holder,
+        "ball": list(ball) if ball is not None else None,
+        "events": enriched,
+        "intervals": intervals,
+        "possessions": possessions,
+        "unobserved_intervals": unobserved,
+        "dead_intervals": dead,
+        "coverage": {
+            "format_seconds": max_duration,
+            "observed_start": first_t if enriched else None,
+            "observed_end": last_t if enriched else None,
+            "observed_span_seconds": round(observed_span, 2),
+            "controlled_seconds": round(controlled, 2),
+            "unobserved_seconds": round(sum(g["end"] - g["start"] for g in unobserved), 2),
+            "continuous": bool(continuous),
+            "time_coverage": time_coverage,
+            "event_coverage": 1.0 if continuous else None,
+            "event_coverage_status": "complete" if continuous else "unknown",
+            "event_count": len(enriched),
+            "score_status": "partial_prefix" if not continuous else ("complete" if ended or at >= max_duration else "prefix"),
+        },
+        "team_names": dict(team_names),
+        "coordinate_frame": frame,
+        "team_players": (
+            {k: list(v) for k, v in PLAYERS.items()} if is_synthetic else _team_players(enriched)
+        ),
+        "ended": ended,
+    }
+
+
+def _team_players(events: list[dict]) -> dict[str, list[str]]:
+    players: dict[str, list[str]] = {"H": [], "N": []}
+    for e in events:
+        team = e.get("team")
+        if team not in players:
+            players[team] = []
+        for pid in (e.get("actor"), e.get("receiver")):
+            if pid and pid not in players[team]:
+                players[team].append(pid)
+    if not players["H"]:
+        players["H"] = list(PLAYERS["H"])
+    if not players["N"]:
+        players["N"] = list(PLAYERS["N"])
+    return players
 
 
 def metric_receipts(state: dict) -> dict[str, dict]:
@@ -373,16 +665,26 @@ def metric_receipts(state: dict) -> dict[str, dict]:
     for idx, e in enumerate(events):
         if e["kind"] == "recovery":
             gains[(e["team"], e["possession_id"])] = e
-        if e["kind"] == "pass" and attack_x(e["team"], e["start"][0]) <= 70 < attack_x(e["team"], e["end"][0]):
-            key = e["team"], e["possession_id"]
-            if key not in seen_entries:
-                entries.append(e)
-                seen_entries.add(key)
+        if e["kind"] == "pass" and e.get("located"):
+            ax_s = event_attacking_x(e, point="start")
+            ax_e = event_attacking_x(e, point="end")
+            if ax_s is not None and ax_e is not None and ax_s <= 70 < ax_e:
+                key = e["team"], e["possession_id"]
+                if key not in seen_entries:
+                    entries.append(e)
+                    seen_entries.add(key)
         if e["kind"] == "shot":
-            gain = gains.get((e["team"], e["possession_id"] - (1 if e["outcome"] == "saved" else 0)))
+            gain = gains.get((e["team"], e["possession_id"]))
             if gain and 0 <= e["t"]-gain["t"] <= 10:
                 transition.append({"shot": e, "gain": gain, "seconds": e["t"]-gain["t"]})
-            if e["outcome"] == "goal":
+            if e["outcome"] in ("goal", "own_goal", "own_goal_for"):
+                is_og = e["outcome"].startswith("own_goal")
+                credited = e["team"] if e["outcome"] == "own_goal_for" else (
+                    other(e["team"]) if is_og else e["team"]
+                )
+                if is_og:
+                    goal_chains_by_team[credited].append([e["id"]])
+                    continue
                 chain = []
                 for before in reversed(events[:idx+1]):
                     if before["team"] != e["team"] or before["kind"] == "shot" and before is not e:
@@ -392,9 +694,16 @@ def metric_receipts(state: dict) -> dict[str, dict]:
                         break
                 goal_chains_by_team[e["team"]].append(list(reversed(chain)))
 
-    def receipt(key: str, value: float | int, unit: str, sources: list[str], definition: str, **details) -> None:
-        receipts[key] = {"id": key, "value": value, "unit": unit, "event_ids": sorted(set(sources)),
-                         "definition": definition, **details}
+    def receipt(key: str, value: float | int | None, unit: str, sources: list[str], definition: str, **details) -> None:
+        receipts[key] = {
+            "id": key,
+            "value": value,
+            "unit": unit,
+            "event_ids": sorted(set(sources)),
+            "definition": definition,
+            "status": details.pop("status", "ok" if value is not None else "unobserved"),
+            **details,
+        }
 
     for name, start, end in (("previous", max(0, at-360), max(0, at-180)), ("current", max(0, at-180), at)):
         window = [e for e in events if start < e["t"] <= end]
@@ -407,12 +716,25 @@ def metric_receipts(state: dict) -> dict[str, dict]:
                 sources.append(interval["event_id"])
         denominator = sum(durations.values())
         for team in TEAMS:
-            receipt(f"{team}.possession.{name}", round(100*durations[team]/denominator, 2) if denominator else 0,
-                    "%", sources, "Controlled seconds / controlled seconds of both teams; dead-ball time excluded.",
-                    numerator=durations[team], denominator=denominator, start=start, end=end)
+            receipt(
+                f"{team}.possession.{name}",
+                round(100*durations[team]/denominator, 2) if denominator else None,
+                "%",
+                sources,
+                "Controlled seconds / controlled seconds of both teams; dead-ball time excluded.",
+                numerator=durations[team],
+                denominator=denominator,
+                status="ok" if denominator else "unobserved",
+                start=start,
+                end=end,
+            )
             shots = [e for e in window if e["team"] == team and e["kind"] == "shot"]
             crossing = [e for e in entries if e["team"] == team and start < e["t"] <= end]
-            high = [e for e in window if e["kind"] == "recovery" and e["team"] == team and attack_x(team, e["start"][0]) >= 70]
+            high = [
+                e for e in window
+                if e["kind"] == "recovery" and e["team"] == team and e.get("located")
+                and (ax := event_attacking_x(e, point="start")) is not None and ax >= 70
+            ]
             quick = [s for s in transition if s["shot"]["team"] == team and start < s["shot"]["t"] <= end]
             receipt(f"{team}.shots.{name}", len(shots), "shots", [e["id"] for e in shots], "All shot events, including saved shots and goals.", start=start, end=end)
             receipt(f"{team}.entries.{name}", len(crossing), "entries", [e["id"] for e in crossing], "First completed pass crossing attacking x=70m per possession; no tracking or xG.", start=start, end=end)
@@ -461,6 +783,11 @@ class SnapshotContext:
     match_clock_basis: str = "match_elapsed"
     data_version: str = "1.0.0"
     format_seconds: int = 720
+    coordinate_frame: str = "fixed"
+    continuous_coverage: bool = False
+    score_basis: str = "observed_prefix"
+    observed_end: float = 0.0
+    event_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -488,6 +815,11 @@ class Snapshot:
                 match_clock_basis=d.get("match_clock_basis", "match_elapsed"),
                 data_version=d.get("data_version", "1.0.0"),
                 format_seconds=d.get("format_seconds", 720),
+                coordinate_frame=d.get("coordinate_frame", "fixed"),
+                continuous_coverage=bool(d.get("coverage", {}).get("continuous", False)),
+                score_basis=d.get("score_basis", "observed_prefix"),
+                observed_end=float(d.get("coverage", {}).get("observed_end") or 0.0),
+                event_count=int(d.get("coverage", {}).get("event_count") or 0),
             )
         return None
 
@@ -503,12 +835,33 @@ def freeze(
     teams: dict[str, str] | None = None,
     format_seconds: int = 720,
     limitations: list[str] | None = None,
+    *,
+    team_map: dict[str, str] | None = None,
+    home_team_id: str | None = None,
+    away_team_id: str | None = None,
+    coordinate_frame: Literal["fixed", "team_relative"] | None = None,
+    continuous_coverage: bool | None = None,
+    official_score: dict[str, int] | None = None,
 ) -> Snapshot:
     is_syn = (match_id is None or match_id.startswith("syn_")) and scenario in SCENARIOS
     max_d = format_seconds if format_seconds else (720 if is_syn else 5400)
-    state = reduce_match(events, at, max_duration=max_d, is_synthetic=is_syn, team_names=teams)
+    if at > max_d:
+        raise ValueError("clock_out_of_bounds")
+    state = reduce_match(
+        events,
+        at,
+        max_duration=max_d,
+        is_synthetic=is_syn,
+        team_names=teams,
+        team_map=team_map,
+        home_team_id=home_team_id,
+        away_team_id=away_team_id,
+        coordinate_frame=coordinate_frame,
+        continuous_coverage=continuous_coverage if continuous_coverage is not None else is_syn,
+        official_score=official_score,
+    )
     receipts = metric_receipts(state)
-    actual_teams = teams or TEAMS
+    actual_teams = teams or state.get("team_names") or TEAMS
     candidate = "Compare Harbor's possession, shots and entries in the two windows. Look for contrary evidence."
     if receipts.get("H.transition_shots.current", {}).get("value", 0) >= 2:
         candidate = "Investigate what followed Harbor's recoveries. Inspect the linked timings and sample size."
@@ -527,10 +880,17 @@ def freeze(
             "as_of": at,
             "teams": TEAMS,
             "score": state["score"],
+            "score_basis": state["score_basis"],
+            "official_score": state["official_score"],
+            "shootout_score": state["shootout_score"],
+            "coverage": state["coverage"],
+            "coordinate_frame": state["coordinate_frame"],
             "candidate": candidate,
             "receipts": receipts,
             "events": state["events"],
             "intervals": state["intervals"],
+            "possessions": state["possessions"],
+            "unobserved_intervals": state["unobserved_intervals"],
             "limitations": [
                 "Synthetic 12-minute demonstration match.",
                 "On-ball events only; no off-ball tracking, pressure, xG or coaching intent."
@@ -557,10 +917,17 @@ def freeze(
             "as_of": at,
             "teams": actual_teams,
             "score": state["score"],
+            "score_basis": state["score_basis"],
+            "official_score": state["official_score"],
+            "shootout_score": state["shootout_score"],
+            "coverage": state["coverage"],
+            "coordinate_frame": state["coordinate_frame"],
             "candidate": candidate,
             "receipts": receipts,
             "events": state["events"],
             "intervals": state["intervals"],
+            "possessions": state["possessions"],
+            "unobserved_intervals": state["unobserved_intervals"],
             "limitations": limitations or (
                 [
                     "Synthetic 12-minute demonstration match.",
@@ -601,17 +968,25 @@ def detect_moments(state: dict) -> list[dict]:
     receipts = metric_receipts(state)
     moments = []
 
+    team_names = state.get("team_names") or TEAMS
     # Two complete comparison windows are required; timestamps are detection
     # times, never chapter timestamps or an assumed future final whistle.
+    def numeric(key: str) -> float | int | None:
+        value = receipts.get(key, {}).get("value")
+        return value if isinstance(value, (int, float)) else None
+
     for team in ("H", "N"):
-        t_name = TEAMS[team].split()[0]
+        t_name = team_names.get(team, TEAMS[team]).split()[0]
         suffix = "" if team == "H" else "-n"
         if at >= 360:
-            pos_curr = receipts.get(f"{team}.possession.current", {}).get("value", 0)
-            pos_prev = receipts.get(f"{team}.possession.previous", {}).get("value", 0)
-            shots_curr = receipts.get(f"{team}.shots.current", {}).get("value", 0)
-            entries_curr = receipts.get(f"{team}.entries.current", {}).get("value", 0)
-            if pos_curr > pos_prev and shots_curr <= 0 and entries_curr <= 0:
+            pos_curr = numeric(f"{team}.possession.current")
+            pos_prev = numeric(f"{team}.possession.previous")
+            shots_curr = numeric(f"{team}.shots.current") or 0
+            entries_curr = numeric(f"{team}.entries.current") or 0
+            if (
+                pos_curr is not None and pos_prev is not None
+                and pos_curr > pos_prev and shots_curr <= 0 and entries_curr <= 0
+            ):
                 moments.append({
                     "id": f"moment-possession{suffix}",
                     "team": team,
@@ -630,8 +1005,8 @@ def detect_moments(state: dict) -> list[dict]:
 
         # Association question, not a prescribed answer. Align with gate support.
         if at >= 180:
-            high_rec = receipts.get(f"{team}.high_recoveries.current", {}).get("value", 0)
-            trans_shots = receipts.get(f"{team}.transition_shots.current", {}).get("value", 0)
+            high_rec = numeric(f"{team}.high_recoveries.current") or 0
+            trans_shots = numeric(f"{team}.transition_shots.current") or 0
             if high_rec >= 2 and trans_shots >= 2 or (team == "N" and trans_shots >= 2):
                 moments.append({
                     "id": f"moment-transition{suffix}",
@@ -669,9 +1044,10 @@ def detect_moments(state: dict) -> list[dict]:
             })
 
     # T3: Breakthrough Goal Sequences (evaluated for all recorded goals)
-    goals = [e for e in events if e.get("kind") == "shot" and e.get("outcome") == "goal"]
+    goals = [e for e in events if e.get("kind") == "shot" and e.get("outcome") in ("goal", "own_goal")]
     for g in goals:
-        g_team = g["team"]
+        g_team = other(g["team"]) if g.get("outcome") == "own_goal" else g["team"]
+        scorer = g.get("actor_name") or g.get("actor") or "Unknown player"
         moments.append({
             "id": "moment-goal-" + g["id"],
             "team": g_team,
@@ -680,7 +1056,7 @@ def detect_moments(state: dict) -> list[dict]:
             "window": [max(0, g["t"] - 60), g["t"]],
             "trigger_type": "goal_breakthrough",
             "badge": "GOAL BREAKTHROUGH",
-            "title": f"{TEAMS[g_team]} goal · {PLAYERS[g_team][g['actor']]}",
+            "title": f"{team_names.get(g_team, g_team)} goal · {scorer}",
             "question": "Which sequence ended with the breakthrough goal?",
             "assertion": "goal_sequence",
             "summary": "A scoring shot is recorded. Inspect the possession chain leading to it.",
@@ -701,6 +1077,35 @@ def channel_name(team: str, y: float) -> str:
         return "left" if y < 22.67 else "right"
 
 
+def event_attacking_x(event: dict, team: str | None = None, point: str = "start") -> float | None:
+    """Longitudinal coordinate in the event's own attacking frame.
+
+    Synthetic events use a fixed physical frame (H attacks right, N left);
+    normalized provider events are already standardized to the attacking
+    team's direction at every event, including after half-time.
+    """
+    coords = event.get(point)
+    if not coords or coords[0] is None:
+        return None
+    team = team or event.get("team", "H")
+    if event.get("coordinate_frame") == "team_relative":
+        return float(coords[0])
+    return attack_x(team, float(coords[0]))
+
+
+def event_channel(event: dict, team: str | None = None, point: str = "start") -> str | None:
+    coords = event.get(point)
+    if not coords or coords[1] is None:
+        return None
+    team = team or event.get("team", "H")
+    y = float(coords[1])
+    if 22.67 <= y <= 45.33:
+        return "center"
+    if event.get("coordinate_frame") == "team_relative":
+        return "left" if y > 45.33 else "right"
+    return channel_name(team, y)
+
+
 def build_sequences(state: dict, team: str | None = None) -> list[dict]:
     """Organize discrete on-ball events into continuous possession sequences with step details."""
     events = state["events"]
@@ -708,10 +1113,9 @@ def build_sequences(state: dict, team: str | None = None) -> list[dict]:
     for e in events:
         if e["kind"] == "end":
             continue
-        # A saved shot's possession_id was incremented to the keeper's new possession;
-        # attach the shot to the attacking sequence that produced it.
-        pid = e["possession_id"] - (1 if e["kind"] == "shot" and e["outcome"] == "saved" else 0)
-        grouped.setdefault(pid, []).append(e)
+        if e.get("possession_id") is None:
+            continue
+        grouped.setdefault(e["possession_id"], []).append(e)
 
     sequences: list[dict] = []
     for pid, seq_events in sorted(grouped.items()):
@@ -723,19 +1127,25 @@ def build_sequences(state: dict, team: str | None = None) -> list[dict]:
         same_team_events = [e for e in seq_events if e["team"] == seq_team]
         if not same_team_events:
             continue
-        passes = [e for e in same_team_events if e["kind"] == "pass"]
-        prog_dist = sum(
-            max(0.0, attack_x(seq_team, e["end"][0]) - attack_x(seq_team, e["start"][0]))
-            for e in passes
-        )
+        passes = [e for e in same_team_events if e["kind"] == "pass" and e.get("located")]
+        prog_dist = 0.0
+        for e in passes:
+            ax_s = event_attacking_x(e, point="start")
+            ax_e = event_attacking_x(e, point="end")
+            if ax_s is not None and ax_e is not None:
+                prog_dist += max(0.0, ax_e - ax_s)
         entered_final_third = any(
-            attack_x(seq_team, e["start"][0]) <= 70 < attack_x(seq_team, e["end"][0])
+            (ax_s := event_attacking_x(e, point="start")) is not None
+            and (ax_e := event_attacking_x(e, point="end")) is not None
+            and ax_s <= 70 < ax_e
             for e in passes
         )
         last_ev = same_team_events[-1]
         outcome = (
             "goal"
             if last_ev["kind"] == "shot" and last_ev["outcome"] == "goal"
+            else "own_goal"
+            if last_ev["kind"] == "shot" and last_ev["outcome"] == "own_goal"
             else "shot_saved"
             if last_ev["kind"] == "shot"
             else "in_play"
@@ -750,31 +1160,38 @@ def build_sequences(state: dict, team: str | None = None) -> list[dict]:
 
         start_pt = same_team_events[0]["start"]
         end_pt = last_ev["end"]
-        territory_gained = round(attack_x(seq_team, end_pt[0]) - attack_x(seq_team, start_pt[0]), 1)
-        events_detail = [
-            {
+        ax_start = event_attacking_x(same_team_events[0], seq_team, point="start")
+        ax_end = event_attacking_x(last_ev, seq_team, point="end")
+        territory_gained = (
+            round(ax_end - ax_start, 1) if ax_start is not None and ax_end is not None else None
+        )
+        event_details: list[dict] = []
+        for idx, e in enumerate(same_team_events):
+            ax_s = event_attacking_x(e, seq_team, point="start")
+            ax_e = event_attacking_x(e, seq_team, point="end")
+            event_details.append({
                 "seq_step": idx + 1,
                 "id": e["id"],
                 "kind": e["kind"],
                 "team": seq_team,
                 "actor": e["actor"],
-                "actor_name": PLAYERS.get(seq_team, {}).get(e["actor"], e["actor"]),
+                "actor_name": e.get("actor_name") or PLAYERS.get(seq_team, {}).get(e["actor"], e["actor"]),
                 "receiver": e.get("receiver"),
-                "receiver_name": PLAYERS.get(seq_team, {}).get(e.get("receiver"), e.get("receiver")) if e.get("receiver") else None,
+                "receiver_name": e.get("receiver"),
                 "start": e["start"],
                 "end": e["end"],
                 "outcome": e.get("outcome", "success"),
                 "t": e["t"],
-                "gain_m": round(attack_x(seq_team, e["end"][0]) - attack_x(seq_team, e["start"][0]), 1),
-                "channel": channel_name(seq_team, e["start"][1]),
-            }
-            for idx, e in enumerate(same_team_events)
-        ]
+                "gain_m": round(ax_e - ax_s, 1) if ax_s is not None and ax_e is not None else None,
+                "channel": event_channel(e, seq_team, point="start"),
+            })
+        events_detail = event_details
 
         sequences.append({
             "sequence_id": f"SEQ-{pid:03d}",
             "possession_id": pid,
             "team": seq_team,
+            "coordinate_frame": state.get("coordinate_frame", "fixed"),
             "start_t": same_team_events[0]["t"],
             "end_t": last_ev["t"],
             "duration": max(0, last_ev["t"] - same_team_events[0]["t"]),
@@ -782,8 +1199,8 @@ def build_sequences(state: dict, team: str | None = None) -> list[dict]:
             "pass_count": len(passes),
             "progressive_distance": round(prog_dist, 1),
             "territory_gained": territory_gained,
-            "start_coords": list(start_pt),
-            "end_coords": list(end_pt),
+            "start_coords": list(start_pt) if start_pt else None,
+            "end_coords": list(end_pt) if end_pt else None,
             "entered_final_third": entered_final_third,
             "outcome": outcome,
             "players": players_involved,
@@ -796,18 +1213,27 @@ def build_sequences(state: dict, team: str | None = None) -> list[dict]:
 def build_tactical_explorer(state: dict, team: str = "H") -> dict:
     """Compute event-grounded passing network, progressive passes, recoveries, channels and zones."""
     team = "N" if team == "N" else "H"
-    events = [e for e in state["events"] if e["team"] == team and e["kind"] != "end"]
-    node_touches: dict[str, list[tuple[float, float]]] = {p: [] for p in PLAYERS[team]}
+    all_team_events = [e for e in state["events"] if e["team"] == team and e["kind"] != "end"]
+    events = [e for e in all_team_events if e.get("located")]
+    roster = list((state.get("team_players") or {}).get(team) or PLAYERS.get(team, {}))
+    node_touches: dict[str, list[tuple[float, float]]] = {p: [] for p in roster}
     edges_map: dict[tuple[str, str], dict] = {}
     progressive_passes: list[dict] = []
     recoveries: list[dict] = []
     zone_counts = {"defensive_third": 0, "middle_third": 0, "attacking_third": 0}
     channel_counts = {"left": 0, "center": 0, "right": 0}
     attacking_channel_counts = {"left": 0, "center": 0, "right": 0}
+    frame = state.get("coordinate_frame", "fixed")
+
+    def add_touch(player: str | None, point: list[float] | None) -> None:
+        if player and point and player in node_touches:
+            node_touches[player].append((float(point[0]), float(point[1])))
 
     for e in events:
-        ax_start = attack_x(team, e["start"][0])
-        ch_start = channel_name(team, e["start"][1])
+        ax_start = event_attacking_x(e, team, point="start")
+        ch_start = event_channel(e, team, point="start")
+        if ax_start is None or ch_start is None:
+            continue
         channel_counts[ch_start] += 1
 
         if ax_start < 35:
@@ -818,37 +1244,39 @@ def build_tactical_explorer(state: dict, team: str = "H") -> dict:
             zone_counts["attacking_third"] += 1
             attacking_channel_counts[ch_start] += 1
 
-        if e["actor"] in node_touches:
-            node_touches[e["actor"]].append(tuple(e["start"]))
-        if e["kind"] == "pass" and e["receiver"] in node_touches:
-            node_touches[e["receiver"]].append(tuple(e["end"]))
+        add_touch(e.get("actor"), e.get("start"))
+        if e["kind"] == "pass" and e.get("receiver"):
+            add_touch(e.get("receiver"), e.get("end"))
             pair = (e["actor"], e["receiver"])
             edge = edges_map.setdefault(pair, {"from": pair[0], "to": pair[1], "count": 0, "event_ids": []})
             edge["count"] += 1
             edge["event_ids"].append(e["id"])
-            gain_m = round(attack_x(team, e["end"][0]) - ax_start, 1)
-            is_entry = ax_start <= 70 < attack_x(team, e["end"][0])
+            ax_end = event_attacking_x(e, team, point="end")
+            if ax_end is None:
+                continue
+            gain_m = round(ax_end - ax_start, 1)
+            is_entry = ax_start <= 70 < ax_end
             if gain_m >= 12.0 or is_entry:
                 progressive_passes.append({
                     "id": e["id"],
                     "t": e["t"],
                     "actor": e["actor"],
-                    "actor_name": PLAYERS[team].get(e["actor"], e["actor"]),
+                    "actor_name": e.get("actor_name") or e["actor"],
                     "receiver": e["receiver"],
-                    "receiver_name": PLAYERS[team].get(e["receiver"], e["receiver"]),
+                    "receiver_name": e["receiver"],
                     "start": e["start"],
                     "end": e["end"],
                     "gain_m": gain_m,
                     "is_entry": is_entry,
                     "channel": ch_start,
-                    "entry_channel": channel_name(team, e["end"][1]) if is_entry else None,
+                    "entry_channel": event_channel(e, team, point="end") if is_entry else None,
                 })
         elif e["kind"] == "recovery":
             recoveries.append({
                 "id": e["id"],
                 "t": e["t"],
                 "actor": e["actor"],
-                "actor_name": PLAYERS[team].get(e["actor"], e["actor"]),
+                "actor_name": e.get("actor_name") or e["actor"],
                 "location": e["start"],
                 "attack_x": round(ax_start, 1),
                 "is_high": ax_start >= 70,
@@ -856,11 +1284,17 @@ def build_tactical_explorer(state: dict, team: str = "H") -> dict:
             })
 
     nodes = []
-    for pid, name in PLAYERS[team].items():
+    for pid in roster:
         pts = node_touches[pid]
-        avg_x = round(sum(p[0] for p in pts) / len(pts), 1) if pts else (30.0 if team == "H" else 75.0)
-        avg_y = round(sum(p[1] for p in pts) / len(pts), 1) if pts else 34.0
-        nodes.append({"player_id": pid, "name": name, "touches": len(pts), "avg_x": avg_x, "avg_y": avg_y})
+        avg_x = round(sum(p[0] for p in pts) / len(pts), 1) if pts else None
+        avg_y = round(sum(p[1] for p in pts) / len(pts), 1) if pts else None
+        nodes.append({
+            "player_id": pid,
+            "name": pid if frame == "team_relative" else PLAYERS.get(team, {}).get(pid, pid),
+            "touches": len(pts),
+            "avg_x": avg_x,
+            "avg_y": avg_y,
+        })
 
     total_ev = max(1, len(events))
     zones = {k: round(100.0 * v / total_ev, 1) for k, v in zone_counts.items()}
@@ -889,7 +1323,7 @@ def build_tactical_explorer(state: dict, team: str = "H") -> dict:
         "avg_progressive_gain_m": round(sum(p["gain_m"] for p in progressive_passes) / len(progressive_passes), 1) if progressive_passes else 0.0,
         "high_recoveries_count": len([r for r in recoveries if r["is_high"]]),
         "total_recoveries_count": len(recoveries),
-        "high_recovery_threshold_x": 70.0 if team == "H" else 35.0,
+        "high_recovery_threshold_x": 70.0 if (frame == "team_relative" or team == "H") else 35.0,
     }
 
     # 9-zone spatial distribution (3 thirds x 3 channels on pitch)
@@ -907,8 +1341,11 @@ def build_tactical_explorer(state: dict, team: str = "H") -> dict:
     ]
     for x_idx, (x_min, x_max), y_idx, (y_min, y_max) in cell_specs:
         y_mid = (y_min + y_max) / 2
-        ch = channel_name(team, y_mid)
-        if team == "H":
+        if frame == "team_relative":
+            ch = "center" if 22.67 <= y_mid <= 45.33 else ("left" if y_mid > 45.33 else "right")
+        else:
+            ch = channel_name(team, y_mid)
+        if frame == "team_relative" or team == "H":
             th = "defensive" if x_idx == 0 else ("middle" if x_idx == 1 else "attacking")
         else:
             th = "attacking" if x_idx == 0 else ("middle" if x_idx == 1 else "defensive")
@@ -936,8 +1373,8 @@ def build_tactical_explorer(state: dict, team: str = "H") -> dict:
 
     return {
         "team": team,
-        "team_name": TEAMS[team],
-        "attack_direction": "right" if team == "H" else "left",
+        "team_name": (state.get("team_names") or TEAMS).get(team, team),
+        "attack_direction": "forward" if frame == "team_relative" else ("right" if team == "H" else "left"),
         "nodes": nodes,
         "edges": list(edges_map.values()),
         "progressive_passes": progressive_passes,
@@ -962,34 +1399,44 @@ def build_player_spotlight(state: dict, team: str | None = None) -> list[dict]:
 
     spotlight = []
     teams = [team] if team in ("H", "N") else ["H", "N"]
+    team_names = state.get("team_names") or TEAMS
+    rosters = state.get("team_players") or PLAYERS
     for t_code in teams:
-        for pid, name in PLAYERS[t_code].items():
+        for pid in rosters.get(t_code) or []:
             actor_events = [e for e in state["events"] if e["team"] == t_code and e["actor"] == pid and e["kind"] != "end"]
-            passes = [e for e in actor_events if e["kind"] == "pass"]
-            prog_passes = [
-                e for e in passes
-                if (attack_x(t_code, e["end"][0]) - attack_x(t_code, e["start"][0])) >= 12.0
-                or (attack_x(t_code, e["start"][0]) <= 70 < attack_x(t_code, e["end"][0]))
-            ]
-            entries = [
-                e for e in passes
-                if attack_x(t_code, e["start"][0]) <= 70 < attack_x(t_code, e["end"][0])
-            ]
-            prog_dist = sum(
-                max(0.0, attack_x(t_code, e["end"][0]) - attack_x(t_code, e["start"][0]))
-                for e in passes
-            )
+            passes = [e for e in actor_events if e["kind"] == "pass" and e.get("located")]
+            prog_passes, entries = [], []
+            prog_dist = 0.0
+            for e in passes:
+                ax_s = event_attacking_x(e, t_code, point="start")
+                ax_e = event_attacking_x(e, t_code, point="end")
+                if ax_s is None or ax_e is None:
+                    continue
+                if ax_e - ax_s >= 12.0 or ax_s <= 70 < ax_e:
+                    prog_passes.append(e)
+                if ax_s <= 70 < ax_e:
+                    entries.append(e)
+                prog_dist += max(0.0, ax_e - ax_s)
             recs = [e for e in actor_events if e["kind"] == "recovery"]
             shots = [e for e in actor_events if e["kind"] == "shot"]
             goals = [e for e in shots if e["outcome"] == "goal"]
             total_touches = len(actor_events)
-            avg_x_pos = (sum(attack_x(t_code, e["start"][0]) for e in actor_events) / total_touches) if total_touches > 0 else 50.0
-            cohort = "Forward" if avg_x_pos > 72.0 else ("Midfielder" if avg_x_pos >= 38.0 else "Defender")
+            located_touches = [e for e in actor_events if e.get("located")]
+            attack_coords = [
+                ax for e in located_touches
+                if (ax := event_attacking_x(e, t_code, point="start")) is not None
+            ]
+            avg_x_pos = sum(attack_coords) / len(attack_coords) if attack_coords else None
+            cohort = (
+                "Unknown"
+                if avg_x_pos is None
+                else "Forward" if avg_x_pos > 72.0 else ("Midfielder" if avg_x_pos >= 38.0 else "Defender")
+            )
             spotlight.append({
                 "player_id": pid,
-                "name": name,
+                "name": pid if state.get("coordinate_frame") == "team_relative" else PLAYERS.get(t_code, {}).get(pid, pid),
                 "team": t_code,
-                "team_name": TEAMS[t_code],
+                "team_name": team_names.get(t_code, t_code),
                 "touches": total_touches,
                 "position_cohort": cohort,
                 "sample_sufficiency": "sufficient" if total_touches >= 10 else "low_sample_uncalibrated",
@@ -1002,7 +1449,7 @@ def build_player_spotlight(state: dict, team: str | None = None) -> list[dict]:
                 "shots": len(shots),
                 "goals": len(goals),
                 "sequences_involved": len(seq_by_player.get(pid, [])),
-                "touch_points": [e["start"] for e in actor_events],
+                "touch_points": [e["start"] for e in located_touches],
                 "progressive_pass_ids": [e["id"] for e in prog_passes],
                 "recovery_ids": [e["id"] for e in recs],
                 "event_ids": [e["id"] for e in actor_events],
@@ -1049,21 +1496,23 @@ def compare_windows(
         team_controlled = durations[team]
         possession_pct = round(100 * team_controlled / total_controlled, 2) if total_controlled else 0.0
 
-        passes = [e for e in window_events if e["team"] == team and e["kind"] == "pass"]
-        prog_passes = [
-            e for e in passes
-            if (attack_x(team, e["end"][0]) - attack_x(team, e["start"][0])) >= 12.0
-            or (attack_x(team, e["start"][0]) <= 70 < attack_x(team, e["end"][0]))
-        ]
+        passes = [e for e in window_events if e["team"] == team and e["kind"] == "pass" and e.get("located")]
+        prog_passes, entries = [], []
+        for e in passes:
+            ax_s = event_attacking_x(e, team, point="start")
+            ax_e = event_attacking_x(e, team, point="end")
+            if ax_s is None or ax_e is None:
+                continue
+            if ax_e - ax_s >= 12.0 or ax_s <= 70 < ax_e:
+                prog_passes.append(e)
+            if ax_s <= 70 < ax_e:
+                entries.append(e)
         shots = [e for e in window_events if e["team"] == team and e["kind"] == "shot"]
         goals = [e for e in shots if e["outcome"] == "goal"]
         high_recs = [
             e for e in window_events
-            if e["team"] == team and e["kind"] == "recovery" and attack_x(team, e["start"][0]) >= 70
-        ]
-        entries = [
-            e for e in passes
-            if attack_x(team, e["start"][0]) <= 70 < attack_x(team, e["end"][0])
+            if e["team"] == team and e["kind"] == "recovery" and e.get("located")
+            and (ax := event_attacking_x(e, team, point="start")) is not None and ax >= 70
         ]
 
         warnings = []
@@ -1106,7 +1555,7 @@ def compare_windows(
 
     return {
         "team": team,
-        "team_name": TEAMS[team],
+        "team_name": (state.get("team_names") or TEAMS).get(team, team),
         "window_1": w1,
         "window_2": w2,
         "deltas": deltas,

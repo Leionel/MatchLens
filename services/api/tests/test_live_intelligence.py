@@ -47,19 +47,95 @@ def test_known_failed_historical_card_cannot_reenter_recap(tmp_path):
     engine.ledger.close()
 
 
-def test_real_goal_receipt_revalidates_without_relabeling_its_snapshot(tmp_path):
-    source = Path(__file__).resolve().parents[3] / "evidence/r0.2/runs/run-c-verify-a359468b.json"
+def _write_reusable_run(tmp_path: Path) -> tuple[str, object]:
+    """Create a run receipt from the current reducer, without a live model."""
+    from matchlens.contracts import ClaimDraft, VerifierDecision, publication_gate
+
+    snap = freeze(generate_match(), 720)
+    draft = ClaimDraft.model_validate({
+        "snapshot_id": snap.id,
+        "claims": [{
+            "id": "claim-goal-sequence",
+            "assertion": "goal_sequence",
+            "primary": {
+                "id": "primary",
+                "scope": "match",
+                "refs": ["H.goals.match"],
+                "fan": "Harbor scored {{H.goals.match}} goal(s). Follow the recorded on-ball sequence.",
+                "analyst": "The recorded goal receipt is {{H.goals.match}}. The chain is on-ball only.",
+            },
+        }],
+    })
+    review = VerifierDecision.model_validate({
+        "snapshot_id": snap.id,
+        "decisions": [{
+            "claim_id": "claim-goal-sequence",
+            "verdict": "publish",
+            "selected_variant": "primary",
+            "reason": "Typed assertion and frozen receipt references pass the publication gate.",
+            "limitations": [],
+        }],
+    })
+    audit = [
+        {"type": t, "role": role, "snapshot_id": snap.id}
+        for t in ("tool", "tool_receipt")
+        for role in ("Analyst", "Verifier")
+    ] + [{"type": "handoff", "snapshot_id": snap.id}]
+    checked = publication_gate(draft, review, snap, audit)
+    assert len(checked["accepted"]) == 1
+    result = {
+        "status": "completed",
+        "origin": "test_fixture",
+        "accepted": checked["accepted"],
+        "rejected": checked["rejected"],
+        "requests": 2,
+        "model": "deterministic-fixture",
+        "prompt_version": "test",
+    }
+    run_id = "run-third-pass-fixture"
+    record = {
+        "run_id": run_id,
+        "snapshot_id": snap.id,
+        "evidence": snap.data,
+        "prompt_version": "test",
+        "bound_epoch": 0,
+        "current_epoch": 0,
+        "draft": draft.model_dump(),
+        "review": review.model_dump(),
+        "result": result,
+        "audit": audit,
+        "requests": 2,
+        "raw_outputs": [],
+    }
     (tmp_path / "runs").mkdir()
-    shutil.copyfile(source, tmp_path / "runs" / source.name)
+    (tmp_path / "runs" / f"{run_id}.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
+    return snap.id, snap
+
+
+def test_real_goal_receipt_revalidates_without_relabeling_its_snapshot(tmp_path):
+    snap_id, _snap = _write_reusable_run(tmp_path)
     engine = Engine(tmp_path, None)
     s = Session("real-history", "local", at=720, focus="C")
     view = engine.view(s)
+    assert view["snapshot_id"] == snap_id
     assert len(view["result"]["accepted"]) == 1
     assert view["result"]["reused"]
     for card in view["history"]:
         assert card["historical"]
         assert s.snapshots[card["snapshot_id"]].id == card["snapshot_id"]
-        assert "13 recorded on-ball events" in card["fan"]
+        assert "recorded on-ball events" in card["fan"]
+    engine.ledger.close()
+
+
+def test_old_semantics_snapshot_is_never_relabelled(tmp_path):
+    """A pre-third-pass receipt must be rejected, not silently rehashed."""
+    source = Path(__file__).resolve().parents[3] / "evidence/r0.2/runs/run-c-verify-a359468b.json"
+    (tmp_path / "runs").mkdir()
+    shutil.copyfile(source, tmp_path / "runs" / source.name)
+    engine = Engine(tmp_path, None)
+    view = engine.view(Session("stale-history", "local", at=720, focus="C"))
+    assert not engine.saved_runs
+    assert not view["history"]
     engine.ledger.close()
 
 
@@ -67,8 +143,12 @@ def test_actual_rejected_quantity_is_caught_before_handoff():
     source = Path(__file__).resolve().parents[3] / "evidence/r0.2/runs/run-c-verify-29254a79.json"
     record = json.loads(source.read_text())
     raw = next(item["text"] for item in record["raw_outputs"] if item["role"] == "Analyst")
+    snap = freeze(generate_match(), 720)
+    # Keep the recorded model prose, but bind it to the current snapshot ID so
+    # the numeric-prose assertion is what actually fails.
+    raw = raw.replace(record["snapshot_id"], snap.id)
     with pytest.raises(ValueError, match="unbound_spelled_number"):
-        AgentRunner.validate_stage(raw, "Analyst", Run("offline-actual-draft", freeze(generate_match(), 720)))
+        AgentRunner.validate_stage(raw, "Analyst", Run("offline-actual-draft", snap))
 
 
 def test_automatic_workflow_does_not_pause_replay_or_repeat_a_candidate(tmp_path, monkeypatch):

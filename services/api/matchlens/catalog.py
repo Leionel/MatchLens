@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -41,6 +41,10 @@ class MatchMetadata(BaseModel):
     events_count: Optional[int] = None
     format_seconds: Optional[int] = None
     capabilities: list[str] = Field(default_factory=list)
+    home_provider_team_id: Optional[str] = None
+    away_provider_team_id: Optional[str] = None
+    continuous_coverage: bool = False
+    official_score_note: Optional[str] = None
 
 
 class MatchCatalog:
@@ -106,6 +110,20 @@ class MatchCatalog:
     get_match_meta = get_match
 
     @classmethod
+    def data_version(cls, match_id: str) -> str:
+        """Cheap fingerprint that changes when the underlying source changes."""
+        if match_id.startswith("syn_"):
+            return "synthetic-controlled-r02"
+        path = MATCHES_DIR / f"{match_id}.json"
+        try:
+            stat = path.stat()
+        except OSError:
+            return "missing"
+        import hashlib
+
+        return hashlib.sha256(f"{stat.st_mtime_ns}:{stat.st_size}".encode()).hexdigest()[:12]
+
+    @classmethod
     def get_match_context(cls, match_id: str) -> MatchContext:
         meta = cls.get_match(match_id)
         if not meta:
@@ -113,28 +131,42 @@ class MatchCatalog:
 
         if match_id.startswith("syn_"):
             mode = "synthetic_replay"
-            home_id = "H"
-            away_id = "N"
+            home_id, away_id = "H", "N"
             duration = 720
             observed_end = 720.0
             period = 2
             partial_notice = None
+            frame = "fixed"
+            continuous = True
+            home_provider = away_provider = None
         else:
             mode = "partial_fixture" if meta.coverage_level == DataCoverageLevel.C1_PARTIAL else "historical"
-            home_id = "ARG" if "argentina" in meta.home_team.lower() else "H"
-            away_id = "FRA" if "france" in meta.away_team.lower() else "N"
-            duration = 5400
-            try:
-                events = cls.load_normalized_events(match_id)
-                observed_end = max((e.clock_seconds for e in events), default=5400.0)
-                period = max((e.period for e in events), default=2)
-            except Exception:
-                observed_end = 5363.0
-                period = 2
+            # Explicit provider identity only. Name-substring inference is forbidden.
+            home_provider = meta.home_provider_team_id
+            away_provider = meta.away_provider_team_id
+            if not home_provider or not away_provider or home_provider == away_provider:
+                raise ValueError(
+                    f"missing_provider_team_mapping: {match_id}; metadata must declare "
+                    "home_provider_team_id and away_provider_team_id"
+                )
+            home_id, away_id = "H", "N"
+            duration = meta.format_seconds or 5400
+            events = cls.load_normalized_events(match_id)
+            observed_end = max((e.clock_seconds for e in events), default=0.0)
+            period = max((e.period for e in events), default=1)
+            frame = "team_relative"
+            continuous = bool(
+                meta.continuous_coverage
+                and meta.coverage_level not in (DataCoverageLevel.C1_PARTIAL,)
+                and meta.events_count is not None
+                and abs(meta.events_count - len(events)) == 0
+                and observed_end >= duration - 60
+            )
             partial_notice = (
-                f"Partial fixture: {meta.events_count or 12} events across 90 minutes. Not full continuous replay."
-                if mode == "partial_fixture"
-                else None
+                None if continuous else
+                f"Partial fixture: {len(events)} events, observed through "
+                f"{observed_end:.0f}s of a nominal {duration}s match. "
+                "Unobserved intervals are Unknown, not zero and not continuous possession."
             )
 
         return MatchContext(
@@ -152,11 +184,25 @@ class MatchCatalog:
             duration=duration,
             observed_end=observed_end,
             period=period,
-            attack_directions={"H": "left_to_right", "N": "right_to_left"},
+            attack_directions=(
+                {"H": "left_to_right", "N": "right_to_left"}
+                if frame == "fixed" else {"H": "left_to_right", "N": "left_to_right"}
+            ),
             event_source=meta.license_ref,
             capabilities=meta.capabilities,
-            data_version="1.0.0",
+            data_version=cls.data_version(match_id),
             partial_notice=partial_notice,
+            competition=meta.competition,
+            season=meta.season,
+            label=meta.label,
+            home_provider_team_id=home_provider,
+            away_provider_team_id=away_provider,
+            coordinate_frame=frame,
+            continuous_coverage=continuous,
+            event_count=len(events) if not match_id.startswith("syn_") else 0,
+            score_basis="observed_prefix",
+            official_home_score=meta.home_score,
+            official_away_score=meta.away_score,
         )
 
     @classmethod
@@ -175,54 +221,217 @@ class MatchCatalog:
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        raw_events = data.get("events", [])
+        meta_raw = data.get("metadata") or {}
+        home_pid = meta_raw.get("home_provider_team_id")
+        away_pid = meta_raw.get("away_provider_team_id")
+        if not home_pid or not away_pid or str(home_pid) == str(away_pid):
+            raise ValueError(f"missing_provider_team_mapping: {match_id}")
+        raw_events = data.get("events")
+        if not isinstance(raw_events, list):
+            raise ValueError(f"malformed_event_payload: {match_id}")
         adapter = StatsBombAdapter(match_id=match_id)
-        return adapter.load_events(raw_events)
+        events = adapter.load_events(raw_events)
+        mapping = {str(home_pid): "H", str(away_pid): "N"}
+        canonical: list[NormalizedEvent] = []
+        for e in events:
+            if e.team_id not in mapping:
+                raise ValueError(f"unmapped_provider_team: {match_id}:{e.team_id}")
+            canonical.append(e.model_copy(update={"team_id": mapping[e.team_id]}))
+        return canonical
 
     @classmethod
     def load_multiple_matches(
-        cls, match_ids: list[str]
+        cls, match_ids: list[str], *, allow_partial: bool = False
     ) -> dict[str, list[NormalizedEvent]]:
-        """Batch load multiple matches by ID across synthetic and real catalogs."""
-        results: dict[str, list[NormalizedEvent]] = {}
-        for m_id in match_ids:
-            try:
-                events = cls.load_normalized_events(m_id)
-                results[m_id] = events
-            except Exception:
-                results[m_id] = []
+        """Batch load matches without collapsing failures into empty event lists."""
+        results, errors = cls.load_multiple_matches_with_status(match_ids)
+        failures = {mid: st for mid, st in errors.items() if st["status"] != "ok"}
+        if failures and not allow_partial:
+            detail = ", ".join(f"{mid}={st['status']}" for mid, st in failures.items())
+            raise ValueError(f"batch_load_failed: {detail}")
         return results
 
     @classmethod
-    def get_batch_summary(cls, match_ids: list[str]) -> dict[str, Any]:
-        """Return aggregated cross-match event statistics."""
-        batch_events = cls.load_multiple_matches(match_ids)
-        total_matches = len(batch_events)
-        total_events = sum(len(evs) for evs in batch_events.values())
-        passes = 0
-        shots = 0
-        goals = 0
-        carries = 0
+    def load_multiple_matches_with_status(
+        cls, match_ids: list[str]
+    ) -> tuple[dict[str, list[NormalizedEvent]], dict[str, dict]]:
+        """Distinguish missing / parse_error / unsupported / zero-events / ok."""
+        results: dict[str, list[NormalizedEvent]] = {}
+        status: dict[str, dict] = {}
+        for m_id in match_ids:
+            meta = cls.get_match(m_id)
+            if meta is None:
+                # A file may exist but be unreadable. Distinguish that from a
+                # genuinely absent source instead of reporting both as missing.
+                candidate = MATCHES_DIR / f"{m_id}.json"
+                if candidate.exists():
+                    try:
+                        payload = json.loads(candidate.read_text(encoding="utf-8"))
+                        meta_raw = payload.get("metadata")
+                        if not isinstance(meta_raw, dict):
+                            raise ValueError("metadata_missing")
+                        MatchMetadata(**meta_raw)
+                    except Exception as exc:
+                        status[m_id] = {"status": "parse_error", "event_count": 0, "reason": str(exc)}
+                        continue
+                status[m_id] = {"status": "missing", "event_count": 0, "reason": "not_in_catalog"}
+                continue
+            if meta.data_provider != "statsbomb_open_data" and not m_id.startswith("syn_"):
+                status[m_id] = {"status": "unsupported", "event_count": 0, "reason": meta.data_provider}
+                continue
+            try:
+                events = cls.load_normalized_events(m_id)
+            except FileNotFoundError as exc:
+                status[m_id] = {"status": "missing", "event_count": 0, "reason": str(exc)}
+                continue
+            except Exception as exc:  # malformed provider payload
+                status[m_id] = {"status": "parse_error", "event_count": 0, "reason": str(exc)}
+                continue
+            if not events:
+                status[m_id] = {"status": "zero_events", "event_count": 0, "reason": "source_loaded_but_empty"}
+            else:
+                status[m_id] = {
+                    "status": "ok",
+                    "event_count": len(events),
+                    "coverage": meta.coverage_level.value,
+                }
+            results[m_id] = events
+        return results, status
 
-        for evs in batch_events.values():
-            for ev in evs:
-                if ev.action_type == ActionType.PASS:
-                    passes += 1
-                elif ev.action_type == ActionType.CARRY:
-                    carries += 1
-                elif ev.action_type == ActionType.SHOT:
-                    shots += 1
-                    if ev.outcome == "goal":
-                        goals += 1
+    @classmethod
+    def get_batch_summary(cls, match_ids: list[str]) -> dict[str, Any]:
+        """Return comparable, coverage-aware cross-match statistics.
+
+        Raw totals are reported but never presented as equivalent per-match
+        rates: partial fixtures and complete synthetic matches are marked as
+        non-comparable unless their coverage and model versions align.
+        """
+        batch_events, load_status = cls.load_multiple_matches_with_status(match_ids)
+        per_match: dict[str, dict] = {}
+        coverage_flags: set[str] = set()
+        for mid, evs in batch_events.items():
+            meta = cls.get_match(mid)
+            ctx = cls.get_match_context(mid) if meta else None
+            passes = sum(1 for ev in evs if ev.action_type == ActionType.PASS)
+            carries = sum(1 for ev in evs if ev.action_type == ActionType.CARRY)
+            shots = [ev for ev in evs if ev.action_type == ActionType.SHOT]
+            goals = sum(1 for ev in shots if ev.outcome in ("goal", "own_goal_for"))
+            home_goals = sum(1 for ev in shots if ev.team_id == "H" and ev.outcome == "goal") + sum(
+                1 for ev in shots if ev.team_id == "N" and ev.outcome == "own_goal_for"
+            )
+            away_goals = sum(1 for ev in shots if ev.team_id == "N" and ev.outcome == "goal") + sum(
+                1 for ev in shots if ev.team_id == "H" and ev.outcome == "own_goal_for"
+            )
+            duration = ctx.duration if ctx else 0
+            coverage = meta.coverage_level.value if meta else "unknown"
+            coverage_flags.add(coverage)
+            continuous = bool(ctx.continuous_coverage) if ctx else False
+            observed = float(ctx.observed_end) if ctx else 0.0
+            per_match[mid] = {
+                "match_id": mid,
+                "match_date": meta.match_date if meta else None,
+                "competition": meta.competition if meta else None,
+                "home_team": meta.home_team if meta else None,
+                "away_team": meta.away_team if meta else None,
+                "home_team_id": ctx.home_team_id if ctx else None,
+                "away_team_id": ctx.away_team_id if ctx else None,
+                "coverage": coverage,
+                "continuous_coverage": continuous,
+                "sample_size_events": len(evs),
+                "observed_end": observed or None,
+                "duration_seconds": duration,
+                "event_coverage": "unknown" if not continuous else "complete",
+                "passes": passes,
+                "carries": carries,
+                "shots": len(shots),
+                "goals": goals,
+                "home_goals": home_goals,
+                "away_goals": away_goals,
+                # Standardized rates only where the denominator is known and
+                # coverage is continuous; otherwise explicitly withheld.
+                "passes_per_90": round(passes * 5400 / duration, 2) if ctx and continuous and duration else None,
+                "shots_per_90": round(len(shots) * 5400 / duration, 2) if ctx and continuous and duration else None,
+                "carries_per_90": round(carries * 5400 / duration, 2) if ctx and continuous and duration else None,
+                "events_per_minute_observed": round(len(evs) / (observed / 60), 2) if observed else None,
+                "load_status": load_status.get(mid, {}).get("status"),
+                "rate_status": "comparable" if ctx and continuous else "withheld_partial_coverage",
+            }
+
+        comparable = bool(per_match) and (
+            len({p["coverage"] for p in per_match.values()}) == 1
+            and all(p["continuous_coverage"] for p in per_match.values())
+            and len({p["duration_seconds"] for p in per_match.values()}) == 1
+        )
+
+        team_summaries: dict[str, dict] = {}
+        for mid, p in per_match.items():
+            for side in ("home_team", "away_team"):
+                team = p.get(side)
+                if not team:
+                    continue
+                summary = team_summaries.setdefault(team, {
+                    "team": team,
+                    "matches": [],
+                    "continuous_matches": 0,
+                    "partial_matches": 0,
+                    "goals_total": 0,
+                    "per_90_available": [],
+                })
+                summary["matches"].append(mid)
+                summary["goals_total"] += p["home_goals"] if side == "home_team" else p["away_goals"]
+                if p["continuous_coverage"]:
+                    summary["continuous_matches"] += 1
+                    summary["per_90_available"].append({
+                        "match_id": mid,
+                        "shots_per_90": p["shots_per_90"],
+                        "passes_per_90": p["passes_per_90"],
+                    })
+                else:
+                    summary["partial_matches"] += 1
+
+        trend = sorted(
+            (
+                {
+                    "match_id": mid,
+                    "match_date": p["match_date"],
+                    "coverage": p["coverage"],
+                    "rate_status": p["rate_status"],
+                    "shots_per_90": p["shots_per_90"],
+                    "passes_per_90": p["passes_per_90"],
+                    "goals": p["goals"],
+                }
+                for mid, p in per_match.items()
+            ),
+            key=lambda row: row["match_date"] or "",
+        )
+        warnings: list[str] = []
+        if not comparable:
+            warnings.append("mixed_coverage_or_duration: per-90 comparison withheld")
+        for mid, status in load_status.items():
+            if status["status"] != "ok":
+                warnings.append(f"{mid}:{status['status']}")
 
         return {
             "match_ids": match_ids,
-            "total_matches": total_matches,
-            "total_events": total_events,
-            "passes_count": passes,
-            "carries_count": carries,
-            "shots_count": shots,
-            "goals_count": goals,
+            "total_matches": len(batch_events),
+            "total_events": sum(p["sample_size_events"] for p in per_match.values()),
+            "passes_count": sum(p["passes"] for p in per_match.values()),
+            "carries_count": sum(p["carries"] for p in per_match.values()),
+            "shots_count": sum(p["shots"] for p in per_match.values()),
+            "goals_count": sum(p["goals"] for p in per_match.values()),
+            "per_match": per_match,
+            "team_summaries": team_summaries,
+            "trend": trend,
+            "load_status": load_status,
+            "coverage_mix": sorted(coverage_flags),
+            "metric_version": "football-v2",
+            "comparable": comparable,
+            "warnings": warnings,
+            "comparability_note": (
+                "Coverage, duration and continuous-coverage align; per-90 rates are comparable."
+                if comparable else
+                "Mixed or partial coverage: raw totals are reported, but per-90 comparison is withheld."
+            ),
         }
 
     @classmethod

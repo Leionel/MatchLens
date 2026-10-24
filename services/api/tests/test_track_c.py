@@ -406,22 +406,31 @@ def test_abc_benchmark_harness():
     assert len(suite_res.configurations) == 3
 
     config_names = [c.config for c in suite_res.configurations]
-    assert "A_dual_agent" in config_names
-    assert "B_dual_agent_plus_tools" in config_names
-    assert "C_triple_agent_specialist" in config_names
+    assert "A_reference_only" in config_names
+    assert "B_gate20" in config_names
+    assert "C_gate20_plus_tools" in config_names
 
-    cfg_a = next(c for c in suite_res.configurations if c.config == "A_dual_agent")
-    cfg_b = next(c for c in suite_res.configurations if c.config == "B_dual_agent_plus_tools")
-    cfg_c = next(c for c in suite_res.configurations if c.config == "C_triple_agent_specialist")
+    cfg_a = next(c for c in suite_res.configurations if c.config == "A_reference_only")
+    cfg_b = next(c for c in suite_res.configurations if c.config == "B_gate20")
+    cfg_c = next(c for c in suite_res.configurations if c.config == "C_gate20_plus_tools")
 
-    # Config C should outperform Config A in accuracy and rival hypothesis coverage
-    assert cfg_c.accuracy_rate >= cfg_a.accuracy_rate
-    assert cfg_c.alternative_hypothesis_coverage > cfg_a.alternative_hypothesis_coverage
-    assert cfg_c.gate_block_rate >= cfg_a.gate_block_rate
+    for cfg in suite_res.configurations:
+        assert cfg.status == "executed"
+        assert cfg.total_claims_evaluated > 0
+        assert cfg.latency_ms_measured is not None
+        # Token and live-model metrics were not measured and must be absent.
+        assert cfg.token_cost_usd is None
+        assert cfg.is_live_model_evaluation is False
+        assert cfg.empirical_accuracy_measured is False
+        assert 0.0 <= cfg.contract_agreement_rate <= 1.0
 
-    # Latency and token consumption order
-    assert cfg_c.latency_ms_est >= cfg_a.latency_ms_est
-    assert cfg_c.token_cost_usd_est >= cfg_a.token_cost_usd_est
+    # Gate 2.0 must block at least as many labelled-invalid claims as the
+    # reference-only checker; B and C execute the same gate by construction.
+    assert cfg_b.invalid_block_rate >= cfg_a.invalid_block_rate
+    assert cfg_c.invalid_block_rate == cfg_b.invalid_block_rate
+    assert cfg_c.alternative_hypothesis_tool_executed is True
+    assert suite_res.live_model_status == "not_run"
+    assert "NOT RUN" in suite_res.summary
 
 
 # ---------------------------------------------------------------------------

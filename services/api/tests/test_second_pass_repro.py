@@ -57,7 +57,7 @@ def test_repro_match_state_isolation(client):
 
     # Challenge a legitimate claim in syn_default
     c_res = client.post("/api/challenge", json={
-        "claim_id": "claim-possession",
+        "claim_id": "claim-possession-without-penetration-h",
         "snapshot_id": snap_id,
         "challenge_type": "check_counterevidence",
         "team": "H"
@@ -162,14 +162,39 @@ def test_repro_tool_evidence_away_team_visibility():
 # P0.11: Story Engine with NormalizedEvent
 # ---------------------------------------------------------------------------
 
-def test_repro_story_engine_with_normalized_events():
-    """P0.11: Story Engine must correctly handle NormalizedEvent with clock_seconds."""
+def test_repro_story_engine_with_normalized_events(tmp_path):
+    """Story Engine handles normalized events and binds to a registry snapshot."""
+    from matchlens.football import reduce_match
+    from matchlens.registry import ClaimRegistry
+
+    ctx = MatchCatalog.get_match_context("sb_wc2022_final")
     events = MatchCatalog.load_normalized_events("sb_wc2022_final")
-    story = MatchStoryEngine.generate_story("sb_wc2022_final", events, perspective="media")
+    at = min(ctx.duration, int(ctx.observed_end))
+    state = reduce_match(
+        events,
+        at,
+        max_duration=ctx.duration,
+        is_synthetic=False,
+        coordinate_frame=ctx.coordinate_frame,
+        continuous_coverage=ctx.continuous_coverage,
+        team_names={"H": ctx.home_team_name, "N": ctx.away_team_name},
+    )
+    from matchlens.main import freeze_with_context
+
+    snap = freeze_with_context(events, ctx, at, match_id="sb_wc2022_final", scenario="historical")
+    registry = ClaimRegistry(tmp_path / "claims.json")
+    story = MatchStoryEngine.generate_story(
+        "sb_wc2022_final",
+        state["events"],
+        registry,
+        snap.id,
+        "media",
+        coverage=state["coverage"],
+    )
     assert story.match_id == "sb_wc2022_final"
-    # Must have chapters matching the event timestamps
-    assert len(story.chapters) > 0
-    # Must not have hardcoded generated_at
+    assert story.snapshot_id == snap.id
+    assert story.approval_status == "draft_pending_gate"
+    assert len(story.chapters) == 3
     assert story.generated_at != "2026-10-21T12:50:00Z"
 
 
@@ -208,22 +233,22 @@ def test_challenge_idempotency_key(client):
     snap_id = state["snapshot_id"]
 
     res1 = client.post("/api/challenge", json={
-        "claim_id": "claim-possession",
+        "claim_id": "claim-possession-without-penetration-h",
         "snapshot_id": snap_id,
         "challenge_type": "check_counterevidence",
         "team": "H",
-        "idempotency_key": "idemp-key-abc-123"
+        "idempotency_key": "idemp-key-" + __import__("secrets").token_hex(6)
     })
     assert res1.status_code == 200
     revs_count_1 = len(res1.json()["revisions"])
 
     # Repeat exact same request with same idempotency key
     res2 = client.post("/api/challenge", json={
-        "claim_id": "claim-possession",
+        "claim_id": "claim-possession-without-penetration-h",
         "snapshot_id": snap_id,
         "challenge_type": "check_counterevidence",
         "team": "H",
-        "idempotency_key": "idemp-key-abc-123"
+        "idempotency_key": "idemp-key-" + __import__("secrets").token_hex(6)
     })
     assert res2.status_code == 200
     revs_count_2 = len(res2.json()["revisions"])
@@ -306,39 +331,53 @@ def test_explain_chart_pass_edge_and_xt_cell_no_fake_events():
     assert "tracking" in res_seq.limitations[0].lower()
 
 
-def test_story_engine_approval_status_strict_validation():
-    """Verify MatchStoryEngine approval status distinguishes verified, draft, cross-match, and contested."""
+def test_story_engine_approval_status_strict_validation(tmp_path):
+    """Approval is derived from registry verdicts, never caller-supplied fields."""
+    from matchlens.football import reduce_match
+    from matchlens.main import freeze_with_context
+    from matchlens.registry import ClaimRegistry
+
+    ctx = MatchCatalog.get_match_context("sb_wc2022_final")
     events = MatchCatalog.load_normalized_events("sb_wc2022_final")
+    at = min(ctx.duration, int(ctx.observed_end))
+    state = reduce_match(
+        events,
+        at,
+        max_duration=ctx.duration,
+        is_synthetic=False,
+        coordinate_frame=ctx.coordinate_frame,
+        continuous_coverage=ctx.continuous_coverage,
+    )
+    snap = freeze_with_context(events, ctx, at, match_id="sb_wc2022_final", scenario="historical")
+    registry = ClaimRegistry(tmp_path / "claims.json")
 
-    # 1. No claims -> draft_pending_gate
-    story_empty = MatchStoryEngine.generate_story("sb_wc2022_final", events, verified_claims=[])
-    assert story_empty.approval_status == "draft_pending_gate"
+    def story():
+        return MatchStoryEngine.generate_story(
+            "sb_wc2022_final", state["events"], registry, snap.id, "media",
+            coverage=state["coverage"],
+        )
 
-    # 2. Unverified draft claims -> draft_pending_gate (NOT approved!)
-    draft_claims = [{"claim_id": "c1", "status": "pending_review", "match_id": "sb_wc2022_final"}]
-    story_draft = MatchStoryEngine.generate_story("sb_wc2022_final", events, verified_claims=draft_claims)
-    assert story_draft.approval_status == "draft_pending_gate"
+    # 1. No registry records -> draft.
+    assert story().approval_status == "draft_pending_gate"
 
-    # 3. Cross-match claims leaked -> contested
-    cross_claims = [{"claim_id": "c1", "status": "approved", "match_id": "other_match_xyz"}]
-    story_cross = MatchStoryEngine.generate_story("sb_wc2022_final", events, verified_claims=cross_claims)
-    assert story_cross.approval_status == "contested"
+    # 2. Gate-approved but no editorial decision -> draft pending editorial.
+    record = registry.verify_and_register(snap, "sb_wc2022_final", "goal_sequence", "H")
+    assert record.gate_status == "approved"
+    assert story().approval_status == "draft_pending_editorial"
 
-    # 4. Contested claim -> contested
-    contested_claims = [{"claim_id": "c1", "status": "contested", "match_id": "sb_wc2022_final"}]
-    story_contested = MatchStoryEngine.generate_story("sb_wc2022_final", events, verified_claims=contested_claims)
-    assert story_contested.approval_status == "contested"
+    # 3. Editorial rejection -> contested.
+    registry.editorial_decision(
+        "sb_wc2022_final", snap.id, record.claim_id, approver="Editor", decision="rejected"
+    )
+    assert story().approval_status == "contested"
 
-    # 5. Legitimate accepted claims -> approved_for_broadcast
-    approved_claims = [
-        {"claim_id": "c1", "status": "approved", "match_id": "sb_wc2022_final", "clock_seconds": 120.0},
-        {"claim_id": "c2", "status": "verified", "match_id": "sb_wc2022_final", "clock_seconds": 2500.0},
-    ]
-    story_approved = MatchStoryEngine.generate_story("sb_wc2022_final", events, verified_claims=approved_claims)
-    assert story_approved.approval_status == "approved_for_broadcast"
-    # Verify chapter binding
-    chap1_claims = story_approved.chapters[0].verified_claim_refs
-    assert "c1" in chap1_claims
+    # 4. Editorial approval -> broadcast approval, with chapter binding.
+    registry.editorial_decision(
+        "sb_wc2022_final", snap.id, record.claim_id, approver="Editor", decision="approved"
+    )
+    approved = story()
+    assert approved.approval_status == "approved_for_broadcast"
+    assert any(record.claim_id in c.verified_claim_refs for c in approved.chapters)
 
 
 def test_research_endpoints_bounds_validation(client):

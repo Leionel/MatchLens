@@ -177,25 +177,22 @@ def test_agent_benchmark_evaluator_abc_synthetic(synthetic_events):
     assert result.match_id == "syn_default"
     assert len(result.configurations) == 3
 
-    config_a = next(c for c in result.configurations if c.config == "A_dual_agent")
-    config_b = next(c for c in result.configurations if c.config == "B_dual_agent_plus_tools")
-    config_c = next(c for c in result.configurations if c.config == "C_triple_agent_specialist")
+    config_a = next(c for c in result.configurations if c.config == "A_reference_only")
+    config_b = next(c for c in result.configurations if c.config == "B_gate20")
+    config_c = next(c for c in result.configurations if c.config == "C_gate20_plus_tools")
 
-    # Gate block rate: Config A > Config B > Config C (Triple agent resolves disputes)
-    assert config_a.gate_block_rate > config_b.gate_block_rate > config_c.gate_block_rate
+    # Rates are computed from executed rule outcomes, never constants.
+    assert config_b.invalid_block_rate >= config_a.invalid_block_rate
+    assert config_c.invalid_block_rate == config_b.invalid_block_rate
+    assert config_c.alternative_hypothesis_tool_executed is True
+    assert config_a.alternative_hypothesis_tool_executed is False
 
-    # Accuracy rate: Config C > Config B > Config A
-    assert config_c.accuracy_rate > config_b.accuracy_rate > config_a.accuracy_rate
-
-    # Alternative hypothesis coverage: Config C has dedicated specialist
-    assert config_c.alternative_hypothesis_coverage > config_b.alternative_hypothesis_coverage > config_a.alternative_hypothesis_coverage
-
-    # Token cost & latency trade-offs: Config C > Config B > Config A
-    assert config_c.token_cost_usd_est > config_b.token_cost_usd_est > config_a.token_cost_usd_est
-    assert config_c.latency_ms_est > config_b.latency_ms_est > config_a.latency_ms_est
-
-    assert "Configuration C" in result.recommendation
-    assert "A/B/C Multi-Agent Benchmark" in result.summary
+    # No model was dispatched: cost/latency claims are Not Run.
+    assert config_a.token_cost_usd is None
+    assert config_c.token_cost_usd is None
+    assert result.live_model_status == "not_run"
+    assert "NOT RUN" in result.summary
+    assert "deterministic" in result.recommendation.lower()
 
 
 def test_agent_benchmark_evaluator_world_cup_final(wc2022_final_events):
@@ -214,6 +211,8 @@ def test_agent_benchmark_evaluator_world_cup_final(wc2022_final_events):
         assert 0.0 <= cfg.gate_block_rate <= 1.0
         assert 0.0 <= cfg.gate_pass_rate <= 1.0
         assert 0.0 <= cfg.accuracy_rate <= 1.0
+        assert cfg.token_cost_usd is None
+        assert result.live_model_status == "not_run"
 
 
 def test_run_agent_benchmark_evaluation_helper():

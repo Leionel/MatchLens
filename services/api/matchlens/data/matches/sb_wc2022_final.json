@@ -19,7 +19,12 @@
       "schema_compatibility",
       "starting_xi_verification",
       "sample_spatial_drilldown"
-    ]
+    ],
+    "home_provider_team_id": "779",
+    "away_provider_team_id": "771",
+    "format_seconds": 5400,
+    "continuous_coverage": false,
+    "official_score_note": "Official final score after extra time (3-3); penalty shootout 4-2 is not part of the score field."
   },
   "events": [
     {
@@ -29,8 +34,14 @@
       "timestamp": "00:00:00.000",
       "minute": 0,
       "second": 0,
-      "type": { "id": 35, "name": "Starting XI" },
-      "team": { "id": 779, "name": "Argentina" }
+      "type": {
+        "id": 35,
+        "name": "Starting XI"
+      },
+      "team": {
+        "id": 779,
+        "name": "Argentina"
+      }
     },
     {
       "id": "e002",
@@ -39,8 +50,14 @@
       "timestamp": "00:00:00.000",
       "minute": 0,
       "second": 0,
-      "type": { "id": 35, "name": "Starting XI" },
-      "team": { "id": 771, "name": "France" }
+      "type": {
+        "id": 35,
+        "name": "Starting XI"
+      },
+      "team": {
+        "id": 771,
+        "name": "France"
+      }
     },
     {
       "id": "e003",
@@ -49,8 +66,14 @@
       "timestamp": "00:00:00.100",
       "minute": 0,
       "second": 0,
-      "type": { "id": 18, "name": "Half Start" },
-      "team": { "id": 771, "name": "France" }
+      "type": {
+        "id": 18,
+        "name": "Half Start"
+      },
+      "team": {
+        "id": 771,
+        "name": "France"
+      }
     },
     {
       "id": "e004",
@@ -59,17 +82,38 @@
       "timestamp": "00:00:01.200",
       "minute": 0,
       "second": 1,
-      "type": { "id": 30, "name": "Pass" },
+      "type": {
+        "id": 30,
+        "name": "Pass"
+      },
       "possession": 2,
-      "possession_team": { "id": 771, "name": "France" },
-      "team": { "id": 771, "name": "France" },
-      "player": { "id": 3009, "name": "Kylian Mbappé" },
-      "location": [60.0, 40.0],
+      "possession_team": {
+        "id": 771,
+        "name": "France"
+      },
+      "team": {
+        "id": 771,
+        "name": "France"
+      },
+      "player": {
+        "id": 3009,
+        "name": "Kylian Mbappé"
+      },
+      "location": [
+        60.0,
+        40.0
+      ],
       "pass": {
-        "recipient": { "id": 3531, "name": "Antoine Griezmann" },
+        "recipient": {
+          "id": 3531,
+          "name": "Antoine Griezmann"
+        },
         "length": 14.5,
         "angle": -2.1,
-        "end_location": [54.0, 28.0]
+        "end_location": [
+          54.0,
+          28.0
+        ]
       }
     },
     {
@@ -79,14 +123,32 @@
       "timestamp": "00:00:04.500",
       "minute": 0,
       "second": 4,
-      "type": { "id": 43, "name": "Carry" },
+      "type": {
+        "id": 43,
+        "name": "Carry"
+      },
       "possession": 2,
-      "possession_team": { "id": 771, "name": "France" },
-      "team": { "id": 771, "name": "France" },
-      "player": { "id": 3531, "name": "Antoine Griezmann" },
-      "location": [54.0, 28.0],
+      "possession_team": {
+        "id": 771,
+        "name": "France"
+      },
+      "team": {
+        "id": 771,
+        "name": "France"
+      },
+      "player": {
+        "id": 3531,
+        "name": "Antoine Griezmann"
+      },
+      "location": [
+        54.0,
+        28.0
+      ],
       "carry": {
-        "end_location": [58.0, 27.0]
+        "end_location": [
+          58.0,
+          27.0
+        ]
       }
     },
     {
@@ -96,17 +158,38 @@
       "timestamp": "00:05:12.300",
       "minute": 5,
       "second": 12,
-      "type": { "id": 30, "name": "Pass" },
+      "type": {
+        "id": 30,
+        "name": "Pass"
+      },
       "possession": 5,
-      "possession_team": { "id": 779, "name": "Argentina" },
-      "team": { "id": 779, "name": "Argentina" },
-      "player": { "id": 5503, "name": "Lionel Messi" },
-      "location": [82.0, 36.0],
+      "possession_team": {
+        "id": 779,
+        "name": "Argentina"
+      },
+      "team": {
+        "id": 779,
+        "name": "Argentina"
+      },
+      "player": {
+        "id": 5503,
+        "name": "Lionel Messi"
+      },
+      "location": [
+        82.0,
+        36.0
+      ],
       "pass": {
-        "recipient": { "id": 2995, "name": "Ángel Di María" },
+        "recipient": {
+          "id": 2995,
+          "name": "Ángel Di María"
+        },
         "length": 25.0,
         "angle": 1.2,
-        "end_location": [102.0, 62.0]
+        "end_location": [
+          102.0,
+          62.0
+        ]
       }
     },
     {
@@ -116,16 +199,38 @@
       "timestamp": "00:22:15.000",
       "minute": 22,
       "second": 15,
-      "type": { "id": 16, "name": "Shot" },
+      "type": {
+        "id": 16,
+        "name": "Shot"
+      },
       "possession": 12,
-      "possession_team": { "id": 779, "name": "Argentina" },
-      "team": { "id": 779, "name": "Argentina" },
-      "player": { "id": 5503, "name": "Lionel Messi" },
-      "location": [108.0, 40.0],
+      "possession_team": {
+        "id": 779,
+        "name": "Argentina"
+      },
+      "team": {
+        "id": 779,
+        "name": "Argentina"
+      },
+      "player": {
+        "id": 5503,
+        "name": "Lionel Messi"
+      },
+      "location": [
+        108.0,
+        40.0
+      ],
       "shot": {
         "statsbomb_xg": 0.78,
-        "end_location": [120.0, 38.5, 0.4],
-        "outcome": { "id": 97, "name": "Goal" }
+        "end_location": [
+          120.0,
+          38.5,
+          0.4
+        ],
+        "outcome": {
+          "id": 97,
+          "name": "Goal"
+        }
       }
     },
     {
@@ -135,16 +240,38 @@
       "timestamp": "00:35:40.000",
       "minute": 35,
       "second": 40,
-      "type": { "id": 16, "name": "Shot" },
+      "type": {
+        "id": 16,
+        "name": "Shot"
+      },
       "possession": 19,
-      "possession_team": { "id": 779, "name": "Argentina" },
-      "team": { "id": 779, "name": "Argentina" },
-      "player": { "id": 2995, "name": "Ángel Di María" },
-      "location": [109.0, 48.0],
+      "possession_team": {
+        "id": 779,
+        "name": "Argentina"
+      },
+      "team": {
+        "id": 779,
+        "name": "Argentina"
+      },
+      "player": {
+        "id": 2995,
+        "name": "Ángel Di María"
+      },
+      "location": [
+        109.0,
+        48.0
+      ],
       "shot": {
         "statsbomb_xg": 0.45,
-        "end_location": [120.0, 43.0, 0.8],
-        "outcome": { "id": 97, "name": "Goal" }
+        "end_location": [
+          120.0,
+          43.0,
+          0.8
+        ],
+        "outcome": {
+          "id": 97,
+          "name": "Goal"
+        }
       }
     },
     {
@@ -154,16 +281,38 @@
       "timestamp": "00:34:10.000",
       "minute": 79,
       "second": 10,
-      "type": { "id": 16, "name": "Shot" },
+      "type": {
+        "id": 16,
+        "name": "Shot"
+      },
       "possession": 34,
-      "possession_team": { "id": 771, "name": "France" },
-      "team": { "id": 771, "name": "France" },
-      "player": { "id": 3009, "name": "Kylian Mbappé" },
-      "location": [108.0, 40.0],
+      "possession_team": {
+        "id": 771,
+        "name": "France"
+      },
+      "team": {
+        "id": 771,
+        "name": "France"
+      },
+      "player": {
+        "id": 3009,
+        "name": "Kylian Mbappé"
+      },
+      "location": [
+        108.0,
+        40.0
+      ],
       "shot": {
         "statsbomb_xg": 0.78,
-        "end_location": [120.0, 42.0, 0.5],
-        "outcome": { "id": 97, "name": "Goal" }
+        "end_location": [
+          120.0,
+          42.0,
+          0.5
+        ],
+        "outcome": {
+          "id": 97,
+          "name": "Goal"
+        }
       }
     },
     {
@@ -173,16 +322,38 @@
       "timestamp": "00:35:48.000",
       "minute": 80,
       "second": 48,
-      "type": { "id": 16, "name": "Shot" },
+      "type": {
+        "id": 16,
+        "name": "Shot"
+      },
       "possession": 36,
-      "possession_team": { "id": 771, "name": "France" },
-      "team": { "id": 771, "name": "France" },
-      "player": { "id": 3009, "name": "Kylian Mbappé" },
-      "location": [104.0, 50.0],
+      "possession_team": {
+        "id": 771,
+        "name": "France"
+      },
+      "team": {
+        "id": 771,
+        "name": "France"
+      },
+      "player": {
+        "id": 3009,
+        "name": "Kylian Mbappé"
+      },
+      "location": [
+        104.0,
+        50.0
+      ],
       "shot": {
         "statsbomb_xg": 0.18,
-        "end_location": [120.0, 36.5, 0.7],
-        "outcome": { "id": 97, "name": "Goal" }
+        "end_location": [
+          120.0,
+          36.5,
+          0.7
+        ],
+        "outcome": {
+          "id": 97,
+          "name": "Goal"
+        }
       }
     },
     {
@@ -192,12 +363,27 @@
       "timestamp": "00:44:20.000",
       "minute": 89,
       "second": 20,
-      "type": { "id": 2, "name": "Ball Recovery" },
+      "type": {
+        "id": 2,
+        "name": "Ball Recovery"
+      },
       "possession": 40,
-      "possession_team": { "id": 779, "name": "Argentina" },
-      "team": { "id": 779, "name": "Argentina" },
-      "player": { "id": 7790, "name": "Enzo Fernández" },
-      "location": [75.0, 30.0]
+      "possession_team": {
+        "id": 779,
+        "name": "Argentina"
+      },
+      "team": {
+        "id": 779,
+        "name": "Argentina"
+      },
+      "player": {
+        "id": 7790,
+        "name": "Enzo Fernández"
+      },
+      "location": [
+        75.0,
+        30.0
+      ]
     },
     {
       "id": "e012",
@@ -206,17 +392,38 @@
       "timestamp": "00:44:23.000",
       "minute": 89,
       "second": 23,
-      "type": { "id": 30, "name": "Pass" },
+      "type": {
+        "id": 30,
+        "name": "Pass"
+      },
       "possession": 40,
-      "possession_team": { "id": 779, "name": "Argentina" },
-      "team": { "id": 779, "name": "Argentina" },
-      "player": { "id": 7790, "name": "Enzo Fernández" },
-      "location": [75.0, 30.0],
+      "possession_team": {
+        "id": 779,
+        "name": "Argentina"
+      },
+      "team": {
+        "id": 779,
+        "name": "Argentina"
+      },
+      "player": {
+        "id": 7790,
+        "name": "Enzo Fernández"
+      },
+      "location": [
+        75.0,
+        30.0
+      ],
       "pass": {
-        "recipient": { "id": 5503, "name": "Lionel Messi" },
+        "recipient": {
+          "id": 5503,
+          "name": "Lionel Messi"
+        },
         "length": 18.0,
         "angle": 0.3,
-        "end_location": [92.0, 35.0]
+        "end_location": [
+          92.0,
+          35.0
+        ]
       }
     }
   ]

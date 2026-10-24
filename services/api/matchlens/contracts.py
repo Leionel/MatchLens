@@ -87,17 +87,33 @@ def infer_team_from_refs(refs: list[str]) -> str:
     return "N" if refs and all(r.startswith("N.") for r in refs) else "H"
 
 
+def team_label(snapshot: Snapshot, team: str) -> str:
+    teams = snapshot.data.get("teams") or {}
+    return str(teams.get(team) or ("Northbridge United" if team == "N" else "Harbor FC"))
+
+
 def assertion_supported(assertion: str, snapshot: Snapshot, team: str = "H") -> bool:
     r = snapshot.data["receipts"]
-    def v(metric: str, window: str = "current") -> float:
-        return r.get(f"{team}.{metric}.{window}", {}).get("value", 0)
+
+    def v(metric: str, window: str = "current") -> float | None:
+        value = r.get(f"{team}.{metric}.{window}", {}).get("value")
+        return value if isinstance(value, (int, float)) else None
+
     if assertion == "possession_without_penetration":
-        return (v("possession") > v("possession", "previous") and v("shots") <= v("shots", "previous")
-                and v("entries") <= v("entries", "previous"))
+        values = (v("possession"), v("possession", "previous"), v("shots"), v("shots", "previous"), v("entries"), v("entries", "previous"))
+        if any(x is None for x in values):
+            return False
+        return values[0] > values[1] and values[2] <= values[3] and values[4] <= values[5]
     if assertion == "attacking_threat_increased":
-        return v("shots") > v("shots", "previous") and v("entries") > v("entries", "previous")
+        values = (v("shots"), v("shots", "previous"), v("entries"), v("entries", "previous"))
+        if any(x is None for x in values):
+            return False
+        return values[0] > values[1] and values[2] > values[3]
     if assertion == "recoveries_followed_by_shots":
-        return v("transition_shots") >= 2 and (v("high_recoveries") >= 1 or team == "N")
+        trans, high = v("transition_shots"), v("high_recoveries")
+        if trans is None or high is None:
+            return False
+        return trans >= 2 and (high >= 1 or team == "N")
     if assertion == "goal_sequence":
         goal_rec = r.get(f"{team}.goals.match", {"value": 0, "chains": []})
         return goal_rec["value"] > 0 and bool(goal_rec["chains"])
@@ -157,9 +173,10 @@ def evidence_summary(assertion: str, snapshot: Snapshot, team: str = "H") -> tup
     The renderer binds metric names, periods and values as a single fact.
     """
     r = snapshot.data["receipts"]
-    team_name = "Northbridge" if team == "N" else "Harbor"
+    team_name = team_label(snapshot, team)
     def value(metric, period="current"):
-        return f"{r.get(f'{team}.{metric}.{period}', {'value': 0})['value']:g}"
+        raw = r.get(f"{team}.{metric}.{period}", {}).get("value")
+        return f"{raw:g}" if isinstance(raw, (int, float)) else "unknown (unobserved)"
     at = snapshot.data["as_of"]
     start = max(0, at-180)
     window = f"{start//60:02d}:{start%60:02d}–{at//60:02d}:{at%60:02d}"
@@ -369,10 +386,11 @@ def evaluate_hypotheses(snapshot: Snapshot, team: str = "H") -> HypothesisLabMat
     team = "N" if team == "N" else "H"
     at = snapshot.data["as_of"]
     r = snapshot.data["receipts"]
-    team_name = "Northbridge United" if team == "N" else "Harbor FC"
+    team_name = team_label(snapshot, team)
 
     def val(metric: str, period: str = "current") -> float:
-        return r.get(f"{team}.{metric}.{period}", {}).get("value", 0)
+        value = r.get(f"{team}.{metric}.{period}", {}).get("value")
+        return float(value) if isinstance(value, (int, float)) else 0.0
 
     hypotheses: list[Hypothesis] = []
     topic = "Tactical Match State"
@@ -640,10 +658,20 @@ def resolve_challenge(snapshot: Snapshot, request: ChallengeRequest, claim_meta:
     # examine_sequence / verify_event_sequence
     events = snapshot.data.get("events", [])
     if request.sequence_id:
+        from .football import build_sequences
+
+        sequence = next(
+            (sq for sq in build_sequences(snapshot.data) if sq["sequence_id"] == request.sequence_id),
+            None,
+        )
+        if sequence is None and request.sequence_id.isdigit():
+            sequence = next(
+                (sq for sq in build_sequences(snapshot.data) if sq["possession_id"] == int(request.sequence_id)),
+                None,
+            )
         seq_events = [
             e for e in events
-            if (isinstance(e, dict) and str(e.get("sequence_id")) == str(request.sequence_id))
-            or str(getattr(e, "sequence_id", "")) == str(request.sequence_id)
+            if sequence is not None and e.get("possession_id") == sequence["possession_id"]
         ]
         if not seq_events:
             return ChallengeResult(
@@ -692,7 +720,7 @@ def resolve_challenge(snapshot: Snapshot, request: ChallengeRequest, claim_meta:
 
 def generate_evidence_gap_report(topic: str, snapshot: Snapshot, team: str = "H") -> EvidenceGapReport:
     """Generate an honest evidence gap advisory for unmeasurable concepts."""
-    team_name = "Northbridge United" if team == "N" else "Harbor FC"
+    team_name = team_label(snapshot, team)
     t_lower = topic.lower()
 
     if "press" in t_lower or "formation" in t_lower:
@@ -742,15 +770,31 @@ def generate_evidence_gap_report(topic: str, snapshot: Snapshot, team: str = "H"
 def ask_the_match(snapshot: Snapshot, intent_id: str, team: str = "H") -> dict:
     """Constrained-intent query engine answering key tactical questions with proofs."""
     team = "N" if team == "N" else "H"
-    team_name = "Northbridge United" if team == "N" else "Harbor FC"
+    team_name = team_label(snapshot, team)
     at = snapshot.data["as_of"]
     r = snapshot.data["receipts"]
 
     if intent_id == "possession_vs_penetration":
-        pos_curr = r.get(f"{team}.possession.current", {}).get("value", 0)
-        pos_prev = r.get(f"{team}.possession.previous", {}).get("value", 0)
+        pos_curr = r.get(f"{team}.possession.current", {}).get("value")
+        pos_prev = r.get(f"{team}.possession.previous", {}).get("value")
+        pos_status = r.get(f"{team}.possession.current", {}).get("status", "ok")
         shots = r.get(f"{team}.shots.current", {}).get("value", 0)
         entries = r.get(f"{team}.entries.current", {}).get("value", 0)
+        coverage = snapshot.data.get("coverage", {})
+        if pos_status == "unobserved" or not isinstance(pos_curr, (int, float)) or not isinstance(pos_prev, (int, float)):
+            answer = (
+                f"Insufficient observed event coverage to attribute controlled possession for {team_name} "
+                f"in this window. Possession share is Unknown, not zero. "
+                f"Recorded events through {coverage.get('observed_end')}s of {coverage.get('format_seconds')}s."
+            )
+            return {
+                "intent_id": intent_id,
+                "question": f"Was {team_name}'s possession supported by shots and final-third entries?",
+                "answer": answer,
+                "evidence_chips": [],
+                "coverage": coverage,
+                "gap_advisor": generate_evidence_gap_report("possession", snapshot, team).model_dump(),
+            }
         answer = (
             f"{team_name}'s controlled possession changed from {pos_prev:g}% to {pos_curr:g}%. "
             f"During this window, {team_name} registered {int(shots)} shot attempts and {int(entries)} attacking-third entries."

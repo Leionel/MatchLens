@@ -44,7 +44,7 @@ def test_set_match_control(client):
 def test_challenge_nonexistent_snapshot_rejected(client):
     # Challenge against a non-existent snapshot must return 404
     payload = {
-        "claim_id": "claim-possession",
+        "claim_id": "claim-possession-without-penetration-h",
         "snapshot_id": "snap-nonexistent-999999",
         "challenge_type": "challenge_causal_interpretation",
         "team": "H",
@@ -75,7 +75,7 @@ def test_challenge_idempotency(client):
     snap_id = state["snapshot_id"]
 
     payload = {
-        "claim_id": "claim-possession",
+        "claim_id": "claim-possession-without-penetration-h",
         "snapshot_id": snap_id,
         "challenge_type": "challenge_causal_interpretation",
         "team": "H",

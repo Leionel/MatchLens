@@ -77,8 +77,9 @@ def _normalize_event_view(ev: Any, home_team: Optional[str] = None) -> dict:
         else:
             team_code = ev.team_id
 
-        start_x = ev.x if ev.x is not None else 52.5
-        start_y = ev.y if ev.y is not None else 34.0
+        located = ev.x is not None and ev.y is not None
+        start_x = ev.x if located else None
+        start_y = ev.y if located else None
         end_x = ev.end_x if ev.end_x is not None else start_x
         end_y = ev.end_y if ev.end_y is not None else start_y
         kind_str = ev.action_type.value.lower()
@@ -100,8 +101,10 @@ def _normalize_event_view(ev: Any, home_team: Optional[str] = None) -> dict:
             "team_id": ev.team_id,
             "kind": kind,
             "actor": ev.player_name or ev.player_id or "Unknown",
-            "start": (start_x, start_y),
-            "end": (end_x, end_y),
+            "start": (start_x, start_y) if located else None,
+            "end": (end_x, end_y) if end_x is not None and end_y is not None else None,
+            "located": located,
+            "frame": "team_relative",
             "outcome": ev.outcome or "complete",
             "raw": ev,
         }
@@ -114,8 +117,16 @@ def _normalize_event_view(ev: Any, home_team: Optional[str] = None) -> dict:
 
     t_val = float(d.get("t", d.get("clock_seconds", 0.0)))
     team = d.get("team", d.get("team_id", "H"))
-    start = d.get("start", (d.get("x", 52.5), d.get("y", 34.0)))
-    end = d.get("end", (d.get("end_x", start[0]), d.get("end_y", start[1])))
+    raw_start = d.get("start")
+    if raw_start is None and d.get("x") is not None and d.get("y") is not None:
+        raw_start = [d.get("x"), d.get("y")]
+    raw_end = d.get("end")
+    if raw_end is None and d.get("end_x") is not None and d.get("end_y") is not None:
+        raw_end = [d.get("end_x"), d.get("end_y")]
+    located = bool(
+        raw_start and len(raw_start) >= 2
+        and raw_start[0] is not None and raw_start[1] is not None
+    )
 
     return {
         "id": d.get("id", d.get("event_id", "EV")),
@@ -124,21 +135,27 @@ def _normalize_event_view(ev: Any, home_team: Optional[str] = None) -> dict:
         "team_id": str(d.get("team_id", team)),
         "kind": d.get("kind", d.get("action_type", "pass")),
         "actor": d.get("actor", d.get("player_name", "Player")),
-        "start": (float(start[0]), float(start[1])),
-        "end": (float(end[0]), float(end[1])),
+        "start": (float(raw_start[0]), float(raw_start[1])) if located else None,
+        "end": (
+            (float(raw_end[0]), float(raw_end[1]))
+            if raw_end and len(raw_end) >= 2 and raw_end[0] is not None and raw_end[1] is not None
+            else None
+        ),
+        "located": located,
+        "frame": d.get("coordinate_frame", "fixed"),
         "outcome": d.get("outcome", "complete"),
         "raw": ev,
     }
 
 
-def _attack_x(team: str, x: float) -> float:
+def _attack_x(team: str, x: float, frame: str = "fixed") -> float:
     """Longitudinal coordinate relative to attacking direction (0 to 105m)."""
+    if frame == "team_relative":
+        return x
     return x if team in ("H", "home") else 105.0 - x
 
 
-def _is_in_penalty_box(team: str, x: float, y: float) -> bool:
-    """Checks whether (x, y) is inside the attacking penalty area."""
-    ax = _attack_x(team, x)
+def _is_in_penalty_box(ax: float, y: float) -> bool:
     return ax >= 88.5 and 13.84 <= y <= 54.16
 
 
@@ -164,12 +181,20 @@ def compute_event_contribution(
     team_id = ev.get("team_id", team)
     kind = ev["kind"]
     outcome = ev["outcome"]
-    start_x, start_y = ev["start"]
-    end_x, end_y = ev["end"]
-
-    ax_start = _attack_x(team, start_x)
-    ax_end = _attack_x(team, end_x)
-    progression_m = max(0.0, ax_end - ax_start)
+    frame = ev.get("frame", "fixed")
+    located = bool(ev.get("located", ev.get("start") is not None))
+    start = ev.get("start")
+    end = ev.get("end")
+    if located and start is not None:
+        start_x, start_y = start
+        end_x, end_y = end if end is not None else start
+        ax_start = _attack_x(team, start_x, frame)
+        ax_end = _attack_x(team, end_x, frame)
+        progression_m = max(0.0, ax_end - ax_start)
+    else:
+        start_x = start_y = end_x = end_y = None
+        ax_start = ax_end = None
+        progression_m = 0.0
 
     magnitude = 0.0
     explanation = f"{kind.capitalize()}"
@@ -178,53 +203,64 @@ def compute_event_contribution(
         # Base shot weight + goal outcome bonus
         is_goal = outcome == "goal"
         base = cfg.shot_base_weight
-        # Compute pre-shot xG using goal visible angle & distance without outcome leakage
-        from .models.xg import compute_pre_shot_xg
-        shot_eval = compute_pre_shot_xg(x=ax_start, y=start_y, event_id=str(ev.get("id", "")), outcome=outcome)
-        approx_xg = shot_eval.pre_shot_xg
-        magnitude = base + (approx_xg * cfg.xg_factor) + (cfg.goal_bonus_weight if is_goal else 0.0)
-        explanation = f"Goal ({magnitude:.2f})" if is_goal else f"Shot attempt ({magnitude:.2f})"
+        if located and ax_start is not None:
+            # Pre-shot xG uses goal visible angle & distance without outcome leakage.
+            from .models.xg import compute_pre_shot_xg
+            shot_eval = compute_pre_shot_xg(x=ax_start, y=start_y, event_id=str(ev.get("id", "")), outcome=outcome)
+            approx_xg = shot_eval.pre_shot_xg
+            magnitude = base + (approx_xg * cfg.xg_factor) + (cfg.goal_bonus_weight if is_goal else 0.0)
+            explanation = f"Goal ({magnitude:.2f})" if is_goal else f"Shot attempt ({magnitude:.2f})"
+        else:
+            magnitude = base + (cfg.goal_bonus_weight if is_goal else 0.0)
+            explanation = "Goal (location unknown; xG not applicable)" if is_goal else "Shot (location unknown; xG not applicable)"
 
     elif kind == "pass":
-        # Check if xT model can be evaluated
-        if xt_model is not None:
-            try:
-                # If event is NormalizedEvent or can be evaluated by xt_model
-                norm_ev = ev["raw"] if isinstance(ev["raw"], NormalizedEvent) else None
-                if norm_ev is not None:
-                    eval_fn = getattr(xt_model, "evaluate_action", None) or getattr(xt_model, "evaluate_progression", None)
-                    xt_metric = eval_fn(norm_ev) if eval_fn else None
-                    if xt_metric is not None and xt_metric.value is not None:
-                        magnitude += max(0.0, float(xt_metric.value)) * cfg.xt_factor
+        if not located:
+            explanation = "Pass (location unknown; no spatial contribution)"
+        else:
+            # Check if xT model can be evaluated
+            if xt_model is not None:
+                try:
+                    # If event is NormalizedEvent or can be evaluated by xt_model
+                    norm_ev = ev["raw"] if isinstance(ev["raw"], NormalizedEvent) else None
+                    if norm_ev is not None:
+                        eval_fn = getattr(xt_model, "evaluate_action", None) or getattr(xt_model, "evaluate_progression", None)
+                        xt_metric = eval_fn(norm_ev) if eval_fn else None
+                        if xt_metric is not None and xt_metric.value is not None:
+                            magnitude += max(0.0, float(xt_metric.value)) * cfg.xt_factor
+                        else:
+                            v_start = xt_model.value_at(ax_start, start_y)
+                            v_end = xt_model.value_at(ax_end, end_y)
+                            delta_xt = max(0.0, v_end - v_start)
+                            magnitude += delta_xt * cfg.xt_factor
                     else:
                         v_start = xt_model.value_at(ax_start, start_y)
                         v_end = xt_model.value_at(ax_end, end_y)
                         delta_xt = max(0.0, v_end - v_start)
                         magnitude += delta_xt * cfg.xt_factor
-                else:
-                    v_start = xt_model.value_at(ax_start, start_y)
-                    v_end = xt_model.value_at(ax_end, end_y)
-                    delta_xt = max(0.0, v_end - v_start)
-                    magnitude += delta_xt * cfg.xt_factor
-            except Exception:
+                except Exception:
+                    magnitude += progression_m * cfg.progression_meter_weight
+            else:
                 magnitude += progression_m * cfg.progression_meter_weight
-        else:
-            magnitude += progression_m * cfg.progression_meter_weight
 
-        # Tactical territory bonuses
-        if ax_start <= 70.0 < ax_end:
-            magnitude += cfg.final_third_entry_bonus
-            explanation = f"Final third entry pass (+{progression_m:.1f}m)"
-        elif _is_in_penalty_box(team, end_x, end_y):
-            magnitude += cfg.penalty_box_entry_bonus
-            explanation = f"Penalty box pass (+{progression_m:.1f}m)"
-        else:
-            explanation = f"Progression pass (+{progression_m:.1f}m)"
+            # Tactical territory bonuses
+            if ax_start <= 70.0 < ax_end:
+                magnitude += cfg.final_third_entry_bonus
+                explanation = f"Final third entry pass (+{progression_m:.1f}m)"
+            elif _is_in_penalty_box(ax_end, end_y):
+                magnitude += cfg.penalty_box_entry_bonus
+                explanation = f"Penalty box pass (+{progression_m:.1f}m)"
+            else:
+                explanation = f"Progression pass (+{progression_m:.1f}m)"
 
     elif kind == "recovery":
-        is_high = ax_start >= 70.0
+        is_high = ax_start is not None and ax_start >= 70.0
         magnitude = cfg.recovery_base_weight + (cfg.high_recovery_bonus if is_high else 0.0)
-        explanation = "High attacking recovery" if is_high else "Ball recovery"
+        explanation = (
+            "High attacking recovery" if is_high
+            else "Ball recovery" if located
+            else "Ball recovery (location unknown)"
+        )
 
     elif kind == "turnover":
         # Turnover penalizes the team that lost possession
@@ -297,6 +333,45 @@ def aggregate_oaai_timeline(
     # Causal index pointer: pointer to the first event with t_k > t
     event_ptr = 0
     n_events = len(contributions)
+
+    if not (cfg.freeze_dead_time and dead_intervals):
+        # No frozen intervals: every contribution decays by the same factor
+        # between samples, so the timeline is computed in O(events + steps)
+        # instead of rescanning the causal prefix at every step.
+        home_intensity = 0.0
+        away_intensity = 0.0
+        net_differential = 0.0
+        previous_t = 0.0
+        for step_idx in range(total_steps):
+            t = round(step_idx * step, 2)
+            factor = math.exp(-decay_lambda * (t - previous_t))
+            home_intensity *= factor
+            away_intensity *= factor
+            net_differential *= factor
+            while event_ptr < n_events and contributions[event_ptr]["t"] <= t:
+                item = contributions[event_ptr]
+                weight = math.exp(-decay_lambda * max(0.0, t - item["t"]))
+                net_differential += item["signed_c"] * weight
+                if item["is_home"]:
+                    if item["signed_c"] > 0:
+                        home_intensity += item["mag"] * weight
+                    else:
+                        home_intensity = max(0.0, home_intensity - item["mag"] * weight)
+                else:
+                    if item["signed_c"] < 0:
+                        away_intensity += item["mag"] * weight
+                    else:
+                        away_intensity = max(0.0, away_intensity - item["mag"] * weight)
+                event_ptr += 1
+            previous_t = t
+            timeline.append({
+                "t": t,
+                "home_intensity": round(home_intensity, 4),
+                "away_intensity": round(away_intensity, 4),
+                "oaai_raw": round(net_differential, 4),
+                "causal_event_count": event_ptr,
+            })
+        return timeline
 
     for step_idx in range(total_steps):
         t = round(step_idx * step, 2)
