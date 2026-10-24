@@ -347,9 +347,14 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
         </label>
       </div>
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <button type="button" onClick={() => void run()} disabled={busy || !state.match_id} style={{ minHeight: 34, fontSize: 12, fontWeight: 700 }}>
+        <button type="button" className="mz-btn mz-btn-primary" onClick={() => void run()} disabled={busy || !state.match_id}>
           {busy ? (isZh ? "执行中..." : "Running...") : isZh ? "运行调查" : "Run investigation"}
         </button>
+        <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+          {isZh
+            ? "提示：在 OAAI 波峰、事件或控球序列上点「调查」，会带着焦点自动回到这里。"
+            : "Tip: clicking Investigate on an OAAI peak, event or sequence returns here with the focus pre-filled."}
+        </span>
         {error && <span style={{ color: "var(--red-11)", fontSize: 12 }}>{error}</span>}
       </div>
 
@@ -511,7 +516,13 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
             {plan.gate_preview.violations.length > 0 && <div style={{ fontSize: 12, color: "var(--red-11)" }}>{plan.gate_preview.violations.join(" ")}</div>}
             {plan.gate_preview.statement && <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{plan.gate_preview.statement}</div>}
             {plan.gate_preview.status === "approved" && !plan.gate_preview.persisted && (
-              <button type="button" onClick={promote} disabled={promoting} style={{ minHeight: 34, fontSize: 12, fontWeight: 700, justifySelf: "start" }}>
+              <button
+                type="button"
+                className="mz-btn mz-btn-primary"
+                onClick={promote}
+                disabled={promoting}
+                title={isZh ? "注册后可在制作人工作区加入 Rundown 并导出" : "After registration the claim can join a producer rundown"}
+              >
                 {promoting ? (isZh ? "注册中..." : "Registering...") : isZh ? "确认并注册 Claim" : "Confirm and register claim"}
               </button>
             )}

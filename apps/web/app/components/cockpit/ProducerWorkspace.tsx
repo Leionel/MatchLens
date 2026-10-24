@@ -105,6 +105,21 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
   const [notice, setNotice] = useState("");
 
   const matchId = state.match_id || "syn_default";
+  // Disabled controls must say why: the reason doubles as the next step.
+  const buildBlockReason = !token
+    ? isZh ? "先输入制作人令牌" : "Enter the producer token first"
+    : selected.length === 0
+      ? isZh ? "先在左侧勾选可播条目" : "Tick broadcastable claims first"
+      : rundown && rundown.valid === false
+        ? isZh ? "Rundown 含失效项：回审后重建" : "Rundown has stale items: re-review and rebuild"
+        : "";
+  const exportBlockReason = !token
+    ? buildBlockReason
+    : !rundown
+      ? isZh ? "先建立 Rundown" : "Build a rundown first"
+      : rundown.valid === false
+        ? isZh ? "Rundown 未通过读时校验" : "Rundown failed read-time validation"
+        : "";
   const snapshotId = state.snapshot_id;
 
   useEffect(() => {
@@ -408,7 +423,16 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
                   </div>
                   <p style={{ margin: 0, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>{claim.statement}</p>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "var(--text-secondary)" }}>
+                    <label
+                      style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "var(--text-secondary)" }}
+                      title={
+                        publishable
+                          ? undefined
+                          : isZh
+                            ? `尚不可播：gate ${claim.gate_status} / 编辑 ${claim.editorial_status} / 生命周期 ${claim.lifecycle_status}`
+                            : `Not broadcastable: gate ${claim.gate_status} / editorial ${claim.editorial_status} / lifecycle ${claim.lifecycle_status}`
+                      }
+                    >
                       <input
                         type="checkbox"
                         checked={checked}
@@ -569,7 +593,13 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
             </div>
           )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <button type="button" className="mz-btn mz-btn-primary" disabled={busy || !token || selected.length === 0} onClick={buildRundown}>
+            <button
+              type="button"
+              className="mz-btn mz-btn-primary"
+              disabled={busy || !token || selected.length === 0}
+              onClick={buildRundown}
+              title={buildBlockReason || undefined}
+            >
               {isZh ? "建立并校验 Rundown" : "Build and validate rundown"}
             </button>
             <span style={{ width: 1, height: 22, background: "var(--glass-border)" }} aria-hidden="true" />
@@ -580,10 +610,16 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
                 className="mz-btn"
                 disabled={busy || !token || !rundown?.valid}
                 onClick={() => exportStory(format)}
+                title={exportBlockReason || undefined}
               >
                 {format.toUpperCase()}
               </button>
             ))}
+            {buildBlockReason && (
+              <span data-testid="producer-block-reason" style={{ fontSize: 11, color: "var(--text-gold)" }}>
+                {buildBlockReason}
+              </span>
+            )}
           </div>
 
           {rundown && (

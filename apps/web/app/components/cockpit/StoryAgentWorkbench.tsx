@@ -440,6 +440,7 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
             <button
               type="button"
               disabled={busy || analysesRemaining <= 0}
+              title={analysesRemaining <= 0 ? (isZh ? "本会话的模型分析次数已用尽" : "This session's model analyses are used up") : undefined}
               onClick={onAnalyse}
               style={{
                 fontSize: 12,
