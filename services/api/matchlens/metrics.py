@@ -597,11 +597,16 @@ class MetricsService:
         start_s: float = 0.0,
         end_s: float | None = None,
         match_id: str | None = None,
+        precomputed_receipts: dict[str, dict] | None = None,
     ) -> list[MetricValue]:
         """Several range observations for one team and one interval.
 
         The frozen snapshot is parsed once; every metric still goes through the
         single `_evaluate` implementation, so batching cannot change a value.
+        `precomputed_receipts` optionally injects receipts produced by one
+        `football.metric_receipts_for_range` call over the same interval — a
+        pure caching affordance for batch callers (cross-match profiles); the
+        receipts are the same objects `_evaluate` would build itself.
         """
         data = snapshot.data
         start, end, reason = cls._resolve_range(data, start_s, end_s)
@@ -628,6 +633,7 @@ class MetricsService:
                     start=start,
                     end=end,
                     match_id=match_id,
+                    precomputed_receipts=precomputed_receipts,
                 )
             )
         return results
@@ -724,11 +730,16 @@ class MetricsService:
         start: float,
         end: float,
         match_id: str | None = None,
+        precomputed_receipts: dict[str, dict] | None = None,
     ) -> MetricValue:
         """The one and only metric computation.
 
         `query()` and `query_range()` both funnel through this method, so the
         formula of a metric exists exactly once in the registry.
+        `precomputed_receipts` (batch callers only) must be the receipts of the
+        exact same (state, start, end, window_label) interval, produced by
+        `football.metric_receipts_for_range` — it is a cache, never a second
+        formula.
         """
         definition = DEFINITIONS.get(metric_id)
         if definition is None:
@@ -783,7 +794,10 @@ class MetricsService:
         if metric_id in RECEIPT_METRICS:
             # One formula for every window flavour, including the match-wide
             # window and any explicit range.
-            receipts = metric_receipts_for_range(state, start, end, name=window_label)
+            if precomputed_receipts is not None:
+                receipts = precomputed_receipts
+            else:
+                receipts = metric_receipts_for_range(state, start, end, name=window_label)
             receipt = receipts.get(_receipt_key(metric_id, team, window_label))
             if receipt is None:
                 return MetricValue(value=None, status="missing_input", event_ids=[], source_events=[], **base)
