@@ -29,8 +29,24 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
   const [whatIfResult, setWhatIfResult] = useState<any>(null);
   const [whatIfLoading, setWhatIfLoading] = useState(false);
   const [counterfactualTurnoverReduced, setCounterfactualTurnoverReduced] = useState(25); // percentage
+  const [governance, setGovernance] = useState<any>(null);
 
   const matchId = state.match_id || "syn_default";
+
+  // 0. Model governance contract (Slice C-3): model provenance, training
+  // protocol, evaluation interface and heuristic labelling rules.
+  useEffect(() => {
+    let active = true;
+    fetch("/api/models/governance")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active && data) setGovernance(data);
+      })
+      .catch((err) => console.warn("Failed to load /api/models/governance:", err));
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // 1. Fetch real xT Grid data from backend whenever resolution changes
   useEffect(() => {
@@ -306,11 +322,89 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
             {isZh ? "对方球门与小禁区危险核心 (0.28+) →" : "Opponent Goal & Six-Yard Box (0.28+) →"}
           </span>
         </div>
+        <div style={{ marginTop: 10, fontSize: 12, color: "var(--text-gold)", lineHeight: 1.5 }}>
+          ⚠️ {isZh
+            ? "此网格为启发式威胁面（未校验空间先验，非经验拟合）。ΔxT 仅用于成功持球推进（传球/带球），严禁作为铲球、扑救、犯规的通用度量。"
+            : "This grid is a heuristic threat surface (uncalibrated spatial prior, not empirically fitted). ΔxT applies to successful ball-retaining progression only — never to tackles, saves or fouls."}
+        </div>
       </div>
 
-      {/* 3. Agent A/B/C Benchmark Harness Quantitative Audit Report */}
-      <div className="glass-panel" style={{ padding: 18 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+      {/* 2.5 Model governance (Slice C-3) */}
+      <details className="glass-panel" style={{ padding: 18 }} data-testid="model-governance">
+        <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+          <div>
+            <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-cyan)", textTransform: "uppercase" }}>
+              {isZh ? "SLICE C-3 模型治理" : ""}
+            </span>
+            <h3 style={{ fontSize: 16, fontWeight: 750, margin: "2px 0 0" }}>
+              {isZh ? "xG / xT / OAAI 模型来源、训练协议与评测接口" : "xG / xT / OAAI provenance, training protocol and evaluation"}
+            </h3>
+          </div>
+          <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+            {isZh ? "展开查看" : "Expand"}
+          </span>
+        </summary>
+        <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+          {governance ? (
+            Object.entries(governance.models as Record<string, any>).map(([key, model]) => (
+              <div key={key} style={{ border: "0.5px solid var(--glass-border)", borderRadius: 8, padding: 12, display: "grid", gap: 6 }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
+                  <b style={{ fontSize: 13, color: "var(--text-primary)" }}>{key}</b>
+                  <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 999, border: "0.5px solid var(--glass-border)", color: "var(--text-gold)" }}>
+                    {model.model_type || model.model_status || "—"}
+                  </span>
+                  {model.model_version && (
+                    <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>v{model.model_version}</span>
+                  )}
+                </div>
+                {model.source && <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>{model.source}</div>}
+                {model.statement && <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>{model.statement}</div>}
+                {model.labelling && (
+                  <div style={{ fontSize: 12, color: "var(--text-gold)" }}>
+                    {isZh ? "标注要求" : "Labelling"}: {model.labelling}
+                  </div>
+                )}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 8, marginTop: 4 }}>
+                  {model.permitted_uses && (
+                    <div style={{ fontSize: 12 }}>
+                      <b style={{ color: "var(--text-emerald)" }}>{isZh ? "允许" : "Permitted"}</b>
+                      <ul style={{ margin: "4px 0 0", paddingLeft: 16, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                        {model.permitted_uses.map((u: string, i: number) => <li key={i}>{u}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {model.forbidden_uses && (
+                    <div style={{ fontSize: 12 }}>
+                      <b style={{ color: "var(--red-11)" }}>{isZh ? "禁止" : "Forbidden"}</b>
+                      <ul style={{ margin: "4px 0 0", paddingLeft: 16, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                        {model.forbidden_uses.map((u: string, i: number) => <li key={i}>{u}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                {model.evaluation_interface && (
+                  <div style={{ fontSize: 11, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>
+                    {Object.values(model.evaluation_interface).join(" · ")}
+                  </div>
+                )}
+              </div>
+            ))
+          ) : (
+            <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+              {isZh ? "加载治理契约..." : "Loading governance contract..."}
+            </div>
+          )}
+          {governance?.inference_levels?.rule && (
+            <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+              <b>{isZh ? "推理层级纪律" : "Inference-level discipline"}:</b> {governance.inference_levels.rule}
+            </div>
+          )}
+        </div>
+      </details>
+
+      {/* 3. Agent A/B/C Benchmark Harness Quantitative Audit Report (collapsed by default) */}
+      <details className="glass-panel" style={{ padding: 18 }} data-testid="benchmark-audit">
+        <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <div>
             <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-cyan)", textTransform: "uppercase" }}>
               {isZh ? "TRACK E 确定性契约基准测试 (DETERMINISTIC CONTRACT BENCHMARK)" : ""}
@@ -320,8 +414,12 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
             </h3>
           </div>
           <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
-            {isZh ? "基于规范契约测试集与确定性 Gate 拦截流水线" : "Based on Contract Test Suites & Deterministic Gate Pipeline"}
+            {isZh ? "审计明细按需展开" : "Expand audit detail"}
           </span>
+        </summary>
+        <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+        <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+          {isZh ? "基于规范契约测试集与确定性 Gate 拦截流水线" : "Based on Contract Test Suites & Deterministic Gate Pipeline"}
         </div>
 
         <div style={{ overflowX: "auto" }}>
@@ -390,8 +488,9 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
           <b>{isZh ? "评测口径说明" : "Benchmark scope"}</b>: {benchmarkResult?.summary || (isZh
             ? "确定性契约基准尚未运行。此处不展示任何预设准确率、成本或延迟数字。"
             : "No deterministic contract benchmark has run. No preset accuracy, cost or latency values are displayed here.")}
-</div>
-      </div>
+        </div>
+        </div>
+      </details>
 
       {/* 4. What-if Counterfactual Research Sandbox (Level 3 Exploratory) */}
       <div className="glass-panel" style={{ padding: 18 }}>
