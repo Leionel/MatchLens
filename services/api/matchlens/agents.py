@@ -79,7 +79,7 @@ def instructions(role: str, focus_team: str = "H") -> str:
 - Level 3 (Statistical Association): Multi-event empirical correlation with rival hypothesis testing.
 - Level 4 (Causal Inference): Strictly guarded. Never claim causal tactical impact without 25Hz tracking, off-ball defensive shape, and counterfactual validation.
 
-You MUST call get_evidence with the supplied snapshot_id at least once in your role's session before your first answer, even when another agent supplied evidence. You may also use decompose_window, query_causal_chain, and assess_alternative_hypotheses to inspect event contributions, sequence chains, and rival explanations. Only tool evidence is authoritative. Return one JSON object, no markdown.
+You MUST call get_evidence with the supplied snapshot_id at least once in your role's session before your first answer, even when another agent supplied evidence. You may also use decompose_window, query_causal_chain, assess_alternative_hypotheses, explain_oaai_contributors and query_metric to inspect event contributions, sequence chains, metric observations and rival explanations. Only tool evidence is authoritative. Return one JSON object, no markdown.
 
 Football principles:
 - Possession measures controlled ball time; entries measure passes crossing attacking third (x=70m); shots measure attempts.
@@ -173,6 +173,39 @@ class AgentRunner:
             run.audit.append({"type": "tool", "role": role, "name": "query_causal_chain", "snapshot_id": run.snapshot.id, "target_event_id": str(tid)})
             return res.model_dump_json()
 
+        def explain_oaai_contributors(at: float = 0.0, team: str = "") -> str:
+            """Recompute OAAI event contributions at a selected time using the frozen snapshot ledger."""
+            from .oaai import compute_oaai_contribution_ledger
+            data = run.snapshot.data
+            target = float(at or data.get("as_of", 0))
+            ledger = compute_oaai_contribution_ledger(
+                data.get("events", []),
+                at=target,
+                team=(team or run.focus_team),
+                dead_intervals=data.get("dead_intervals", []),
+                limit=8,
+            )
+            run.audit.append({"type": "tool", "role": role, "name": "explain_oaai_contributors",
+                              "snapshot_id": run.snapshot.id, "at": target})
+            return json.dumps(ledger, separators=(",", ":"))
+
+        def query_metric(metric_id: str, team: str = "", window: str = "current") -> str:
+            """Query a registered football metric observation for this frozen snapshot."""
+            from .metrics import MetricsService
+            if window not in ("previous", "current", "match"):
+                raise ValueError("invalid_metric_window")
+            value = MetricsService.query(
+                run.snapshot,
+                metric_id,
+                team=(team or run.focus_team),
+                window=window,  # type: ignore[arg-type]
+                match_id=run.match_id,
+            )
+            run.audit.append({"type": "tool", "role": role, "name": "query_metric",
+                              "snapshot_id": run.snapshot.id, "metric_id": metric_id,
+                              "team": value.team, "window": window})
+            return value.model_dump_json()
+
         def assess_alternative_hypotheses(primary_hypothesis: str = "") -> str:
             """Assess candidate alternative rival hypotheses against empirical event receipts."""
             from .attribution import EventAttributionSpecialist
@@ -228,7 +261,7 @@ class AgentRunner:
                 client = OpenAIChatCompletionClient(model="deepseek-flash", async_client=sdk,
                     function_invocation_configuration={"max_iterations": 3, "max_function_calls": 2})
                 agent = Agent(client=client, name=role, instructions=instructions(role, focus_team=run.focus_team),
-                    tools=[get_evidence, get_event_chain, get_sequence, decompose_window, query_causal_chain, assess_alternative_hypotheses], default_options={"response_format": {"type": "json_object"},
+                    tools=[get_evidence, get_event_chain, get_sequence, decompose_window, query_causal_chain, assess_alternative_hypotheses, explain_oaai_contributors, query_metric], default_options={"response_format": {"type": "json_object"},
                     "extra_body": {"thinking": {"type": "disabled"}, "max_tokens": MAX_OUTPUT_TOKENS}})
                 session = agent.create_session()
                 response = await agent.run(prompt, session=session)

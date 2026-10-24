@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .football import Snapshot, event_attacking_x, metric_receipts
 
 MetricWindow = Literal["previous", "current", "match"]
-MetricStatus = Literal["ok", "unobserved", "not_applicable", "missing_input", "not_available"]
+MetricStatus = Literal["ok", "unobserved", "not_applicable", "missing_input", "not_calibrated", "not_available"]
 
 
 class MetricDefinition(BaseModel):
@@ -48,11 +48,21 @@ class MetricValue(BaseModel):
     numerator: float | int | None = None
     denominator: float | int | None = None
     event_ids: list[str] = Field(default_factory=list)
+    source_events: list[str] = Field(default_factory=list)
     definition: str
     version: str
+    metric_version: str = "football-v2"
+    computation_version: str = "metrics-v2"
+    model_version: str | None = None
+    team_scope: str = "team"
+    player_scope: str | None = None
+    match_scope: str | None = None
+    time_window: str = "current"
+    coverage_status: str = "unknown"
     dataset_revision: str | None = None
     coverage: dict[str, Any] = Field(default_factory=dict)
     limitations: list[str] = Field(default_factory=list)
+    details: dict[str, Any] = Field(default_factory=dict)
 
 
 DEFINITIONS: dict[str, MetricDefinition] = {
@@ -118,9 +128,9 @@ DEFINITIONS: dict[str, MetricDefinition] = {
         metric_id="goals",
         label="Recorded goals",
         unit="goals",
-        scope="match",
+        scope="team",
         event_inputs=["Shot", "Own Goal"],
-        formula="credited goals in the snapshot prefix; shootout goals excluded",
+        formula="credited goals in the requested window; shootout goals excluded",
         capabilities=["event_data"],
         missing_policy="zero is a valid observed count; official final score is separate",
         limitations=["A partial prefix does not prove the final score."],
@@ -216,8 +226,6 @@ def _event_window(events: list[dict], as_of: int, window: MetricWindow) -> list[
 
 
 def _receipt_key(metric_id: str, team: str, window: MetricWindow) -> str:
-    if metric_id == "goals":
-        return f"{team}.goals.match"
     return f"{team}.{metric_id}.{window}"
 
 
@@ -249,6 +257,11 @@ class MetricsService:
             "intervals": data.get("intervals", []),
             "score": data.get("score", {"H": 0, "N": 0}),
         })
+        coverage_status = (
+            "complete" if coverage.get("continuous") is True
+            else "partial" if coverage.get("continuous") is False
+            else "unknown"
+        )
         base = {
             "metric_id": metric_id,
             "match_id": match_id or str(data.get("match_id") or ""),
@@ -258,18 +271,32 @@ class MetricsService:
             "unit": definition.unit,
             "definition": definition.formula,
             "version": definition.version,
+            "metric_version": definition.version,
+            "computation_version": "metrics-v2",
+            "model_version": (
+                "oaai-1.0.0" if metric_id == "oaai"
+                else None if definition.model_status != "unavailable"
+                else "unavailable"
+            ),
+            "team_scope": team,
+            "match_scope": match_id or str(data.get("match_id") or ""),
+            "time_window": window,
+            "coverage_status": coverage_status,
             "dataset_revision": data.get("dataset_revision") or data.get("data_version"),
             "coverage": coverage,
             "limitations": definition.limitations,
         }
 
         if definition.model_status == "unavailable":
-            return MetricValue(value=None, status="not_available", numerator=None, denominator=None, event_ids=[], **base)
+            return MetricValue(
+                value=None, status="not_calibrated", numerator=None, denominator=None,
+                event_ids=[], source_events=[], **base,
+            )
 
         if metric_id in ("possession", "shots", "entries", "high_recoveries", "transition_shots", "goals"):
             receipt = receipts.get(_receipt_key(metric_id, team, window))
             if receipt is None:
-                return MetricValue(value=None, status="missing_input", event_ids=[], **base)
+                return MetricValue(value=None, status="missing_input", event_ids=[], source_events=[], **base)
             value = receipt.get("value")
             status = receipt.get("status", "ok" if value is not None else "unobserved")
             return MetricValue(
@@ -278,6 +305,13 @@ class MetricsService:
                 numerator=receipt.get("numerator"),
                 denominator=receipt.get("denominator"),
                 event_ids=list(receipt.get("event_ids", [])),
+                source_events=list(receipt.get("event_ids", [])),
+                details={
+                    "receipt_id": receipt.get("id"),
+                    "window_start": receipt.get("start"),
+                    "window_end": receipt.get("end"),
+                    "chains": receipt.get("chains", []),
+                },
                 **base,
             )
 
@@ -319,23 +353,68 @@ class MetricsService:
                         selected.append(e)
             status = "ok"
         elif metric_id == "oaai":
-            from .oaai import compute_oaai
+            from .oaai import compute_oaai, compute_oaai_contribution_ledger
 
-            oaai = compute_oaai(events, smoothing_mode="causal")
-            points = oaai.get("timeline", [])
+            start, end = _window_bounds(as_of, window)
+            if not team_events:
+                return MetricValue(value=None, status="unobserved", event_ids=[], source_events=[], **base)
+            dead_intervals = data.get("dead_intervals", [])
+            oaai = compute_oaai(
+                events,
+                smoothing_mode="causal",
+                t_end=end,
+                dead_intervals=dead_intervals,
+            )
+            key = "home_smoothed" if team == "H" else "away_smoothed"
+            points = [
+                p for p in oaai.get("timeline", [])
+                if start < float(p.get("t", 0.0)) <= end
+            ]
             if not points:
-                return MetricValue(value=None, status="unobserved", event_ids=[], **base)
-            peak = max(points, key=lambda p: abs(float(p.get("oaai_value", p.get("oaai_raw", 0)))))
-            value = float(peak.get("oaai_value", peak.get("oaai_raw", 0)))
-            return MetricValue(value=round(value, 4), status="ok", event_ids=[], **base)
+                return MetricValue(value=None, status="unobserved", event_ids=[], source_events=[], **base)
+            peak = max(points, key=lambda p: abs(float(p.get(key, 0.0))))
+            peak_at = float(peak.get("t", 0.0))
+            value = float(peak.get(key, 0.0))
+            ledger = compute_oaai_contribution_ledger(
+                events,
+                at=peak_at,
+                team=team,
+                dead_intervals=dead_intervals,
+                smoothing_mode="causal",
+                limit=8,
+            )
+            event_ids = [
+                row["event_id"] for row in ledger["contributions"]
+                if row.get("team") == team
+            ]
+            return MetricValue(
+                value=round(value, 4),
+                status="ok",
+                numerator=round(ledger["raw_team_intensity"], 4),
+                denominator=None,
+                event_ids=event_ids,
+                source_events=event_ids,
+                details={
+                    "peak_at": round(peak_at, 2),
+                    "value_basis": "smoothed_team_intensity",
+                    "raw_team_intensity": ledger["raw_team_intensity"],
+                    "raw_net_contribution": ledger["raw_net_contribution"],
+                    "contribution_count": ledger["contribution_count"],
+                    "half_life_seconds": ledger["half_life_seconds"],
+                    "top_contributions": ledger["contributions"][:6],
+                },
+                **base,
+            )
         else:
-            return MetricValue(value=None, status="not_applicable", event_ids=[], **base)
+            return MetricValue(value=None, status="not_applicable", event_ids=[], source_events=[], **base)
 
+        source_events = [str(e.get("id")) for e in selected if e.get("id")]
         return MetricValue(
             value=len(selected),
             status=status,
             numerator=len(selected),
             denominator=None,
-            event_ids=[str(e.get("id")) for e in selected if e.get("id")],
+            event_ids=source_events,
+            source_events=source_events,
             **base,
         )

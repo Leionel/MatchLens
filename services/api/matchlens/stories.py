@@ -56,6 +56,8 @@ class MatchStory(BaseModel):
     approved_claims_count: int
     gate_verified_claims_count: int
     coverage: dict[str, Any]
+    dataset_revision: str | None = None
+    stale_claim_ids: list[str] = Field(default_factory=list)
     claims: list[dict[str, Any]] = Field(default_factory=list)
 
 
@@ -133,15 +135,26 @@ class MatchStoryEngine:
         perspective: AudiencePerspective = "media",
         *,
         coverage: dict[str, Any] | None = None,
+        dataset_revision: str | None = None,
+        claim_ids: list[str] | None = None,
     ) -> MatchStory:
         if registry is None or not snapshot_id:
             raise ValueError("trusted_claim_registry_required")
         records = registry.records_for(match_id, snapshot_id)
+        if claim_ids is not None:
+            allowed = set(claim_ids)
+            records = [record for record in records if record.claim_id in allowed]
+        validity = {
+            r.claim_id: registry.claim_validity(r, dataset_revision=dataset_revision)
+            for r in records
+        }
+        stale_claim_ids = [claim_id for claim_id, check in validity.items() if not check["valid"]]
+        valid_records = [r for r in records if validity[r.claim_id]["valid"]]
         gate_approved = [
-            r for r in records
-            if r.gate_status == "approved" and r.lifecycle_status == "current"
+            r for r in valid_records
+            if r.gate_status == "approved" and r.lifecycle_status in ("current", "qualified")
         ]
-        editorial_approved = [r for r in records if r.broadcastable]
+        editorial_approved = [r for r in valid_records if r.broadcastable]
         rejected_editorially = [
             r for r in records
             if r.editorial_status == "rejected" or r.lifecycle_status == "withdrawn"
@@ -301,6 +314,8 @@ class MatchStoryEngine:
             approved_claims_count=len(editorial_approved),
             gate_verified_claims_count=len(gate_approved),
             coverage=coverage,
+            dataset_revision=dataset_revision,
+            stale_claim_ids=stale_claim_ids,
             claims=[
                 {
                     "claim_id": r.claim_id,
@@ -319,7 +334,7 @@ class MatchStoryEngine:
                     "revision_count": r.revision_count,
                     "evidence_scope": r.evidence_scope,
                 }
-                for r in records
+                for r in valid_records
             ],
         )
 

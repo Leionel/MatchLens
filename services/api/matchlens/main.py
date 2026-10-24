@@ -47,6 +47,7 @@ from .football import (
     reduce_match,
 )
 from .oaai import compute_oaai, OAAIConfig
+from .gate import publication_gate_2_0
 from .models.xt import ExpectedThreatModel
 from .exploration import (
     analyze_quick_recoveries,
@@ -183,7 +184,61 @@ def freeze_with_context(
         official_score=official,
         limitations=[ctx.partial_notice] if ctx.partial_notice else None,
         dataset_revision=ctx.dataset_revision or ctx.data_version,
+        completeness=ctx.completeness,
     )
+
+
+def freeze_match_snapshot(eng: "Engine", match_id: str, at: int) -> tuple[Snapshot, dict]:
+    """Freeze a match API request with the same event identity as a session."""
+    from .catalog import MatchCatalog
+
+    ctx = eng.match_context(match_id)
+    bounded = max(0, min(int(at), int(ctx.duration)))
+    if match_id.startswith("syn_"):
+        scenario = match_id.replace("syn_", "", 1)
+        events = eng.events_for_match(match_id, scenario=scenario)
+        legacy = match_id == "syn_default" and scenario == "default"
+        snap = freeze(
+            events,
+            bounded,
+            seed=17,
+            match_id=None if legacy else match_id,
+            scenario=scenario,
+            data_version=ctx.data_version,
+            clock_basis=ctx.match_clock_basis,
+            teams={"H": ctx.home_team_name, "N": ctx.away_team_name},
+            format_seconds=ctx.duration,
+            team_map=None,
+            coordinate_frame=ctx.coordinate_frame,
+            continuous_coverage=ctx.continuous_coverage,
+            dataset_revision=ctx.dataset_revision or ctx.data_version,
+            completeness=ctx.completeness,
+        )
+    else:
+        events = eng.events_for_match(match_id)
+        snap = freeze_with_context(events, ctx, bounded, match_id=match_id, scenario="historical")
+    state = reduce_match(
+        events,
+        bounded,
+        max_duration=ctx.duration,
+        is_synthetic=match_id.startswith("syn_"),
+        team_names={"H": ctx.home_team_name, "N": ctx.away_team_name},
+        team_map=(
+            {ctx.home_provider_team_id: "H", ctx.away_provider_team_id: "N"}
+            if ctx.home_provider_team_id and ctx.away_provider_team_id
+            else None
+        ),
+        coordinate_frame=ctx.coordinate_frame,
+        continuous_coverage=ctx.continuous_coverage,
+        official_score=(
+            {"H": int(ctx.official_home_score), "N": int(ctx.official_away_score)}
+            if ctx.mode != "synthetic_replay"
+            and ctx.official_home_score is not None
+            and ctx.official_away_score is not None
+            else None
+        ),
+    )
+    return snap, state
 
 
 class Engine:
@@ -202,7 +257,9 @@ class Engine:
         self.ledger = BudgetLedger(runtime / "budget.sqlite3", int(os.getenv("MATCHLENS_MAX_REQUESTS", "32")), float(os.getenv("MATCHLENS_MAX_RESERVED_USD", "1.0")))
         self.runner = AgentRunner(key, self.ledger)
         from .registry import ClaimRegistry
+        from .investigation import InvestigationStore
         self.registry = ClaimRegistry(runtime / "claims.json")
+        self.investigations = InvestigationStore(runtime / "investigations.json")
         self.auto_enabled = os.getenv("MATCHLENS_AUTO_ANALYSE", "0") == "1"
         self.auto_limit = min(2, max(0, int(os.getenv("MATCHLENS_AUTO_RUNS_PER_SESSION", "2"))))
         self.admissions: set[str] = set()
@@ -217,10 +274,18 @@ class Engine:
                 snap_id = data.get("snapshot_id")
                 res = data.get("result")
                 if snap_id and res and res.get("status") == "completed" and res.get("accepted"):
+                    evidence_match = data["evidence"].get("match_id") or "syn_default"
+                    try:
+                        evidence_ctx = self.match_context(
+                            evidence_match if evidence_match.startswith("sb_") else "syn_default"
+                        )
+                    except (FileNotFoundError, ValueError):
+                        evidence_ctx = None
                     snap = freeze(
                         self.events,
                         data["evidence"]["as_of"],
                         dataset_revision=data["evidence"].get("dataset_revision"),
+                        completeness=evidence_ctx.completeness if evidence_ctx else None,
                     )
                     # A historical receipt must match this match prefix byte for
                     # byte and pass today's gate. Never relabel an old hash.
@@ -244,7 +309,14 @@ class Engine:
                     self.saved_snapshots[snap_id] = snap
                     # Dual-track mapping for evidence-v2 snapshot id
                     try:
-                        v2_snap = freeze(self.events, data["evidence"]["as_of"], seed=17, match_id="syn_default", scenario="default")
+                        v2_snap = freeze(
+                            self.events,
+                            data["evidence"]["as_of"],
+                            seed=17,
+                            match_id="syn_default",
+                            scenario="default",
+                            completeness=self.match_context("syn_default").completeness,
+                        )
                         self.saved_runs[v2_snap.id] = {**self.saved_runs[snap_id], "snapshot_id": v2_snap.id}
                         self.saved_snapshots[v2_snap.id] = v2_snap
                     except Exception:
@@ -262,6 +334,19 @@ class Engine:
         if key not in self.scenario_events:
             self.scenario_events[key] = generate_match(seed=s.seed, scenario=s.scenario)
         return self.scenario_events[key]
+
+    def events_for_match(self, match_id: str, scenario: str | None = None, seed: int = 17):
+        """Use the same event representation as a session for synthetic fixtures."""
+        if match_id.startswith("syn_"):
+            scenario = scenario or match_id.replace("syn_", "", 1)
+            key = (scenario, seed)
+            if key not in self.scenario_events:
+                self.scenario_events[key] = generate_match(seed=seed, scenario=scenario)
+            return self.scenario_events[key]
+        if match_id not in self.real_events:
+            from .catalog import MatchCatalog
+            self.real_events[match_id] = MatchCatalog.load_normalized_events(match_id)
+        return self.real_events[match_id]
 
     def match_context(self, match_id: str):
         from .catalog import MatchCatalog
@@ -935,7 +1020,9 @@ async def challenge(body: ChallengeRequest, request: Request):
     request_hash = _challenge_hash(payload)
 
     if body.idempotency_key:
-        existing_key = eng.registry.find_idempotency_key(body.idempotency_key)
+        existing_key = eng.registry.find_idempotency_key(
+            body.idempotency_key, owner_id=s.id, match_id=s.match_id
+        )
         if existing_key:
             if existing_key.request_hash != request_hash:
                 raise HTTPException(409, "idempotency_key_conflict")
@@ -963,6 +1050,43 @@ async def challenge(body: ChallengeRequest, request: Request):
     if not snap:
         snap = eng.saved_snapshots.get(body.snapshot_id)
     if not snap:
+        # A process restart discards in-memory snapshots. Rebuild only the
+        # frozen prefix named by a registered claim, never an arbitrary clock.
+        hint = next(
+            (
+                record for record in eng.registry.records.values()
+                if record.match_id == s.match_id
+                and record.snapshot_id == body.snapshot_id
+                and record.claim_id == body.claim_id
+            ),
+            None,
+        )
+        if hint is not None:
+            from .catalog import MatchCatalog
+
+            try:
+                ctx = MatchCatalog.get_match_context(s.match_id)
+                events = (
+                    eng.events_for(s)
+                    if s.match_id.startswith("syn_")
+                    else MatchCatalog.load_normalized_events(s.match_id)
+                )
+                legacy_default = (
+                    s.match_id == "syn_default" and s.scenario == "default" and s.seed == 17
+                )
+                snap = freeze_with_context(
+                    events, ctx, hint.as_of,
+                    seed=s.seed,
+                    scenario=s.scenario,
+                    match_id=None if legacy_default else s.match_id,
+                )
+                if snap.id == body.snapshot_id:
+                    eng.saved_snapshots[snap.id] = snap
+                else:
+                    snap = None
+            except (FileNotFoundError, ValueError):
+                snap = None
+    if not snap:
         raise HTTPException(404, "snapshot_not_found")
 
     snapshot_match = snap.data.get("match_id")
@@ -970,6 +1094,8 @@ async def challenge(body: ChallengeRequest, request: Request):
         s.match_id == "syn_default" and str(snapshot_match).startswith("harbor-northbridge-")
     ):
         raise HTTPException(409, "snapshot_match_mismatch")
+    # Keep the frozen evidence available for a replay in another process/session.
+    eng.saved_snapshots[snap.id] = snap
 
     # A claim must have a persisted gate verdict; hypotheses are not claims.
     valid_claims = eng.get_registered_claims(s, snap)
@@ -991,12 +1117,46 @@ async def challenge(body: ChallengeRequest, request: Request):
     )
     result_payload = result.model_dump()
     result_payload["snapshot_as_of"] = snap.data["as_of"]
+
+    revised_card = result.revised_card
+    revised_gate_status: str | None = None
+    revised_gate_violations: list[str] = []
+    if result.outcome == "narrowed" and record is not None:
+        if revised_card is None:
+            revised_card = {
+                "claim_id": record.claim_id,
+                "claim_level": 2,
+                "text": f"Observed local association only: {result.resolution_summary}",
+                "evidence_scope": {
+                    "metric_ids": [r for r in result.counterevidence_checked if r in snap.data.get("receipts", {})],
+                    "event_ids": [],
+                },
+                "assumptions": ["Frozen snapshot only; no causal identification."],
+                "counterevidence": [],
+                "verification_method": "Recomputed receipts after challenge.",
+            }
+        verdict = publication_gate_2_0(
+            revised_card,
+            snap.data.get("events", []),
+            catalog_metric_ids=set(snap.data.get("receipts", {})),
+        )
+        revised_gate_status = verdict.status
+        revised_gate_violations = list(verdict.rule_violations)
+        result_payload["revised_gate"] = {
+            "status": verdict.status,
+            "violations": revised_gate_violations,
+            "claim_level": revised_card.get("claim_level"),
+        }
+
     revision = eng.registry.apply_challenge_revision(
         record,
         outcome=result.outcome,
         rationale=result.resolution_summary,
         challenge_request_hash=request_hash,
         actor="challenge_review",
+        revised_card=revised_card,
+        gate_status=revised_gate_status,
+        gate_violations=revised_gate_violations,
     ) if record else None
     if revision is not None:
         result_payload["revision_id"] = revision.revision_id
@@ -1021,6 +1181,7 @@ async def challenge(body: ChallengeRequest, request: Request):
     eng.registry.remember_challenge(
         request_payload=payload,
         idempotency_key=body.idempotency_key,
+        owner_id=s.id,
         match_id=s.match_id,
         snapshot_id=snap.id,
         claim_id=body.claim_id,
@@ -1130,7 +1291,6 @@ async def query_metric(
         raise HTTPException(400, "invalid_team")
     try:
         ctx = MatchCatalog.get_match_context(match_id)
-        events = MatchCatalog.load_normalized_events(match_id)
     except FileNotFoundError:
         raise HTTPException(404, "match_not_found")
     if at is not None and (at < 0 or at > ctx.duration):
@@ -1138,15 +1298,57 @@ async def query_metric(
     target = int(at) if at is not None else (
         ctx.duration if match_id.startswith("syn_") else int(ctx.observed_end)
     )
-    snap = freeze_with_context(
-        events, ctx, target, match_id=match_id,
-        scenario=match_id.replace("syn_", "", 1) if match_id.startswith("syn_") else "historical",
-    )
+    snap, _state = freeze_match_snapshot(engine(request), match_id, target)
     try:
         metric = MetricsService.query(snap, metric_id, team=team, window=window, match_id=match_id)
     except KeyError:
         raise HTTPException(404, "metric_not_registered")
     return metric.model_dump()
+
+
+@app.get("/api/oaai/ledger")
+async def get_oaai_ledger(
+    request: Request,
+    match_id: str = "syn_default",
+    at: int | None = None,
+    team: Literal["H", "N"] = "H",
+    smoothing_mode: Literal["causal", "bilateral"] = "causal",
+    limit: int = 8,
+):
+    from .catalog import MatchCatalog
+    from .oaai import compute_oaai_contribution_ledger
+
+    public_rate(request, "oaai_ledger", 60)
+    if limit < 1 or limit > 20:
+        raise HTTPException(422, "limit_out_of_bounds")
+    try:
+        ctx = MatchCatalog.get_match_context(match_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "match_not_found")
+    if at is not None and (at < 0 or at > ctx.duration):
+        raise HTTPException(422, "at_outside_match_context")
+    target = int(at) if at is not None else (
+        ctx.duration if match_id.startswith("syn_") else int(ctx.observed_end)
+    )
+    eng = engine(request)
+    _snap, state = freeze_match_snapshot(eng, match_id, target)
+    ledger = compute_oaai_contribution_ledger(
+        state.get("events", []),
+        at=target,
+        team=team,
+        dead_intervals=state.get("dead_intervals", []),
+        xt_model=eng.xt_model,
+        smoothing_mode=smoothing_mode,
+        limit=limit,
+    )
+    ledger.update(
+        match_id=match_id,
+        snapshot_as_of=target,
+        dataset_revision=ctx.dataset_revision or ctx.data_version,
+        coverage=state.get("coverage", {}),
+        completeness_status=ctx.completeness_status,
+    )
+    return ledger
 
 
 @app.get("/api/matches/compare")
@@ -1186,6 +1388,25 @@ async def get_match_detail(match_id: str, request: Request):
     if not meta:
         raise HTTPException(404, "match_not_found")
     return {"match": meta.model_dump()}
+
+
+@app.get("/api/matches/{match_id}/completeness")
+async def get_match_completeness(match_id: str, request: Request):
+    from .catalog import MatchCatalog
+
+    public_rate(request, "completeness", 120)
+    try:
+        ctx = MatchCatalog.get_match_context(match_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "match_not_found")
+    return {
+        "match_id": match_id,
+        "dataset_revision": ctx.dataset_revision or ctx.data_version,
+        "coverage_level": ctx.data_coverage,
+        "continuous_coverage": ctx.continuous_coverage,
+        "coverage_verified": ctx.coverage_verified,
+        "completeness": ctx.completeness,
+    }
 
 
 @app.get("/api/matches/{match_id}/events")
@@ -1349,9 +1570,12 @@ class InvestigationBody(BaseModel):
     match_id: str
     at: int | None = None
     team: Literal["H", "N"] = "H"
-    focus_type: Literal["moment", "event", "metric", "sequence"] = "moment"
-    focus_id: str | None = None
+    focus_type: Literal[
+        "moment", "oaai_point", "event", "metric", "sequence", "player", "zone", "chart"
+    ] = "moment"
+    focus_id: str | None = Field(default=None, max_length=160)
     question: str = Field(default="", max_length=500)
+    compare_match_ids: list[str] = Field(default_factory=list, max_length=3)
 
 
 @app.post("/api/investigate")
@@ -1362,35 +1586,64 @@ async def investigate(body: InvestigationBody, request: Request):
     public_rate(request, "investigate", 30)
     try:
         ctx = MatchCatalog.get_match_context(body.match_id)
-        events = MatchCatalog.load_normalized_events(body.match_id)
     except FileNotFoundError:
         raise HTTPException(404, "match_not_found")
+    eng = engine(request)
+    events = eng.events_for_match(body.match_id)
     if body.at is not None and (body.at < 0 or body.at > ctx.duration):
         raise HTTPException(422, "at_outside_match_context")
     at = int(body.at) if body.at is not None else (
         ctx.duration if body.match_id.startswith("syn_") else int(ctx.observed_end)
     )
-    snap = freeze_with_context(
-        events, ctx, at, match_id=body.match_id,
-        scenario=body.match_id.replace("syn_", "", 1) if body.match_id.startswith("syn_") else "historical",
-    )
-    eng = engine(request)
+
+    # Freeze the investigation at the selected football moment, not merely at
+    # the session clock. This keeps current-window metrics and the focus aligned.
+    if body.focus_type in ("event", "sequence", "moment", "oaai_point"):
+        pre_state = reduce_match(
+            events,
+            at,
+            max_duration=ctx.duration,
+            is_synthetic=body.match_id.startswith("syn_"),
+            team_names={"H": ctx.home_team_name, "N": ctx.away_team_name},
+            team_map=(
+                {ctx.home_provider_team_id: "H", ctx.away_provider_team_id: "N"}
+                if ctx.home_provider_team_id and ctx.away_provider_team_id
+                else None
+            ),
+            coordinate_frame=ctx.coordinate_frame,
+            continuous_coverage=ctx.continuous_coverage,
+        )
+        if body.focus_type == "event" and body.focus_id:
+            event = next((e for e in pre_state.get("events", []) if str(e.get("id")) == body.focus_id), None)
+            if event is not None:
+                at = int(float(event.get("t", at)))
+        elif body.focus_type == "sequence" and body.focus_id:
+            sequence = next(
+                (s for s in build_sequences(pre_state) if s.get("sequence_id") == body.focus_id),
+                None,
+            )
+            if sequence is not None:
+                at = int(float(sequence.get("end_t", at)))
+        else:
+            oaai = compute_oaai(
+                pre_state.get("events", []),
+                t_end=at,
+                dead_intervals=pre_state.get("dead_intervals", []),
+                xt_model=eng.xt_model,
+            )
+            points = oaai.get("change_points", [])
+            point = None
+            if body.at is None:
+                if body.focus_id:
+                    point = next((p for p in points if p.get("change_point_id") == body.focus_id), None)
+                elif points:
+                    point = max(points, key=lambda p: float(p.get("at", 0.0)))
+                if point is not None:
+                    at = int(float(point.get("at", at)))
+
+    snap, state = freeze_match_snapshot(eng, body.match_id, at)
     eng.saved_snapshots[snap.id] = snap
-    state = reduce_match(
-        events,
-        at,
-        max_duration=ctx.duration,
-        is_synthetic=body.match_id.startswith("syn_"),
-        team_names={"H": ctx.home_team_name, "N": ctx.away_team_name},
-        team_map=(
-            {ctx.home_provider_team_id: "H", ctx.away_provider_team_id: "N"}
-            if ctx.home_provider_team_id and ctx.away_provider_team_id
-            else None
-        ),
-        coordinate_frame=ctx.coordinate_frame,
-        continuous_coverage=ctx.continuous_coverage,
-    )
-    return InvestigationPlanner.run(
+    plan = InvestigationPlanner.run(
         match_id=body.match_id,
         snapshot=snap,
         state=state,
@@ -1398,7 +1651,72 @@ async def investigate(body: InvestigationBody, request: Request):
         focus_type=body.focus_type,
         focus_id=body.focus_id,
         question=body.question,
-    ).model_dump()
+        compare_match_ids=body.compare_match_ids,
+        xt_model=eng.xt_model,
+    )
+    eng.investigations.save(plan)
+    return plan.model_dump()
+
+
+@app.get("/api/investigations/{investigation_id}")
+async def get_investigation(investigation_id: str, request: Request):
+    eng = engine(request)
+    plan = eng.investigations.get(investigation_id)
+    if plan is None:
+        raise HTTPException(404, "investigation_not_found")
+    return plan.model_dump()
+
+
+@app.post("/api/investigations/{investigation_id}/cancel")
+async def cancel_investigation(investigation_id: str, request: Request):
+    eng = engine(request)
+    try:
+        plan = eng.investigations.cancel(investigation_id)
+    except KeyError:
+        raise HTTPException(404, "investigation_not_found")
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+    return plan.model_dump()
+
+
+@app.post("/api/investigations/{investigation_id}/promote")
+async def promote_investigation(investigation_id: str, request: Request):
+    from .catalog import MatchCatalog
+
+    eng = engine(request)
+    plan = eng.investigations.get(investigation_id)
+    if plan is None:
+        raise HTTPException(404, "investigation_not_found")
+    if plan.gate_preview.assertion == "none" or plan.gate_preview.status != "approved":
+        raise HTTPException(409, "investigation_not_gate_approved")
+    if plan.state not in ("APPROVED", "QUALIFIED"):
+        raise HTTPException(409, f"investigation_state_{plan.state.lower()}")
+
+    snap = eng.saved_snapshots.get(plan.snapshot_id)
+    if snap is None:
+        try:
+            snap, _state = freeze_match_snapshot(eng, plan.match_id, plan.as_of)
+        except (FileNotFoundError, ValueError):
+            raise HTTPException(404, "snapshot_not_found")
+    snap_revision = snap.data.get("dataset_revision") or snap.data.get("data_version")
+    if plan.dataset_revision and snap_revision and plan.dataset_revision != snap_revision:
+        raise HTTPException(409, "dataset_revision_changed")
+
+    record = eng.registry.verify_and_register(
+        snap,
+        plan.match_id,
+        plan.gate_preview.assertion,
+        subject_team=plan.team,  # type: ignore[arg-type]
+        source_run=plan.investigation_id,
+    )
+    plan.gate_preview.persisted = record.gate_status == "approved"
+    eng.investigations.save(plan)
+    return {
+        "claim": record.model_dump(),
+        "investigation_id": plan.investigation_id,
+        "gate_status": record.gate_status,
+        "current_revision_id": record.current_revision_id,
+    }
 
 
 @app.get("/api/matches/{match_id}/story")
@@ -1416,7 +1734,6 @@ async def get_match_story(
     eng = engine(request)
     try:
         ctx = MatchCatalog.get_match_context(match_id)
-        events = MatchCatalog.load_normalized_events(match_id)
     except FileNotFoundError:
         raise HTTPException(404, "match_not_found")
 
@@ -1429,27 +1746,7 @@ async def get_match_story(
             ctx.duration if match_id.startswith("syn_") else min(ctx.duration, int(ctx.observed_end))
         )
     at = max(0, min(at, ctx.duration))
-    state = reduce_match(
-        events,
-        at,
-        max_duration=ctx.duration,
-        is_synthetic=match_id.startswith("syn_"),
-        team_names={"H": ctx.home_team_name, "N": ctx.away_team_name},
-        team_map=(
-            {ctx.home_provider_team_id: "H", ctx.away_provider_team_id: "N"}
-            if ctx.home_provider_team_id and ctx.away_provider_team_id
-            else None
-        ),
-        coordinate_frame=ctx.coordinate_frame,
-        continuous_coverage=ctx.continuous_coverage,
-    )
-    snap = freeze_with_context(
-        events,
-        ctx,
-        at,
-        match_id=match_id,
-        scenario=match_id.replace("syn_", "", 1) if match_id.startswith("syn_") else "historical",
-    )
+    snap, state = freeze_match_snapshot(eng, match_id, at)
     eng.saved_snapshots[snap.id] = snap
     eng.ensure_snapshot_claims(match_id, snap)
     records = eng.registry.records_for(match_id, snap.id)
@@ -1467,6 +1764,7 @@ async def get_match_story(
         snap.id,
         perspective,
         coverage=state["coverage"],
+        dataset_revision=ctx.dataset_revision or ctx.data_version,
     ).model_dump()
     story.update(dataset_revision=ctx.dataset_revision or ctx.data_version, as_of=at, mode=mode)
     if len(eng.story_cache) > 128:
@@ -1521,10 +1819,19 @@ async def claim_history(
     record = eng.registry.get(match_id, snapshot_id, claim_id)
     if record is None:
         raise HTTPException(404, "claim_not_registered")
+    revisions = eng.registry.revision_history(match_id, snapshot_id, claim_id)
     return {
         "claim": record.model_dump(),
-        "revisions": [r.model_dump() for r in eng.registry.revision_history(match_id, snapshot_id, claim_id)],
+        "revisions": [
+            {
+                **r.model_dump(),
+                "is_current": r.revision_id == record.current_revision_id,
+            }
+            for r in revisions
+        ],
+        "supersessions": [e.model_dump() for e in eng.registry.supersessions_for(match_id, snapshot_id, claim_id)],
         "editorial_history": record.editorial_history,
+        "validity": eng.registry.claim_validity(record, require_editorial=False),
     }
 
 
@@ -1545,13 +1852,40 @@ class ExportBody(BaseModel):
 
 @app.get("/api/broadcast/queue")
 async def broadcast_queue(request: Request, match_id: str, snapshot_id: str):
+    from .broadcast import public_claim_projection
+
     public_rate(request, "broadcast", 60)
     eng = engine(request)
     records = eng.registry.records_for(match_id, snapshot_id)
     return {
         "match_id": match_id,
         "snapshot_id": snapshot_id,
-        "records": [r.model_dump() for r in sorted(records, key=lambda r: (r.as_of, r.claim_id))],
+        "projection": "public",
+        "records": [
+            public_claim_projection(r)
+            for r in sorted(records, key=lambda r: (r.as_of, r.claim_id))
+        ],
+        "broadcastable_count": sum(1 for r in records if r.broadcastable),
+    }
+
+
+@app.get("/api/broadcast/queue/producer")
+async def broadcast_queue_producer(request: Request, match_id: str, snapshot_id: str):
+    from .auth import require_content_editor
+    from .broadcast import producer_claim_projection
+
+    principal = require_content_editor(request)
+    eng = engine(request)
+    records = eng.registry.records_for(match_id, snapshot_id)
+    return {
+        "match_id": match_id,
+        "snapshot_id": snapshot_id,
+        "projection": "producer",
+        "principal": principal.subject,
+        "records": [
+            producer_claim_projection(r)
+            for r in sorted(records, key=lambda r: (r.as_of, r.claim_id))
+        ],
         "broadcastable_count": sum(1 for r in records if r.broadcastable),
     }
 
@@ -1583,11 +1917,46 @@ async def broadcast_rundown(body: RundownBody, request: Request):
 
 @app.get("/api/broadcast/rundown")
 async def get_broadcast_rundown(request: Request, match_id: str, snapshot_id: str):
+    from .broadcast import RundownValidation
+
     eng = engine(request)
     rundown = eng.broadcast.get(match_id, snapshot_id)
     if rundown is None:
         raise HTTPException(404, "rundown_not_found")
-    return rundown.model_dump()
+    snap = eng.saved_snapshots.get(snapshot_id)
+    if snap is None:
+        from .catalog import MatchCatalog
+
+        try:
+            ctx = MatchCatalog.get_match_context(match_id)
+            target = rundown.as_of if rundown.as_of is not None else int(ctx.observed_end)
+            snap, _state = freeze_match_snapshot(eng, match_id, target)
+            eng.saved_snapshots[snap.id] = snap
+        except (FileNotFoundError, ValueError):
+            snap = None
+    dataset_revision = (
+        (snap.data.get("dataset_revision") or snap.data.get("data_version"))
+        if snap else rundown.dataset_revision
+    )
+    records = eng.registry.records_for(match_id, snapshot_id)
+    if snap is None:
+        validation = RundownValidation(
+            valid=False,
+            items=[],
+            stale_items=[item.claim_id for item in rundown.items],
+            dataset_revision=dataset_revision,
+        )
+    else:
+        validation = eng.broadcast.validate(
+            rundown, claims=records, dataset_revision=dataset_revision, require_editorial=True
+        )
+    return {
+        **rundown.model_dump(),
+        "valid": validation.valid,
+        "stale_items": validation.stale_items,
+        "validation": validation.model_dump(),
+        "items": [item.model_dump() for item in validation.items],
+    }
 
 
 @app.post("/api/broadcast/export")
@@ -1600,10 +1969,40 @@ async def broadcast_export(body: ExportBody, request: Request):
     snap = eng.saved_snapshots.get(body.snapshot_id)
     if snap is None:
         raise HTTPException(404, "snapshot_not_found")
+    dataset_revision = snap.data.get("dataset_revision") or snap.data.get("data_version")
     records = eng.registry.records_for(body.match_id, body.snapshot_id)
-    approved = [r for r in records if r.broadcastable]
+    approved = [
+        r for r in records
+        if r.broadcastable
+        and eng.registry.claim_validity(
+            r, dataset_revision=dataset_revision, require_editorial=True
+        )["valid"]
+    ]
     if not approved:
         raise HTTPException(409, "no_broadcastable_claims")
+
+    rundown = eng.broadcast.get(body.match_id, body.snapshot_id)
+    if rundown is None:
+        try:
+            rundown = eng.broadcast.build(
+                match_id=body.match_id,
+                snapshot_id=body.snapshot_id,
+                claims=records,
+                claim_ids=[r.claim_id for r in approved],
+                dataset_revision=dataset_revision,
+                actor=principal.subject,
+            )
+        except ValueError as exc:
+            raise HTTPException(409, str(exc))
+    validation = eng.broadcast.validate(
+        rundown, claims=records, dataset_revision=dataset_revision, require_editorial=True
+    )
+    if not validation.valid:
+        raise HTTPException(409, {
+            "code": "rundown_contains_stale_claims",
+            "stale_items": validation.stale_items,
+        })
+
     story = MatchStoryEngine.generate_story(
         body.match_id,
         snap.data.get("events", []),
@@ -1611,17 +2010,33 @@ async def broadcast_export(body: ExportBody, request: Request):
         body.snapshot_id,
         body.perspective,
         coverage=snap.data.get("coverage", {}),
+        dataset_revision=dataset_revision,
+        claim_ids=[item.claim_id for item in rundown.items],
     )
     if story.approval_status != "approved_for_broadcast":
         raise HTTPException(409, "story_not_broadcastable")
     package = StoryExportEngine.export_story_package(story, body.export_format)
+    manifest = eng.broadcast.manifest(
+        rundown=rundown,
+        validation=validation,
+        claims=records,
+        dataset_revision=dataset_revision,
+        actor=principal.subject,
+        package_payload=package.payload,
+    )
+    valid_claim_ids = [item.claim_id for item in validation.items if item.valid]
+    approved_by = sorted({
+        r.editorial_approver for r in approved
+        if r.claim_id in set(valid_claim_ids) and r.editorial_approver
+    })
     return {
         **package.model_dump(),
         "match_id": body.match_id,
         "snapshot_id": body.snapshot_id,
-        "dataset_revision": snap.data.get("dataset_revision") or snap.data.get("data_version"),
-        "approved_by": sorted({r.editorial_approver for r in approved if r.editorial_approver}),
-        "claim_ids": sorted(r.claim_id for r in approved),
+        "dataset_revision": dataset_revision,
+        "approved_by": approved_by,
+        "claim_ids": valid_claim_ids,
+        "manifest": manifest.model_dump(),
     }
 
 
@@ -1823,7 +2238,6 @@ async def get_match_evidence_graph(
     public_rate(request, "evidence_graph", 30)
     eng = engine(request)
     try:
-        events = MatchCatalog.load_normalized_events(match_id)
         ctx = MatchCatalog.get_match_context(match_id)
     except FileNotFoundError:
         raise HTTPException(404, "match_not_found")
@@ -1834,13 +2248,7 @@ async def get_match_evidence_graph(
         at if at is not None
         else (ctx.duration if match_id.startswith("syn_") else min(ctx.duration, int(ctx.observed_end)))
     )
-    snap = freeze_with_context(
-        events,
-        ctx,
-        at_time,
-        match_id=match_id,
-        scenario=match_id.replace("syn_", "", 1) if match_id.startswith("syn_") else "historical",
-    )
+    snap, _state = freeze_match_snapshot(eng, match_id, at_time)
     eng.saved_snapshots[snap.id] = snap
     eng.ensure_snapshot_claims(match_id, snap)
     return build_evidence_graph(

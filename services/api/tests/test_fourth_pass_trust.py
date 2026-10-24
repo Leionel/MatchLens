@@ -151,21 +151,40 @@ def test_claim_revision_history_is_append_only():
     registry = ClaimRegistry()
     record = registry.verify_and_register(snap, "syn_default", "goal_sequence", "H")
     original = record.statement
+    initial_payload = registry.revision_history("syn_default", snap.id, record.claim_id)[0].model_dump()
     v1 = registry.apply_challenge_revision(
         record, outcome="maintained", rationale="checked", challenge_request_hash="h1"
     )
+    v1_payload = v1.model_dump()
     v2 = registry.apply_challenge_revision(
-        record, outcome="narrowed", rationale="window narrowed", challenge_request_hash="h2"
+        record,
+        outcome="narrowed",
+        rationale="window narrowed",
+        challenge_request_hash="h2",
+        revised_card={
+            "text": "Local-window observation only: the recorded events do not establish a match-level pattern.",
+            "claim_level": 2,
+            "evidence_scope": record.evidence_scope,
+            "assumptions": ["Frozen snapshot only."],
+            "counterevidence": [],
+            "verification_method": "Recomputed receipts after challenge.",
+        },
+        gate_status="approved",
     )
     assert v1.version == 2 and v2.version == 3
     assert v2.parent_revision_id == v1.revision_id
     assert v2.status == "qualified"
+    assert v2.statement != original
     assert record.lifecycle_status == "qualified"
-    assert not record.broadcastable
     history = registry.revision_history("syn_default", snap.id, record.claim_id)
     assert [r.version for r in history] == [1, 2, 3]
     assert history[0].statement == original
-    assert history[0].status == "superseded"
+    # Historical payloads are byte-for-byte unchanged; supersession is an event.
+    assert history[0].model_dump() == initial_payload
+    assert history[1].model_dump() == v1_payload
+    supersessions = registry.supersessions_for("syn_default", snap.id, record.claim_id)
+    assert any(e.from_revision_id == v1.revision_id and e.to_revision_id == v2.revision_id for e in supersessions)
+    assert registry.claim_validity(record, dataset_revision=record.dataset_revision)["valid"]
 
 
 def test_dataset_revision_hashes_content_not_file_metadata(tmp_path, monkeypatch):
@@ -191,8 +210,10 @@ def test_story_as_of_does_not_leak_future_events(client):
     late = client.get("/api/matches/syn_default/story?as_of=720&mode=recap").json()
     assert early["as_of"] == 100 and early["mode"] == "live"
     assert late["as_of"] == 720 and late["mode"] == "recap"
-    events = MatchCatalog.load_normalized_events("syn_default")
-    state = reduce_match(events, 100, max_duration=720, is_synthetic=False, continuous_coverage=True)
+    from matchlens.football import generate_match
+
+    events = generate_match(seed=17)
+    state = reduce_match(events, 100, max_duration=720, is_synthetic=True, continuous_coverage=True)
     allowed = {e["id"] for e in state["events"]}
     for chapter in early["chapters"]:
         assert set(chapter["supporting_event_ids"]) <= allowed
@@ -207,7 +228,7 @@ def test_metrics_registry_reuses_receipts_and_reports_unavailable_xg(client):
     assert shots["status"] == "ok"
     assert isinstance(shots["value"], int)
     xg = client.get("/api/metrics/xg?match_id=syn_default&at=540&team=H").json()
-    assert xg["status"] == "not_available"
+    assert xg["status"] == "not_calibrated"
     assert xg["value"] is None
 
 

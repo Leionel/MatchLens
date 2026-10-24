@@ -10,7 +10,7 @@ Conforms to Section 3.2.2 & 6.3.1 of FOOTBALL_INTELLIGENCE_PLATFORMS_2026.md:
 from __future__ import annotations
 
 from enum import Enum
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -164,6 +164,9 @@ class MatchContext(BaseModel):
     away_provider_team_id: Optional[str] = None
     coordinate_frame: Literal["fixed", "team_relative"] = "fixed"
     continuous_coverage: bool = False
+    completeness_status: str = "unknown"
+    completeness: dict[str, Any] = Field(default_factory=dict)
+    coverage_verified: bool = False
     event_count: int = 0
     score_basis: Literal["observed_prefix", "official_final"] = "observed_prefix"
     official_home_score: Optional[int] = None

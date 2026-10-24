@@ -661,6 +661,7 @@ def metric_receipts(state: dict) -> dict[str, dict]:
     # End of a controlled possession is the next gain, goal or final whistle.
     entries, transition, gains = [], [], {}
     goal_chains_by_team: dict[str, list[list[str]]] = {"H": [], "N": []}
+    goal_events_by_team: dict[str, list[dict]] = {"H": [], "N": []}
     seen_entries: set[tuple[str, int]] = set()
     for idx, e in enumerate(events):
         if e["kind"] == "recovery":
@@ -683,7 +684,9 @@ def metric_receipts(state: dict) -> dict[str, dict]:
                     other(e["team"]) if is_og else e["team"]
                 )
                 if is_og:
-                    goal_chains_by_team[credited].append([e["id"]])
+                    chain = [e["id"]]
+                    goal_chains_by_team[credited].append(chain)
+                    goal_events_by_team[credited].append({"event": e, "chain": chain})
                     continue
                 chain = []
                 for before in reversed(events[:idx+1]):
@@ -692,14 +695,16 @@ def metric_receipts(state: dict) -> dict[str, dict]:
                     chain.append(before["id"])
                     if before["kind"] in ("recovery", "restart"):
                         break
-                goal_chains_by_team[e["team"]].append(list(reversed(chain)))
+                ordered_chain = list(reversed(chain))
+                goal_chains_by_team[e["team"]].append(ordered_chain)
+                goal_events_by_team[e["team"]].append({"event": e, "chain": ordered_chain})
 
     def receipt(key: str, value: float | int | None, unit: str, sources: list[str], definition: str, **details) -> None:
         receipts[key] = {
             "id": key,
             "value": value,
             "unit": unit,
-            "event_ids": sorted(set(sources)),
+            "event_ids": sorted({str(s) for s in sources if s is not None}),
             "definition": definition,
             "status": details.pop("status", "ok" if value is not None else "unobserved"),
             **details,
@@ -742,15 +747,20 @@ def metric_receipts(state: dict) -> dict[str, dict]:
             receipt(f"{team}.transition_shots.{name}", len(quick), "shots", [e["id"] for s in quick for e in (s["gain"], s["shot"])],
                     "Shot <=10s after a recovery with no intervening loss; a temporal association, not causation.",
                     chains=[{"event_ids": [s["gain"]["id"], s["shot"]["id"]], "seconds": s["seconds"]} for s in quick], start=start, end=end)
-    goal_chains = goal_chains_by_team["H"]
-    goal_ids = [x for chain in goal_chains for x in chain]
-    receipt("H.goals.match", state["score"]["H"], "goals", goal_ids,
-            "Harbor goals and the uninterrupted on-ball event sequence ending in each goal.", chains=goal_chains, start=0, end=at)
-    if state["score"]["N"] > 0:
-        n_chains = goal_chains_by_team["N"]
-        n_goal_ids = [x for chain in n_chains for x in chain]
-        receipt("N.goals.match", state["score"]["N"], "goals", n_goal_ids,
-                "Northbridge goals and the uninterrupted on-ball event sequence ending in each goal.", chains=n_chains, start=0, end=at)
+            window_goals = [
+                g for g in goal_events_by_team[team]
+                if start < g["event"]["t"] <= end
+            ]
+            goal_sources = [x for g in window_goals for x in g["chain"]]
+            receipt(f"{team}.goals.{name}", len(window_goals), "goals", goal_sources,
+                    "Credited goals in the requested window; shootout goals excluded.",
+                    chains=[g["chain"] for g in window_goals], start=start, end=end)
+    for team in TEAMS:
+        goal_chains = goal_chains_by_team[team]
+        goal_ids = [x for chain in goal_chains for x in chain]
+        receipt(f"{team}.goals.match", state["score"][team], "goals", goal_ids,
+                "Credited goals in the frozen match prefix; shootout goals excluded.",
+                chains=goal_chains, start=0, end=at)
     return receipts
 
 
@@ -843,6 +853,7 @@ def freeze(
     continuous_coverage: bool | None = None,
     official_score: dict[str, int] | None = None,
     dataset_revision: str | None = None,
+    completeness: dict | None = None,
 ) -> Snapshot:
     is_syn = (match_id is None or match_id.startswith("syn_")) and scenario in SCENARIOS
     max_d = format_seconds if format_seconds else (720 if is_syn else 5400)
@@ -893,6 +904,8 @@ def freeze(
             "intervals": state["intervals"],
             "possessions": state["possessions"],
             "unobserved_intervals": state["unobserved_intervals"],
+            "dead_intervals": state["dead_intervals"],
+            **({"completeness": completeness} if completeness is not None else {}),
             "limitations": [
                 "Synthetic 12-minute demonstration match.",
                 "On-ball events only; no off-ball tracking, pressure, xG or coaching intent."
@@ -932,6 +945,8 @@ def freeze(
             "intervals": state["intervals"],
             "possessions": state["possessions"],
             "unobserved_intervals": state["unobserved_intervals"],
+            "dead_intervals": state["dead_intervals"],
+            **({"completeness": completeness} if completeness is not None else {}),
             "limitations": limitations or (
                 [
                     "Synthetic 12-minute demonstration match.",

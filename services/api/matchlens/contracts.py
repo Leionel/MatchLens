@@ -346,6 +346,7 @@ ChallengeType = Literal[
     "examine_sequence",
     "challenge_causal_interpretation",
     "check_sample_sufficiency",
+    "withdraw_claim",
 ]
 
 
@@ -523,11 +524,55 @@ def _val(x: Any, default: float = 0.0) -> float:
         return default
 
 
+def _revised_observational_card(
+    snapshot: Snapshot,
+    request: ChallengeRequest,
+    team: str,
+    *,
+    text: str,
+    refs: list[str],
+    counterevidence: list[str],
+) -> dict:
+    receipts = snapshot.data.get("receipts", {})
+    event_ids = sorted({
+        event_id
+        for ref in refs
+        for event_id in receipts.get(ref, {}).get("event_ids", [])
+    })
+    return {
+        "claim_id": request.claim_id,
+        "claim_level": 2,
+        "text": text,
+        "evidence_scope": {"metric_ids": refs, "event_ids": event_ids},
+        "assumptions": [
+            "The frozen snapshot is the evidence boundary.",
+            "The narrowed statement describes recorded on-ball associations only.",
+            "No off-ball tracking or counterfactual identification is available.",
+        ],
+        "counterevidence": counterevidence,
+        "verification_method": "Recomputed frozen receipts after the challenge; causal wording removed.",
+        "metric_versions": {"oaai": "1.0.0"},
+    }
+
+
 def resolve_challenge(snapshot: Snapshot, request: ChallengeRequest, claim_meta: dict | None = None) -> ChallengeResult:
     """Deterministically resolve a user challenge against published insights by auditing snapshot receipts."""
     r = snapshot.data.get("receipts", {})
     at = snapshot.data.get("as_of", 0)
     team = request.team
+
+    if request.challenge_type == "withdraw_claim":
+        return ChallengeResult(
+            claim_id=request.claim_id,
+            snapshot_id=snapshot.id,
+            challenge_type=request.challenge_type,
+            outcome="withdrawn",
+            resolution_summary=(
+                "Claim withdrawn by an explicit user request. The original statement and "
+                "evidence remain in the revision history, and the claim is no longer publishable."
+            ),
+            counterevidence_checked=[],
+        )
 
     if request.challenge_type == "challenge_causal_interpretation":
         # P0.6: True semantic review of the challenged claim
@@ -581,6 +626,11 @@ def resolve_challenge(snapshot: Snapshot, request: ChallengeRequest, claim_meta:
             )
             counter_checked = [f"{team}.possession.current", f"{team}.shots.current"]
 
+        revised_text = (
+            f"Recorded on-ball association only: the frozen window contains {pos_curr:.1f}% "
+            f"controlled possession for {team}, {rec_count} high recoveries and {trans_count} "
+            "shots following a recovery within ten seconds. No tactical mechanism is asserted."
+        )
         return ChallengeResult(
             claim_id=request.claim_id,
             snapshot_id=snapshot.id,
@@ -588,6 +638,14 @@ def resolve_challenge(snapshot: Snapshot, request: ChallengeRequest, claim_meta:
             outcome="narrowed",
             resolution_summary=summary,
             counterevidence_checked=counter_checked,
+            revised_card=_revised_observational_card(
+                snapshot,
+                request,
+                team,
+                text=revised_text,
+                refs=counter_checked,
+                counterevidence=[],
+            ),
             evidence_gap={
                 "missing_data": "Off-ball 22-player tracking, pressing distance, player heart rates.",
                 "unsupported_inference": "Cannot prove turnovers or territory were caused by team tactical directives.",
@@ -625,6 +683,18 @@ def resolve_challenge(snapshot: Snapshot, request: ChallengeRequest, claim_meta:
                     "Claim is formally restricted to local observation window rather than a sustained match-level pattern."
                 ),
                 counterevidence_checked=[f"{team}.possession.previous"],
+                revised_card=_revised_observational_card(
+                    snapshot,
+                    request,
+                    team,
+                    text=(
+                        f"Local-window observation only: {len(team_evs)} on-ball events were "
+                        f"recorded for {team} through {at}s. The claim does not assert a "
+                        "sustained match-level pattern."
+                    ),
+                    refs=[f"{team}.possession.current", f"{team}.shots.current"],
+                    counterevidence=[],
+                ),
             )
         return ChallengeResult(
             claim_id=request.claim_id,

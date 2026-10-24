@@ -585,6 +585,128 @@ def detect_change_points(
 
 
 # ==============================================================================
+# Layer A/B ledger: recomputable event contributions at one point
+# ==============================================================================
+
+def compute_oaai_contribution_ledger(
+    events: Sequence[Any],
+    *,
+    at: float,
+    team: str,
+    dead_intervals: Optional[list[dict]] = None,
+    config: Optional[OAAIConfig] = None,
+    xt_model: Any = None,
+    smoothing_mode: Literal["causal", "bilateral"] = "causal",
+    limit: Optional[int] = None,
+) -> dict:
+    """Recompute every event contribution to OAAI at a selected time.
+
+    The ledger separates the signed net contribution from the selected team's
+    intensity contribution. The chart value is the smoothed team intensity at
+    the nearest sample; the raw ledger sums are reported separately so the two
+    are never conflated.
+    """
+    cfg = config or OAAIConfig()
+    selected_team = "N" if team == "N" else "H"
+    initial = [_normalize_event_view(e) for e in events]
+    home_team = _infer_home_team(initial)
+    norm_events = [_normalize_event_view(e, home_team=home_team) for e in events]
+    norm_events.sort(key=lambda e: (e["t"], e["id"]))
+    dead = dead_intervals or []
+    decay_lambda = math.log(2) / cfg.half_life_seconds
+
+    def dead_between(start: float, end: float) -> float:
+        total = 0.0
+        for interval in dead:
+            overlap_start = max(start, float(interval.get("start", 0.0)))
+            overlap_end = min(end, float(interval.get("end", 0.0)))
+            if overlap_end > overlap_start:
+                total += overlap_end - overlap_start
+        return total
+
+    rows: list[dict] = []
+    for event in norm_events:
+        if event["t"] > at:
+            continue
+        signed, magnitude, explanation = compute_event_contribution(
+            event, cfg, xt_model=xt_model, home_team=home_team
+        )
+        effective_dt = max(0.0, float(at) - event["t"] - dead_between(event["t"], float(at)))
+        weight = math.exp(-decay_lambda * effective_dt)
+        net = signed * weight
+        team_contribution = 0.0
+        is_selected = event["team"] == selected_team or str(event.get("team_id")) == selected_team
+        if is_selected:
+            team_contribution = magnitude * weight if signed > 0 else -magnitude * weight
+        start = event.get("start")
+        attack_x = None
+        if start is not None:
+            attack_x = round(_attack_x(event["team"], float(start[0]), event.get("frame", "fixed")), 2)
+        rows.append({
+            "event_id": event["id"],
+            "t": round(event["t"], 2),
+            "team": event["team"],
+            "actor": event.get("actor") or "Unknown",
+            "kind": event.get("kind") or "other",
+            "outcome": event.get("outcome") or "",
+            "attack_x": attack_x,
+            "weight": round(weight, 6),
+            "effective_dt": round(effective_dt, 3),
+            "signed_contribution": round(signed, 6),
+            "magnitude": round(magnitude, 6),
+            "net_contribution": round(net, 6),
+            "team_contribution": round(team_contribution, 6),
+            "decay": round(weight, 6),
+            "explanation": explanation,
+        })
+
+    rows.sort(key=lambda row: abs(row["team_contribution"] or row["net_contribution"]), reverse=True)
+    top = rows if limit is None else rows[:limit]
+    raw_team = round(sum(row["team_contribution"] for row in rows), 6)
+    raw_net = round(sum(row["net_contribution"] for row in rows), 6)
+    top_team = round(sum(row["team_contribution"] for row in top), 6)
+    top_net = round(sum(row["net_contribution"] for row in top), 6)
+
+    oaai = compute_oaai(
+        events,
+        config=cfg,
+        smoothing_mode=smoothing_mode,
+        t_end=at,
+        dead_intervals=dead,
+        xt_model=xt_model,
+    )
+    timeline = oaai.get("timeline", [])
+    nearest = min(timeline, key=lambda p: abs(float(p.get("t", 0.0)) - float(at))) if timeline else None
+    smoothed_value = None
+    if nearest is not None:
+        key = "home_smoothed" if selected_team == "H" else "away_smoothed"
+        smoothed_value = nearest.get(key)
+
+    return {
+        "model_version": cfg.version,
+        "smoothing_mode": smoothing_mode,
+        "at": round(float(at), 2),
+        "team": selected_team,
+        "half_life_seconds": cfg.half_life_seconds,
+        "sample_step_seconds": cfg.sample_step_seconds,
+        "value_basis": "team_intensity_raw_at_selected_time",
+        "smoothed_value_at_nearest_sample": smoothed_value,
+        "raw_team_intensity": raw_team,
+        "raw_net_contribution": raw_net,
+        "top_team_intensity": top_team,
+        "top_net_contribution": top_net,
+        "unlisted_team_intensity": round(raw_team - top_team, 6),
+        "contribution_count": len(rows),
+        "listed_contribution_count": len(top),
+        "contributions": top,
+        "disclaimer": (
+            "OAAI contribution is a formula decomposition of recorded on-ball activity; "
+            "it is not psychological momentum or causal proof."
+        ),
+    }
+
+
+# ==============================================================================
 # Full Pipeline Orchestration
 # ==============================================================================
 

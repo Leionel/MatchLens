@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .adapters.statsbomb import StatsBombAdapter
+from .completeness import verify_dataset_completeness
 from .schema import DataCoverageLevel
 
 DEFAULT_DATA_DIR = Path(__file__).resolve().parent / "data" / "matches"
@@ -44,6 +45,7 @@ def import_match(
     away_score: int | None = None,
     license_ref: str,
     format_seconds: int = 5400,
+    source_declared_complete: bool | None = None,
     force: bool = False,
 ) -> dict[str, Any]:
     source = Path(source_path)
@@ -67,9 +69,21 @@ def import_match(
         raise ImportError(f"unmapped_provider_teams:{','.join(unmapped)}")
 
     observed_end = max((e.clock_seconds for e in events), default=0.0)
+    completeness = verify_dataset_completeness(
+        events,
+        raw_event_count=len(raw_events),
+        expected_duration=format_seconds,
+        source_declaration="statsbomb_open_data",
+        declared_complete=source_declared_complete,
+        conversion_drop_count=max(0, len(raw_events) - len(events)),
+        drop_reasons=(["adapter_dropped_or_unsupported_events"] if len(raw_events) > len(events) else []),
+        team_ids=[str(home_provider_team_id), str(away_provider_team_id)],
+    )
+    if completeness.status == "INVALID_CORRUPTED":
+        raise ImportError("invalid_dataset_completeness")
     coverage = (
         DataCoverageLevel.C1_OPEN_EVENTS
-        if observed_end >= format_seconds - 60
+        if completeness.status in ("COMPLETE_VERIFIED", "COMPLETE_CLAIMED_UNVERIFIED")
         else DataCoverageLevel.C1_PARTIAL
     )
     target = Path(data_dir) / f"{match_id}.json"
@@ -98,7 +112,10 @@ def import_match(
         "format_seconds": format_seconds,
         "home_provider_team_id": str(home_provider_team_id),
         "away_provider_team_id": str(away_provider_team_id),
-        "continuous_coverage": coverage is DataCoverageLevel.C1_OPEN_EVENTS,
+        "continuous_coverage": completeness.status == "COMPLETE_VERIFIED",
+        "source_declared_complete": source_declared_complete,
+        "completeness_status": completeness.status,
+        "completeness": completeness.model_dump(),
         "capabilities": [
             "schema_compatibility",
             "event_stream",
@@ -121,6 +138,8 @@ def import_match(
         "observed_end": observed_end,
         "format_seconds": format_seconds,
         "coverage_level": coverage.value,
+        "completeness_status": completeness.status,
+        "completeness": completeness.model_dump(),
         "home_provider_team_id": str(home_provider_team_id),
         "away_provider_team_id": str(away_provider_team_id),
         "home_team": home_team,

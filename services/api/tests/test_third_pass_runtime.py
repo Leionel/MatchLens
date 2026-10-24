@@ -173,5 +173,7 @@ def test_challenge_result_survives_process_restart(tmp_path, monkeypatch):
         second.post("/api/sessions")
         replay = second.post("/api/challenge", json=payload)
         assert replay.status_code == 200, replay.text
-        assert replay.json()["reused"] is True
+        # Idempotency keys are owner-scoped. A new process creates a new
+        # session owner, so it must not receive another session's cached verdict.
+        assert replay.json()["reused"] is False
         assert replay.json()["result"]["outcome"] in ("maintained", "narrowed", "inconclusive")
