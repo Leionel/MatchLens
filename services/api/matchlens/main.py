@@ -853,7 +853,14 @@ def session(request: Request) -> Session:
 
 @app.get("/api/health")
 async def health(request: Request):
-    return {"ok": True, "model_configured": bool(engine(request).runner.key), "format": "12-minute synthetic match"}
+    from .catalog import MatchCatalog
+
+    return {
+        "ok": True,
+        "model_configured": bool(engine(request).runner.key),
+        "format": "12-minute synthetic match",
+        "manifest_rejections": MatchCatalog.manifest_rejections(),
+    }
 
 
 @app.post("/api/sessions")
@@ -1027,6 +1034,39 @@ async def stream(request: Request):
                 last_send = time.monotonic()
             await asyncio.sleep(.3)
     return StreamingResponse(updates(), media_type="text/event-stream", headers={"X-Accel-Buffering": "no"})
+
+
+@app.get("/api/challengeable-claims")
+async def challengeable_claims(request: Request, snapshot_id: str):
+    """Registered claims of the session snapshot that a user can challenge.
+
+    The deterministic gate executes on demand, so the registry holds a real
+    verdict for every standard assertion of this snapshot even when no paid
+    deliberation has run. Listing those ids is what lets the UI challenge a
+    registered claim instead of a placeholder the server would reject.
+    """
+    s, eng = session(request), engine(request)
+    snap = s.snapshots.get(snapshot_id) or eng.saved_snapshots.get(snapshot_id)
+    if snap is None:
+        raise HTTPException(404, "snapshot_not_found")
+    eng.get_registered_claims(s, snap)
+    records = eng.registry.records_for(s.match_id, snapshot_id)
+    return {
+        "match_id": s.match_id,
+        "snapshot_id": snapshot_id,
+        "claims": [
+            {
+                "claim_id": r.claim_id,
+                "assertion": r.assertion,
+                "gate_status": r.gate_status,
+                "claim_level": r.claim_level,
+                "lifecycle_status": r.lifecycle_status,
+                "editorial_status": r.editorial_status,
+                "statement": r.statement,
+            }
+            for r in sorted(records, key=lambda r: (r.gate_status != "approved", r.claim_id))
+        ],
+    }
 
 
 def _challenge_hash(payload: dict) -> str:
