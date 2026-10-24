@@ -75,7 +75,7 @@ export function AskTheMatch({ team, onInspectReceipt }: Props) {
   return (
     <div className="ask-match-container">
       <div className="ask-match-header">
-        <span className="ask-badge">ASK THE MATCH · CONSTRAINED INTENTS</span>
+        <span className="ask-badge">ASK THE MATCH CONSTRAINED INTENTS</span>
         <h4 className="ask-heading">Constrained Tactical Query Engine</h4>
         <p className="ask-sub">
           Ask verifiable questions grounded exclusively in immutable event receipts and spatial invariants.

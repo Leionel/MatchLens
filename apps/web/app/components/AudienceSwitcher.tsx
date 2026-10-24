@@ -14,9 +14,7 @@ export function AudienceSwitcher({ mode, onChange }: AudienceSwitcherProps) {
         aria-pressed={mode === "fan"}
         onClick={() => onChange("fan")}
       >
-        <span className="tab-glyph">⚡</span>
-        <span className="tab-title">Fan View</span>
-        <span className="tab-subtitle">Narrative & Punchline</span>
+        <span className="tab-title">Fan view</span>
       </button>
       <button
         type="button"
@@ -24,9 +22,7 @@ export function AudienceSwitcher({ mode, onChange }: AudienceSwitcherProps) {
         aria-pressed={mode === "analyst"}
         onClick={() => onChange("analyst")}
       >
-        <span className="tab-glyph">📊</span>
-        <span className="tab-title">Analyst View</span>
-        <span className="tab-subtitle">Metrics & Verification</span>
+        <span className="tab-title">Analyst view</span>
       </button>
     </div>
   );

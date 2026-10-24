@@ -11,8 +11,9 @@ export type FootballEvent = {
   team: "H" | "N";
   actor: string;
   receiver: string | null;
-  start: [number, number];
-  end: [number, number];
+  start?: [number, number] | null;
+  end?: [number, number] | null;
+  located?: boolean;
   outcome: string;
   possession_id: number;
 };
@@ -21,6 +22,7 @@ interface EventFeedProps {
   events: FootballEvent[];
   selectedId: string;
   players: Record<string, Record<string, string>>;
+  teamNames?: { H?: string; N?: string };
   onSelectEvent: (eventId: string) => void;
   locale?: Locale;
 }
@@ -32,6 +34,7 @@ export const EventFeed: React.FC<EventFeedProps> = ({
   events,
   selectedId,
   players,
+  teamNames,
   onSelectEvent,
   locale = "zh",
 }) => {
@@ -78,11 +81,11 @@ export const EventFeed: React.FC<EventFeedProps> = ({
       style={{
         display: "flex",
         flexDirection: "column",
-        background: "rgba(15, 23, 42, 0.75)",
-        border: "1px solid var(--glass-border)",
-        borderRadius: "14px",
+        background: "color-mix(in srgb, var(--slate-1) 75%, transparent)",
+        border: "0.5px solid var(--glass-border)",
+        borderRadius: "var(--radius-panel)",
         padding: "16px",
-        boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5)",
+        boxShadow: "none",
         backdropFilter: "blur(12px)",
         height: "100%",
         minHeight: "480px",
@@ -92,40 +95,23 @@ export const EventFeed: React.FC<EventFeedProps> = ({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 800,
-                padding: "2px 6px",
-                borderRadius: 4,
-                background: "rgba(16, 185, 129, 0.15)",
-                color: "var(--turf-emerald)",
-                border: "1px solid rgba(16, 185, 129, 0.3)",
-                letterSpacing: "0.5px",
-              }}
-            >
-              LIVE STREAM
-            </span>
-            <h3 style={{ fontSize: 15, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>
               {t.eventLogTitle}
             </h3>
           </div>
-          <p style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>
-            {t.eventLogSubtitle}
-          </p>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span
             style={{
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: 700,
               fontFamily: "monospace",
               color: "var(--text-secondary)",
-              background: "rgba(255, 255, 255, 0.05)",
+              background: "color-mix(in srgb, var(--slate-12) 5%, transparent)",
               padding: "3px 8px",
               borderRadius: 6,
-              border: "1px solid rgba(255, 255, 255, 0.08)",
+              border: "0.5px solid color-mix(in srgb, var(--slate-12) 8%, transparent)",
             }}
           >
             {filteredEvents.length} / {events.length} {t.eventTotalSuffix}
@@ -138,19 +124,19 @@ export const EventFeed: React.FC<EventFeedProps> = ({
         {/* Team & Category Filter Chips */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
           {/* Team Switcher */}
-          <div style={{ display: "flex", background: "rgba(0, 0, 0, 0.25)", padding: 2, borderRadius: 6, border: "1px solid rgba(255, 255, 255, 0.06)" }}>
+          <div style={{ display: "flex", background: "var(--black-a4)", padding: 2, borderRadius: 6, border: "0.5px solid color-mix(in srgb, var(--slate-12) 6%, transparent)" }}>
             <button
               type="button"
               onClick={() => setTeamFilter("all")}
               style={{
                 minHeight: "auto",
                 padding: "3px 8px",
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 700,
                 borderRadius: 4,
                 border: "none",
-                background: teamFilter === "all" ? "rgba(255, 255, 255, 0.15)" : "transparent",
-                color: teamFilter === "all" ? "#fff" : "var(--text-secondary)",
+                background: teamFilter === "all" ? "color-mix(in srgb, var(--slate-12) 15%, transparent)" : "transparent",
+                color: teamFilter === "all" ? "var(--white)" : "var(--text-secondary)",
                 cursor: "pointer",
               }}
             >
@@ -162,16 +148,16 @@ export const EventFeed: React.FC<EventFeedProps> = ({
               style={{
                 minHeight: "auto",
                 padding: "3px 8px",
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 700,
                 borderRadius: 4,
                 border: "none",
-                background: teamFilter === "H" ? "rgba(16, 185, 129, 0.25)" : "transparent",
+                background: teamFilter === "H" ? "color-mix(in srgb, var(--green-9) 25%, transparent)" : "transparent",
                 color: teamFilter === "H" ? "var(--turf-emerald)" : "var(--text-secondary)",
                 cursor: "pointer",
               }}
             >
-              Harbor
+              {teamNames?.H || "Harbor"}
             </button>
             <button
               type="button"
@@ -179,16 +165,16 @@ export const EventFeed: React.FC<EventFeedProps> = ({
               style={{
                 minHeight: "auto",
                 padding: "3px 8px",
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 700,
                 borderRadius: 4,
                 border: "none",
-                background: teamFilter === "N" ? "rgba(56, 189, 248, 0.25)" : "transparent",
+                background: teamFilter === "N" ? "color-mix(in srgb, var(--cyan-9) 25%, transparent)" : "transparent",
                 color: teamFilter === "N" ? "var(--tech-cyan)" : "var(--text-secondary)",
                 cursor: "pointer",
               }}
             >
-              Northbridge
+              {teamNames?.N || "Northbridge"}
             </button>
           </div>
 
@@ -207,11 +193,11 @@ export const EventFeed: React.FC<EventFeedProps> = ({
               style={{
                 minHeight: "auto",
                 padding: "3px 9px",
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: filter === cat.id ? 700 : 500,
                 borderRadius: 6,
-                border: filter === cat.id ? "1px solid var(--turf-emerald)" : "1px solid rgba(255, 255, 255, 0.08)",
-                background: filter === cat.id ? "rgba(16, 185, 129, 0.2)" : "rgba(255, 255, 255, 0.03)",
+                border: filter === cat.id ? "0.5px solid var(--turf-emerald)" : "0.5px solid color-mix(in srgb, var(--slate-12) 8%, transparent)",
+                background: filter === cat.id ? "color-mix(in srgb, var(--green-9) 20%, transparent)" : "color-mix(in srgb, var(--slate-12) 3%, transparent)",
                 color: filter === cat.id ? "var(--turf-emerald)" : "var(--text-secondary)",
                 cursor: "pointer",
               }}
@@ -230,8 +216,8 @@ export const EventFeed: React.FC<EventFeedProps> = ({
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
               width: "100%",
-              background: "rgba(0, 0, 0, 0.3)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
+              background: "var(--black-a5)",
+              border: "0.5px solid color-mix(in srgb, var(--slate-12) 8%, transparent)",
               borderRadius: 6,
               padding: "6px 12px",
               color: "var(--text-primary)",
@@ -260,7 +246,7 @@ export const EventFeed: React.FC<EventFeedProps> = ({
               padding: "32px 16px",
               textAlign: "center",
               color: "var(--text-tertiary)",
-              fontSize: 13,
+              fontSize: 14,
             }}
           >
             {t.noEventsFound}
@@ -278,30 +264,30 @@ export const EventFeed: React.FC<EventFeedProps> = ({
             const receiverName = e.receiver ? players[e.team]?.[e.receiver] || e.receiver : null;
 
             // Badges colors
-            let badgeBg = "rgba(56, 189, 248, 0.15)";
+            let badgeBg = "color-mix(in srgb, var(--cyan-9) 15%, transparent)";
             let badgeColor = "var(--tech-cyan)";
-            let badgeBorder = "rgba(56, 189, 248, 0.3)";
+            let badgeBorder = "color-mix(in srgb, var(--cyan-9) 30%, transparent)";
             let badgeText = t.passBadge;
 
             if (isGoal) {
-              badgeBg = "rgba(16, 185, 129, 0.25)";
+              badgeBg = "color-mix(in srgb, var(--green-9) 25%, transparent)";
               badgeColor = "var(--turf-emerald)";
-              badgeBorder = "rgba(16, 185, 129, 0.5)";
+              badgeBorder = "color-mix(in srgb, var(--green-9) 50%, transparent)";
               badgeText = t.goalBadge;
             } else if (isShot) {
-              badgeBg = "rgba(245, 158, 11, 0.2)";
+              badgeBg = "color-mix(in srgb, var(--amber-9) 20%, transparent)";
               badgeColor = "var(--amber-gold)";
-              badgeBorder = "rgba(245, 158, 11, 0.4)";
+              badgeBorder = "color-mix(in srgb, var(--amber-9) 40%, transparent)";
               badgeText = t.shotBadge;
             } else if (isRecovery) {
-              badgeBg = "rgba(168, 85, 247, 0.2)";
-              badgeColor = "#c084fc";
-              badgeBorder = "rgba(168, 85, 247, 0.4)";
+              badgeBg = "color-mix(in srgb, var(--violet-9) 20%, transparent)";
+              badgeColor = "var(--violet-10)";
+              badgeBorder = "color-mix(in srgb, var(--violet-9) 40%, transparent)";
               badgeText = t.recoveryBadge;
             } else if (isTurnover) {
-              badgeBg = "rgba(244, 63, 94, 0.15)";
+              badgeBg = "color-mix(in srgb, var(--red-9) 15%, transparent)";
               badgeColor = "var(--crimson-warn)";
-              badgeBorder = "rgba(244, 63, 94, 0.3)";
+              badgeBorder = "color-mix(in srgb, var(--red-9) 30%, transparent)";
               badgeText = t.turnoverBadge;
             }
 
@@ -317,17 +303,17 @@ export const EventFeed: React.FC<EventFeedProps> = ({
                   borderRadius: 8,
                   cursor: "pointer",
                   background: isSelected
-                    ? "rgba(16, 185, 129, 0.12)"
+                    ? "color-mix(in srgb, var(--green-9) 12%, transparent)"
                     : isGoal
-                    ? "rgba(16, 185, 129, 0.06)"
-                    : "rgba(15, 23, 42, 0.5)",
+                    ? "color-mix(in srgb, var(--green-9) 6%, transparent)"
+                    : "color-mix(in srgb, var(--slate-1) 50%, transparent)",
                   border: isSelected
-                    ? "1px solid var(--turf-emerald)"
+                    ? "0.5px solid var(--turf-emerald)"
                     : isGoal
-                    ? "1px solid rgba(16, 185, 129, 0.4)"
-                    : "1px solid rgba(255, 255, 255, 0.05)",
-                  boxShadow: isSelected ? "0 0 12px rgba(16, 185, 129, 0.25)" : "none",
-                  transition: "all 0.15s ease",
+                    ? "0.5px solid color-mix(in srgb, var(--green-9) 40%, transparent)"
+                    : "0.5px solid color-mix(in srgb, var(--slate-12) 5%, transparent)",
+                  boxShadow: isSelected ? "0 0 12px color-mix(in srgb, var(--green-9) 25%, transparent)" : "none",
+                  transition: "none",
                 }}
               >
                 {/* Row 1: Time, Type Badge, Team Indicator & ID */}
@@ -336,7 +322,7 @@ export const EventFeed: React.FC<EventFeedProps> = ({
                     <span
                       style={{
                         fontFamily: "monospace",
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: 700,
                         color: "var(--text-secondary)",
                       }}
@@ -346,13 +332,13 @@ export const EventFeed: React.FC<EventFeedProps> = ({
 
                     <span
                       style={{
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: 800,
                         padding: "1px 6px",
                         borderRadius: 4,
                         background: badgeBg,
                         color: badgeColor,
-                        border: `1px solid ${badgeBorder}`,
+                        border: `0.5px solid ${badgeBorder}`,
                         letterSpacing: "0.3px",
                       }}
                     >
@@ -361,22 +347,22 @@ export const EventFeed: React.FC<EventFeedProps> = ({
 
                     <span
                       style={{
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: 700,
                         padding: "1px 5px",
                         borderRadius: 3,
-                        background: isHome ? "rgba(16, 185, 129, 0.15)" : "rgba(56, 189, 248, 0.15)",
+                        background: isHome ? "color-mix(in srgb, var(--green-9) 15%, transparent)" : "color-mix(in srgb, var(--cyan-9) 15%, transparent)",
                         color: isHome ? "var(--turf-emerald)" : "var(--tech-cyan)",
                       }}
                     >
-                      {isHome ? "HAR" : "NOR"}
+                      {isHome ? (teamNames?.H || "HAR").slice(0, 3).toUpperCase() : (teamNames?.N || "NOR").slice(0, 3).toUpperCase()}
                     </span>
                   </div>
 
                   <span
                     style={{
                       fontFamily: "monospace",
-                      fontSize: 10,
+                      fontSize: 12,
                       color: "var(--text-tertiary)",
                     }}
                   >
@@ -385,18 +371,18 @@ export const EventFeed: React.FC<EventFeedProps> = ({
                 </div>
 
                 {/* Row 2: Player Movement (Actor → Receiver) */}
-                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 600 }}>
                   <span style={{ color: "var(--text-primary)" }}>{actorName}</span>
                   {receiverName && (
                     <>
-                      <span style={{ color: "var(--text-tertiary)", fontSize: 11 }}>→</span>
+                      <span style={{ color: "var(--text-tertiary)", fontSize: 12 }}>→</span>
                       <span style={{ color: "var(--text-secondary)" }}>{receiverName}</span>
                     </>
                   )}
                 </div>
 
                 {/* Row 3: Meta details */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "var(--text-tertiary)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "var(--text-tertiary)" }}>
                   <span>
                     {e.outcome === "saved"
                       ? t.outcomeSaved
@@ -407,7 +393,7 @@ export const EventFeed: React.FC<EventFeedProps> = ({
                       : e.outcome}
                   </span>
                   {e.possession_id !== undefined && (
-                    <span style={{ fontSize: 10, fontFamily: "monospace" }}>
+                    <span style={{ fontSize: 12, fontFamily: "monospace" }}>
                       Seq #{e.possession_id}
                     </span>
                   )}

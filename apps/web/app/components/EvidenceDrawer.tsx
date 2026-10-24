@@ -18,7 +18,7 @@ type FootballEvent = {
 
 type Receipt = {
   id: string;
-  value: number;
+  value: number | null;
   unit: string;
   event_ids: string[];
   definition: string;
@@ -64,7 +64,7 @@ const labels: Record<string, string> = {
 
 const titleFor = (id: string) => {
   const parts = id.split(".");
-  const teamPrefix = parts[0] === "N" ? "Northbridge · " : "Harbor · ";
+  const teamPrefix = parts[0] === "N" ? "Northbridge " : "Harbor ";
   const name = labels[parts[1]] || parts[1];
   const windowName = parts[2] ? ` (${parts[2].toUpperCase()})` : "";
   return `${teamPrefix}${name}${windowName}`;
@@ -277,7 +277,7 @@ export function EvidenceDrawer({
                     <span className="tel-label">Player / Team:</span>
                     <span className="tel-value">
                       {players[selectedEvent.team]?.[selectedEvent.actor] || selectedEvent.actor}{" "}
-                      <small>({selectedEvent.team === "H" ? "Harbor FC" : "Northbridge Utd"})</small>
+                      <small>({selectedEvent.team === "H" ? "Home" : "Away"})</small>
                     </span>
                   </div>
                   {selectedEvent.receiver && (

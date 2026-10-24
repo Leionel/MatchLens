@@ -22,38 +22,38 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
 
   const eventCount = state.events?.length || 0;
   const sequenceCount = state.sequences?.length || 0;
-  const claimsCount = state.result?.accepted?.length || (state.history?.length || 0);
+  const claimsCount = (state.result?.accepted?.length || 0) + (state.history?.length || 0);
 
-  const tabs: { id: WorkspaceId; label: string; icon: string; countBadge: string | number }[] = [
+  const tabs: { id: WorkspaceId; index: string; label: string; countBadge: string }[] = [
     {
       id: "match_center",
+      index: "01",
       label: t.workspaceMatchCenter,
-      icon: "🏟️",
-      countBadge: `${state.score.H}-${state.score.N} (${eventCount})`,
+      countBadge: `${state.score.H}–${state.score.N} ${eventCount}`,
     },
     {
       id: "tactical_lab",
+      index: "02",
       label: t.workspaceTacticalLab,
-      icon: "🧭",
-      countBadge: `${sequenceCount} S2`,
+      countBadge: `${sequenceCount} ${isZh ? "序列" : "seq"}`,
     },
     {
       id: "story_agent",
+      index: "03",
       label: t.workspaceStoryAgent,
-      icon: "🤖",
-      countBadge: `${claimsCount} Gate`,
+      countBadge: isZh ? "注册表" : "Registry",
     },
     {
       id: "validation_lab",
+      index: "04",
       label: t.workspaceValidationLab,
-      icon: "📊",
-      countBadge: "xT & A/B/C",
+      countBadge: "xT CONTRACT",
     },
   ];
 
   return (
     <nav className="workspace-tabs-bar" aria-label="Cockpit Workspaces">
-      <div className="workspace-tabs-container">
+      <div className="workspace-tabs-container" role="tablist">
         {tabs.map((tab) => {
           const isActive = activeWorkspace === tab.id;
           return (
@@ -65,8 +65,8 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
               aria-selected={isActive}
               role="tab"
             >
-              <span style={{ fontSize: 16 }}>{tab.icon}</span>
-              <span>{tab.label}</span>
+              <span className="workspace-tab-index">{tab.index}</span>
+              <span className="workspace-tab-label">{tab.label}</span>
               <span className="workspace-tab-badge">{tab.countBadge}</span>
             </button>
           );

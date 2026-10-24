@@ -132,18 +132,18 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
           justifyContent: "space-between",
           alignItems: "center",
           padding: "10px 18px",
-          background: "rgba(15, 23, 42, 0.75)",
-          border: "1px solid var(--glass-border)",
+          background: "color-mix(in srgb, var(--slate-1) 75%, transparent)",
+          border: "0.5px solid var(--glass-border)",
           borderRadius: 10,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 20 }}>📊</span>
+          
           <div>
             <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>
               {t.validationLabTitle}
             </div>
-            <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+            <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
               {t.validationLabSubtitle}
             </div>
           </div>
@@ -158,13 +158,13 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
             })
           }
           style={{
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: 700,
             padding: "4px 10px",
             borderRadius: 6,
-            background: "rgba(16, 185, 129, 0.15)",
-            border: "1px solid var(--turf-emerald)",
-            color: "var(--turf-emerald)",
+            background: "color-mix(in srgb, var(--green-9) 15%, transparent)",
+            border: "0.5px solid var(--turf-emerald)",
+            color: "var(--text-emerald)",
             cursor: "pointer",
           }}
         >
@@ -176,21 +176,21 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
       <div className="glass-panel" style={{ padding: 18 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div>
-            <span style={{ fontSize: 10, fontWeight: 800, color: "var(--turf-emerald)", textTransform: "uppercase" }}>
-              {isZh ? "BL-09 数学空间拟合" : "BL-09 MATHEMATICAL SPATIAL FIT"}
+            <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-emerald)", textTransform: "uppercase" }}>
+              {isZh ? "BL-09 数学空间拟合" : ""}
             </span>
-            <h3 style={{ fontSize: 15, fontWeight: 750, margin: "2px 0 0" }}>
+            <h3 style={{ fontSize: 18, fontWeight: 750, margin: "2px 0 0" }}>
               {t.xtContractionTitle}
             </h3>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{t.gridResolutionLabel}</span>
+            <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{t.gridResolutionLabel}</span>
             <button
               type="button"
               className={`feed-filter-btn ${selectedGridResolution === "16x12" ? "active" : ""}`}
               onClick={() => setSelectedGridResolution("16x12")}
-              style={{ fontSize: 11, padding: "3px 8px" }}
+              style={{ fontSize: 12, padding: "3px 8px" }}
             >
               {isZh ? "16 × 12 (细粒度)" : "16 × 12 (Fine)"}
             </button>
@@ -198,7 +198,7 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
               type="button"
               className={`feed-filter-btn ${selectedGridResolution === "12x8" ? "active" : ""}`}
               onClick={() => setSelectedGridResolution("12x8")}
-              style={{ fontSize: 11, padding: "3px 8px" }}
+              style={{ fontSize: 12, padding: "3px 8px" }}
             >
               {isZh ? "12 × 8 (收缩拟合)" : "12 × 8 (Contracted)"}
             </button>
@@ -213,40 +213,40 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
             gap: 10,
             marginBottom: 14,
             padding: "10px 14px",
-            background: "rgba(15, 23, 42, 0.6)",
+            background: "color-mix(in srgb, var(--slate-1) 60%, transparent)",
             borderRadius: 8,
-            border: "1px solid var(--pitch-border)",
+            border: "0.5px solid var(--pitch-border)",
             textAlign: "center",
           }}
         >
           <div>
-            <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>MAE ({isZh ? "绝对误差" : "Error"})</div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--turf-emerald)" }}>
-              {validationReport?.cross_match_mae !== undefined && validationReport?.cross_match_mae !== null ? validationReport.cross_match_mae : "0.0124"}
+            <div style={{ fontSize: 12, color: "var(--text-tertiary)", textTransform: "uppercase" }}>MAE ({isZh ? "绝对误差" : "Error"})</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text-emerald)" }}>
+              {validationReport?.cross_match_mae !== undefined && validationReport?.cross_match_mae !== null ? validationReport.cross_match_mae : "—"}
             </div>
-            <div style={{ fontSize: 9, color: "var(--text-secondary)" }}>{isZh ? "目标 < 0.0150 ✓" : "Target < 0.0150 ✓"}</div>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{isZh ? "未运行或未评估" : "Not run / not evaluated"}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>RMSE ({isZh ? "均方根差" : "RMSE"})</div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--turf-emerald)" }}>
-              {validationReport?.cross_match_rmse !== undefined && validationReport?.cross_match_rmse !== null ? validationReport.cross_match_rmse : "0.0189"}
+            <div style={{ fontSize: 12, color: "var(--text-tertiary)", textTransform: "uppercase" }}>RMSE ({isZh ? "均方根差" : "RMSE"})</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text-emerald)" }}>
+              {validationReport?.cross_match_rmse !== undefined && validationReport?.cross_match_rmse !== null ? validationReport.cross_match_rmse : "—"}
             </div>
-            <div style={{ fontSize: 9, color: "var(--text-secondary)" }}>{isZh ? "收敛平稳 ✓" : "Stabilized fit ✓"}</div>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{isZh ? "需实际交叉验证" : "Requires cross-match run"}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "皮尔逊相关性 r" : "Pearson r"}</div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--tech-cyan)" }}>
-              {validationReport?.cross_match_pearson_r !== undefined && validationReport?.cross_match_pearson_r !== null ? validationReport.cross_match_pearson_r : "0.942"}
+            <div style={{ fontSize: 12, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "皮尔逊相关性 r" : "Pearson r"}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text-cyan)" }}>
+              {validationReport?.cross_match_pearson_r !== undefined && validationReport?.cross_match_pearson_r !== null ? validationReport.cross_match_pearson_r : "—"}
             </div>
-            <div style={{ fontSize: 9, color: "var(--text-secondary)" }}>{isZh ? "强相关性 ✓" : "Strong correlation ✓"}</div>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{isZh ? "样本不足时不外推" : "No extrapolation on small n"}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "自举重采样" : "Bootstrap CIs"}</div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: "var(--electric-gold)" }}>
-              {validationReport?.bootstrap_iterations ? `${validationReport.bootstrap_iterations} ${isZh ? "次采样" : "Runs"}` : (isZh ? "50折采样" : "50-Fold")}
+            <div style={{ fontSize: 12, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "自举重采样" : "Bootstrap CIs"}</div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-gold)" }}>
+              {validationReport?.bootstrap_iterations ? `${validationReport.bootstrap_iterations} ${isZh ? "次重采样" : "resamples"}` : (isZh ? "未运行" : "Not run")}
             </div>
-            <div style={{ fontSize: 9, color: "var(--text-secondary)" }}>
-              {validationReport?.monotonicity_preserved ? (isZh ? "单调性守恒 ✓" : "Monotonic ✓") : `ID: ${matchId}`}
+            <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+              {validationReport?.monotonicity_preserved ? (isZh ? "静态网格单调性通过" : "Static grid monotonic") : `ID: ${matchId}`}
             </div>
           </div>
         </div>
@@ -258,9 +258,9 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
             gridTemplateColumns: `repeat(${cols}, 1fr)`,
             gap: 3,
             padding: 10,
-            background: "rgba(11, 15, 25, 0.8)",
+            background: "color-mix(in srgb, var(--slate-1) 80%, transparent)",
             borderRadius: 8,
-            border: "1px solid var(--glass-border)",
+            border: "0.5px solid var(--glass-border)",
           }}
         >
           {Array.from({ length: rows }).map((_, r) =>
@@ -280,18 +280,18 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: 9,
+                    fontSize: 12,
                     fontFamily: "monospace",
                     fontWeight: 700,
-                    color: val > 0.15 ? "#041017" : "var(--text-secondary)",
+                    color: val > 0.15 ? "var(--slate-1)" : "var(--text-secondary)",
                     backgroundColor: isBox
-                      ? `rgba(16, 185, 129, ${opacity})`
-                      : `rgba(56, 189, 248, ${opacity * 0.8})`,
+                      ? `color-mix(in srgb, var(--green-9) ${Math.round(opacity * 100)}%, transparent)`
+                      : `color-mix(in srgb, var(--cyan-9) ${Math.round(opacity * 80)}%, transparent)`,
                     border: isBox
-                      ? "1px solid rgba(16, 185, 129, 0.5)"
-                      : "1px solid rgba(255, 255, 255, 0.04)",
+                      ? "0.5px solid color-mix(in srgb, var(--green-9) 50%, transparent)"
+                      : "0.5px solid color-mix(in srgb, var(--slate-12) 4%, transparent)",
                     cursor: "pointer",
-                    transition: "transform 0.1s ease",
+                    transition: "none",
                   }}
                 >
                   {val.toFixed(2)}
@@ -300,9 +300,9 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
             })
           )}
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-tertiary)", marginTop: 6 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-tertiary)", marginTop: 6 }}>
           <span>{isZh ? "← 己方防守三区 (0.005)" : "← Own Defensive Third (0.005)"}</span>
-          <span style={{ color: "var(--turf-emerald)", fontWeight: 700 }}>
+          <span style={{ color: "var(--text-emerald)", fontWeight: 700 }}>
             {isZh ? "对方球门与小禁区危险核心 (0.28+) →" : "Opponent Goal & Six-Yard Box (0.28+) →"}
           </span>
         </div>
@@ -312,14 +312,14 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
       <div className="glass-panel" style={{ padding: 18 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div>
-            <span style={{ fontSize: 10, fontWeight: 800, color: "var(--tech-cyan)", textTransform: "uppercase" }}>
-              {isZh ? "TRACK E 确定性契约基准测试 (DETERMINISTIC CONTRACT BENCHMARK)" : "TRACK E DETERMINISTIC CONTRACT BENCHMARK"}
+            <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-cyan)", textTransform: "uppercase" }}>
+              {isZh ? "TRACK E 确定性契约基准测试 (DETERMINISTIC CONTRACT BENCHMARK)" : ""}
             </span>
-            <h3 style={{ fontSize: 15, fontWeight: 750, margin: "2px 0 0" }}>
+            <h3 style={{ fontSize: 18, fontWeight: 750, margin: "2px 0 0" }}>
               {isZh ? "智能体架构 A / B / C 确定性契约对照评测" : "Deterministic Contract Audit: Agent Architecture A / B / C"}
             </h3>
           </div>
-          <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+          <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
             {isZh ? "基于规范契约测试集与确定性 Gate 拦截流水线" : "Based on Contract Test Suites & Deterministic Gate Pipeline"}
           </span>
         </div>
@@ -328,120 +328,81 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
           <table className="tactical-table">
             <thead>
               <tr>
-                <th>{isZh ? "架构配置" : "Configuration"}</th>
-                <th>{isZh ? "挂载智能体/工具" : "Agents / Tools Active"}</th>
-                <th>{isZh ? "Gate 拦截率" : "Gate Rejection Rate"}</th>
-                <th>{isZh ? "契约合格率" : "Contract Pass Rate"}</th>
-                <th>{isZh ? "对立假设数/覆盖" : "Alt Hypotheses Cov."}</th>
-                <th>{isZh ? "单次成本 (USD)" : "Token Cost"}</th>
-                <th>{isZh ? "流水线延迟" : "Pipeline Latency"}</th>
-                <th>{isZh ? "评级" : "Rating"}</th>
+                <th>{isZh ? "流水线配置" : "Pipeline"}</th>
+                <th>{isZh ? "执行组件" : "Executed components"}</th>
+                <th>{isZh ? "无效声明拦截率" : "Invalid block rate"}</th>
+                <th>{isZh ? "契约一致率" : "Contract agreement"}</th>
+                <th>{isZh ? "在线模型" : "Live model"}</th>
+                <th>{isZh ? "Token 成本" : "Token cost"}</th>
+                <th>{isZh ? "实测延迟" : "Measured latency"}</th>
+                <th>{isZh ? "工具状态" : "Tools"}</th>
               </tr>
             </thead>
             <tbody>
               {benchmarkResult?.configurations && benchmarkResult.configurations.length > 0 ? (
                 benchmarkResult.configurations.map((cfg: any) => {
-                  const isGold = cfg.config === "C_triple_agent_specialist";
-                  const name =
-                    cfg.config === "A_dual_agent"
-                      ? isZh ? "配置 A (双智能体基线)" : "Config A (Dual-Agent)"
-                      : cfg.config === "B_dual_agent_plus_tools"
-                      ? isZh ? "配置 B (单工具增强)" : "Config B (Tools Only)"
-                      : isZh ? "配置 C (完整三智能体)" : "Config C (Tri-Agent Full)";
-                  const tools =
-                    cfg.config === "A_dual_agent"
-                      ? isZh ? "双智能体 (Analyst + Verifier)" : "Analyst + Verifier"
-                      : cfg.config === "B_dual_agent_plus_tools"
-                      ? isZh ? "双智能体 + 时序窗口分解工具" : "Dual-Agent + Temporal Decomp"
-                      : isZh ? "分析师 + 事件归因专家 + 审核门禁" : "Analyst + Attribution Specialist + Verifier";
-                  const rating =
-                    cfg.config === "A_dual_agent"
-                      ? isZh ? "基础版" : "Basic"
-                      : cfg.config === "B_dual_agent_plus_tools"
-                      ? isZh ? "可用" : "Capable"
-                      : isZh ? "生产金标 ✓" : "Production Gold ✓";
-
+                  const labels: Record<string, { name: string; tools: string }> = {
+                    A_reference_only: {
+                      name: isZh ? "配置 A 仅引用校验" : "A Reference only",
+                      tools: isZh ? "事件 ID 存在性检查" : "Event-ID existence",
+                    },
+                    B_gate20: {
+                      name: isZh ? "配置 B Gate 2.0" : "B Gate 2.0",
+                      tools: isZh ? "规则引擎（措辞/假设/版本）" : "Rule engine (wording/assumptions/version)",
+                    },
+                    C_gate20_plus_tools: {
+                      name: isZh ? "配置 C Gate + 工具" : "C Gate + tools",
+                      tools: isZh ? "门禁 + 确定性归因工具" : "Gate + deterministic attribution tools",
+                    },
+                  };
+                  const meta = labels[cfg.config] || { name: cfg.config, tools: "—" };
+                  const block = typeof cfg.invalid_block_rate === "number" ? `${(cfg.invalid_block_rate * 100).toFixed(1)}%` : "n/a";
+                  const agreement = typeof cfg.contract_agreement_rate === "number" ? `${(cfg.contract_agreement_rate * 100).toFixed(1)}%` : "n/a";
                   return (
-                    <tr
-                      key={cfg.config}
-                      style={isGold ? { background: "rgba(16, 185, 129, 0.08)", borderLeft: "3px solid var(--turf-emerald)" } : {}}
-                    >
+                    <tr key={cfg.config}>
+                      <td><b>{meta.name}</b></td>
+                      <td>{meta.tools}</td>
+                      <td style={{ fontWeight: 750 }}>{block}</td>
+                      <td>{agreement}</td>
+                      <td>{benchmarkResult?.live_model_status === "not_run" ? "Not Run" : "Run"}</td>
+                      <td>—</td>
+                      <td>{typeof cfg.latency_ms_measured === "number" ? `${cfg.latency_ms_measured.toFixed(1)}ms` : "—"}</td>
                       <td>
-                        <b style={isGold ? { color: "var(--turf-emerald)" } : {}}>{name}</b>
-                      </td>
-                      <td>{tools}</td>
-                      <td style={{ color: isGold ? "var(--turf-emerald)" : cfg.gate_block_rate > 0.3 ? "var(--crimson-warn)" : "var(--electric-gold)", fontWeight: 750 }}>
-                        {(cfg.gate_block_rate * 100).toFixed(1)}%
-                      </td>
-                      <td style={{ fontWeight: isGold ? 800 : 600, color: isGold ? "var(--turf-emerald)" : "inherit" }}>
-                        {(cfg.gate_pass_rate * 100).toFixed(1)}%
-                      </td>
-                      <td>{(cfg.alternative_hypothesis_coverage * 100).toFixed(0)}%</td>
-                      <td>${cfg.token_cost_usd_est?.toFixed(4) || "0.0150"}</td>
-                      <td>{cfg.latency_ms_est?.toFixed(0) || "1200"}ms</td>
-                      <td>
-                        <span style={isGold ? { color: "var(--turf-emerald)", fontWeight: 800 } : { color: "var(--text-tertiary)" }}>
-                          {rating}
+                        <span style={{ color: cfg.alternative_hypothesis_tool_executed ? "var(--turf-emerald)" : "var(--text-tertiary)", fontWeight: 700 }}>
+                          {cfg.alternative_hypothesis_tool_executed ? (isZh ? "工具已执行" : "Tools run") : (isZh ? "未执行" : "Not run")}
                         </span>
                       </td>
                     </tr>
                   );
                 })
               ) : (
-                <>
-                  <tr>
-                    <td><b>{isZh ? "配置 A (双智能体基线)" : "Config A (Baseline)"}</b></td>
-                    <td>{isZh ? "双智能体 (Analyst + Verifier)" : "Dual-Agent (Analyst + Verifier)"}</td>
-                    <td style={{ color: "var(--crimson-warn)", fontWeight: 750 }}>37.5%</td>
-                    <td>62.5%</td>
-                    <td>0%</td>
-                    <td>$0.0080</td>
-                    <td>420ms</td>
-                    <td><span style={{ color: "var(--text-tertiary)" }}>{isZh ? "基础版" : "Basic"}</span></td>
-                  </tr>
-                  <tr>
-                    <td><b>{isZh ? "配置 B (单工具增强)" : "Config B (Tools Only)"}</b></td>
-                    <td>{isZh ? "双智能体 + 时序窗口分解工具" : "Dual-Agent + Temporal Decomp Tool"}</td>
-                    <td style={{ color: "var(--electric-gold)", fontWeight: 750 }}>25.0%</td>
-                    <td>75.0%</td>
-                    <td>44%</td>
-                    <td>$0.0120</td>
-                    <td>680ms</td>
-                    <td><span style={{ color: "var(--tech-cyan)" }}>{isZh ? "可用" : "Capable"}</span></td>
-                  </tr>
-                  <tr style={{ background: "rgba(16, 185, 129, 0.08)", borderLeft: "3px solid var(--turf-emerald)" }}>
-                    <td><b style={{ color: "var(--turf-emerald)" }}>{isZh ? "配置 C (完整三智能体)" : "Config C (Tri-Agent Full)"}</b></td>
-                    <td><b>{isZh ? "分析师 + 事件归因专家 + 审核门禁" : "Analyst + Event Attribution Specialist + Verifier"}</b></td>
-                    <td style={{ color: "var(--turf-emerald)", fontWeight: 800 }}>12.5% ({isZh ? "最低拦截" : "Lowest"})</td>
-                    <td style={{ color: "var(--turf-emerald)", fontWeight: 800 }}>87.5% ({isZh ? "最高" : "Top"})</td>
-                    <td style={{ color: "var(--turf-emerald)", fontWeight: 800 }}>86% ({isZh ? "充分覆盖" : "Thorough"})</td>
-                    <td>$0.0180</td>
-                    <td>950ms</td>
-                    <td><b style={{ color: "var(--turf-emerald)" }}>{isZh ? "生产金标 ✓" : "Production Gold ✓"}</b></td>
-                  </tr>
-                </>
+                <tr>
+                  <td colSpan={8} style={{ color: "var(--text-tertiary)", padding: 16 }}>
+                    {isZh ? "尚无已执行的基准结果。" : "No executed benchmark result."}
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
         </div>
 
-        <div style={{ marginTop: 12, padding: "10px 14px", background: "rgba(15, 23, 42, 0.6)", borderRadius: 6, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-          <b>{isZh ? "评测结论说明" : "Benchmark Evaluation Notice"}</b>: {benchmarkResult?.summary || (isZh
-            ? "确定性契约评测表明：引入专职“事件归因专家”工具链 (配置 C) 可将 Gate 2.0 拦截漏检与反事实覆盖率显著改善至 86% 对立假设覆盖。所有实测指标均经由确定性契约测试集验收。"
-            : "Deterministic contract evaluation confirms: Adding the dedicated Event Attribution Specialist (Config C) significantly improves Gate 2.0 coverage to 86% alternative hypotheses. All figures verified via deterministic test suites.")}
-        </div>
+        <div style={{ marginTop: 12, padding: "10px 14px", background: "color-mix(in srgb, var(--slate-1) 60%, transparent)", borderRadius: 6, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+          <b>{isZh ? "评测口径说明" : "Benchmark scope"}</b>: {benchmarkResult?.summary || (isZh
+            ? "确定性契约基准尚未运行。此处不展示任何预设准确率、成本或延迟数字。"
+            : "No deterministic contract benchmark has run. No preset accuracy, cost or latency values are displayed here.")}
+</div>
       </div>
 
       {/* 4. What-if Counterfactual Research Sandbox (Level 3 Exploratory) */}
       <div className="glass-panel" style={{ padding: 18 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 18 }}>🧪</span>
+            
             <div>
-              <span style={{ fontSize: 10, fontWeight: 800, color: "var(--electric-gold)", textTransform: "uppercase" }}>
-                {isZh ? "LEVEL 3 探索性科研实验" : "LEVEL 3 RESEARCH EXPERIMENT"}
+              <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-gold)", textTransform: "uppercase" }}>
+                {isZh ? "LEVEL 3 探索性科研实验" : ""}
               </span>
-              <h3 style={{ fontSize: 15, fontWeight: 750, margin: "2px 0 0" }}>
+              <h3 style={{ fontSize: 18, fontWeight: 750, margin: "2px 0 0" }}>
                 {isZh ? "What-If 反事实推演沙盒 (模拟战术干预)" : "What-If Counterfactual Sandbox (Simulated Interventions)"}
               </h3>
             </div>
@@ -449,13 +410,13 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
 
           <span
             style={{
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: 750,
               padding: "3px 8px",
               borderRadius: 6,
-              background: "rgba(245, 158, 11, 0.15)",
-              border: "1px solid rgba(245, 158, 11, 0.4)",
-              color: "var(--electric-gold)",
+              background: "color-mix(in srgb, var(--amber-9) 15%, transparent)",
+              border: "0.5px solid color-mix(in srgb, var(--amber-9) 40%, transparent)",
+              color: "var(--text-gold)",
             }}
           >
             {isZh ? "⚠️ 严谨科研提示：仅限探索实验 — 不作为正式转播结论" : "⚠️ RESEARCH ONLY — NOT FOR OFFICIAL BROADCAST"}
@@ -481,7 +442,7 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
                 setWhatIfScenario(sc.id as any);
                 executeWhatIfSimulation(sc.id);
               }}
-              style={{ fontSize: 11, padding: "4px 10px" }}
+              style={{ fontSize: 12, padding: "4px 10px" }}
             >
               {sc.label}
             </button>
@@ -492,12 +453,12 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
             disabled={whatIfLoading}
             onClick={() => executeWhatIfSimulation(whatIfScenario)}
             style={{
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: 750,
               padding: "4px 12px",
               borderRadius: 6,
               background: "var(--turf-emerald)",
-              color: "#0b0f19",
+              color: "var(--slate-1)",
               border: "none",
               cursor: "pointer",
               marginLeft: "auto",
@@ -515,34 +476,34 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
               gridTemplateColumns: "repeat(4, 1fr)",
               gap: 8,
               padding: "10px 14px",
-              background: "rgba(16, 185, 129, 0.08)",
-              border: "1px solid rgba(16, 185, 129, 0.3)",
+              background: "color-mix(in srgb, var(--green-9) 8%, transparent)",
+              border: "0.5px solid color-mix(in srgb, var(--green-9) 30%, transparent)",
               borderRadius: 8,
               marginBottom: 12,
               textAlign: "center",
             }}
           >
             <div>
-              <div style={{ fontSize: 9, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Δ OAAI 动量幅度</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: whatIfResult.delta_oaai_amplitude >= 0 ? "var(--turf-emerald)" : "var(--crimson-warn)" }}>
+              <div style={{ fontSize: 12, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Δ OAAI 动量幅度</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: whatIfResult.delta_oaai_amplitude >= 0 ? "var(--turf-emerald)" : "var(--crimson-warn)" }}>
                 {whatIfResult.delta_oaai_amplitude > 0 ? `+${whatIfResult.delta_oaai_amplitude}` : whatIfResult.delta_oaai_amplitude}
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 9, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Δ xT 威胁增量</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "var(--tech-cyan)" }}>
+              <div style={{ fontSize: 12, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Δ xT 威胁增量</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text-cyan)" }}>
                 {whatIfResult.delta_threat > 0 ? `+${whatIfResult.delta_threat}` : whatIfResult.delta_threat}
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 9, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Δ xG 期望进球</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "var(--electric-gold)" }}>
+              <div style={{ fontSize: 12, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Δ xG 期望进球</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text-gold)" }}>
                 {whatIfResult.delta_xg > 0 ? `+${whatIfResult.delta_xg}` : whatIfResult.delta_xg}
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 9, color: "var(--text-tertiary)", textTransform: "uppercase" }}>受影响事件数</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text-primary)" }}>
+              <div style={{ fontSize: 12, color: "var(--text-tertiary)", textTransform: "uppercase" }}>受影响事件数</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)" }}>
                 {whatIfResult.affected_events_count} {isZh ? "个" : "events"}
               </div>
             </div>
@@ -550,7 +511,7 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
         )}
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <div style={{ padding: 12, background: "rgba(15, 23, 42, 0.6)", borderRadius: 8, border: "1px solid var(--pitch-border)" }}>
+          <div style={{ padding: 12, background: "color-mix(in srgb, var(--slate-1) 60%, transparent)", borderRadius: 8, border: "0.5px solid var(--pitch-border)" }}>
             <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>
               {isZh ? `模拟减少后场关键防守失误率: ${counterfactualTurnoverReduced}%` : `Simulated Reduction in Defensive Turnover Rate: ${counterfactualTurnoverReduced}%`}
             </label>
@@ -562,21 +523,21 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
               onChange={(e) => setCounterfactualTurnoverReduced(Number(e.target.value))}
               style={{ width: "100%", accentColor: "var(--turf-emerald)" }}
             />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-tertiary)", marginTop: 4 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-tertiary)", marginTop: 4 }}>
               <span>{isZh ? "基线现状 (0%)" : "Baseline (0%)"}</span>
               <span>{isZh ? "最大抑制 (50%)" : "Maximum Suppression (50%)"}</span>
             </div>
           </div>
 
-          <div style={{ padding: 12, background: "rgba(15, 23, 42, 0.6)", borderRadius: 8, border: "1px solid var(--pitch-border)", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-            <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
+          <div style={{ padding: 12, background: "color-mix(in srgb, var(--slate-1) 60%, transparent)", borderRadius: 8, border: "0.5px solid var(--pitch-border)", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
               {isZh ? `反事实观察边界 (失误抑制 ${counterfactualTurnoverReduced}%):` : `Observational Counterfactual Boundary (${counterfactualTurnoverReduced}% Turnover Suppression):`}
             </div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--turf-emerald)", marginTop: 4 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-emerald)", marginTop: 4 }}>
               {isZh ? "潜在转换射门抑制: " : "Potential Transition Shots Suppressed: "}~{((Number(state.receipts?.[`${state.focus_team || "H"}.transition_shots.current`]?.value || 2) * counterfactualTurnoverReduced) / 100).toFixed(1)} {isZh ? "次起脚" : "shots"}
             </div>
-            <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 4, lineHeight: 1.4 }}>
-              {whatIfResult?.disclaimer || (isZh ? "Gate 2.0 边界守则: 缺乏22人全场追踪与体能负荷数据，严禁将失误率直接线性换算为胜率或教练意图因果。" : "Gate 2.0 Boundary: Without 22-player tracking and biometrics, linear conversion from turnover rate to win probability is rejected.")}
+            <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 4, lineHeight: 1.4 }}>
+              {whatIfResult?.disclaimer || (isZh ? "发布门禁边界守则: 缺乏22人全场追踪与体能负荷数据，严禁将失误率直接线性换算为胜率或教练意图因果。" : "No 22-player tracking: turnover counts cannot be converted to win probability.")}
             </div>
           </div>
         </div>

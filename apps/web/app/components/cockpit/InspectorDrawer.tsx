@@ -64,12 +64,12 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
       {/* Drawer Header */}
       <div className="drawer-header">
         <div className="drawer-header-title">
-          <span style={{ fontSize: 18 }}>🔍</span>
+          
           <div>
             <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>
               {payload?.title || (payload?.type ? (isZh ? `${payload.type.toUpperCase()} 审计` : `${payload.type.toUpperCase()} INSPECTOR`) : (isZh ? "战术审计侧边栏" : "TACTICAL INSPECTOR"))}
             </div>
-            <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+            <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
               {isZh ? "全局无阻断深度审计侧边栏" : "Non-blocking Sidecar Audit"}
             </div>
           </div>
@@ -115,7 +115,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
           className={`drawer-nav-btn ${activeTab === "claim" ? "active" : ""}`}
           onClick={() => setActiveTab("claim")}
         >
-          {isZh ? "论断与 Gate 2.0" : "Claim & Gate 2.0"}
+          {isZh ? "论断与 Publication Gate" : "Claim & Publication Gate"}
         </button>
         <button
           type="button"
@@ -135,11 +135,11 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
           <>
             {payload?.type === "zone" ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div className="glass-card" style={{ borderLeft: "3px solid var(--tech-cyan)" }}>
-                  <div style={{ fontSize: 11, fontWeight: 750, color: "var(--tech-cyan)", textTransform: "uppercase" }}>
+                <div className="glass-card" style={{  }}>
+                  <div style={{ fontSize: 12, fontWeight: 750, color: "var(--text-cyan)", textTransform: "uppercase" }}>
                     {isZh ? "九宫格空间分区审计" : "Spatial Pitch Zone Drilldown"}
                   </div>
-                  <div style={{ fontSize: 16, fontWeight: 800, marginTop: 4 }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, marginTop: 4 }}>
                     {payload.zoneName || `Zone ${payload.zoneId}`}
                   </div>
                   <p style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 6, lineHeight: 1.5 }}>
@@ -163,7 +163,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
             ) : seq ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {/* Sequence Overview Banner */}
-                <div className="glass-card" style={{ borderLeft: "3px solid var(--turf-emerald)" }}>
+                <div className="glass-card" style={{  }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span className="seq-id-badge">{seq.sequence_id}</span>
                     <span className={`seq-outcome ${seq.outcome}`}>
@@ -180,7 +180,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                         : seq.outcome.replace("_", " ").toUpperCase()}
                     </span>
                   </div>
-                  <div style={{ marginTop: 8, fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>
+                  <div style={{ marginTop: 8, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
                     {seq.team === "H"
                       ? (isZh ? "Harbor FC (主队控球)" : "Harbor FC (Home) Possession")
                       : (isZh ? "Northbridge Utd (客队控球)" : "Northbridge Utd (Away) Possession")}
@@ -196,23 +196,23 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                       gap: 8,
                       marginTop: 12,
                       paddingTop: 10,
-                      borderTop: "1px solid var(--pitch-border)",
+                      borderTop: "0.5px solid var(--pitch-border)",
                       textAlign: "center",
                     }}
                   >
                     <div>
-                      <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "传球次数" : "Passes"}</div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text-primary)" }}>{seq.pass_count}</div>
+                      <div style={{ fontSize: 12, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "传球次数" : "Passes"}</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)" }}>{seq.pass_count}</div>
                     </div>
                     <div>
-                      <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "推进净增" : "Territory"}</div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: "var(--turf-emerald)" }}>
+                      <div style={{ fontSize: 12, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "推进净增" : "Territory"}</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: "var(--text-emerald)" }}>
                         {seq.territory_gained !== undefined ? `${seq.territory_gained > 0 ? `+${seq.territory_gained}` : seq.territory_gained}m` : `+${seq.progressive_distance}m`}
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "打入前场" : "Final 3rd"}</div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: seq.entered_final_third ? "var(--turf-emerald)" : "var(--text-tertiary)" }}>
+                      <div style={{ fontSize: 12, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "打入前场" : "Final 3rd"}</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: seq.entered_final_third ? "var(--turf-emerald)" : "var(--text-tertiary)" }}>
                         {seq.entered_final_third ? (isZh ? "是 ✓" : "YES ✓") : (isZh ? "否" : "NO")}
                       </div>
                     </div>
@@ -237,10 +237,10 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                             justifyContent: "space-between",
                             padding: "6px 10px",
                             borderRadius: 6,
-                            background: "rgba(15, 23, 42, 0.6)",
-                            border: "1px solid var(--pitch-border)",
+                            background: "color-mix(in srgb, var(--slate-1) 60%, transparent)",
+                            border: "0.5px solid var(--pitch-border)",
                             cursor: "pointer",
-                            transition: "all 0.15s ease",
+                            transition: "none",
                           }}
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -249,9 +249,9 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                                 width: 20,
                                 height: 20,
                                 borderRadius: "50%",
-                                background: "rgba(16, 185, 129, 0.2)",
-                                color: "var(--turf-emerald)",
-                                fontSize: 10,
+                                background: "color-mix(in srgb, var(--green-9) 20%, transparent)",
+                                color: "var(--text-emerald)",
+                                fontSize: 12,
                                 fontWeight: 800,
                                 display: "flex",
                                 alignItems: "center",
@@ -262,21 +262,21 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                             </span>
                             <div>
                               <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>
-                                {st.actor_name || st.actor} · <span style={{ textTransform: "uppercase", color: "var(--tech-cyan)" }}>{st.kind}</span>
+                                {st.actor_name || st.actor} <span style={{ textTransform: "uppercase", color: "var(--text-cyan)" }}>{st.kind}</span>
                               </div>
-                              <div style={{ fontSize: 10, color: "var(--text-tertiary)" }}>
-                                {clock(st.t)} · {isZh ? "起点" : "start"}: [{st.start[0].toFixed(1)}, {st.start[1].toFixed(1)}] → {isZh ? "终点" : "end"}: [{st.end[0].toFixed(1)}, {st.end[1].toFixed(1)}]
+                              <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                                {clock(st.t)} {isZh ? "起点" : "start"}: [{st.start[0].toFixed(1)}, {st.start[1].toFixed(1)}] → {isZh ? "终点" : "end"}: [{st.end[0].toFixed(1)}, {st.end[1].toFixed(1)}]
                               </div>
                             </div>
                           </div>
 
                           <div style={{ textAlign: "right" }}>
                             {st.gain_m !== 0 && (
-                              <span style={{ fontSize: 11, fontWeight: 700, color: st.gain_m > 0 ? "var(--turf-emerald)" : "var(--crimson-warn)" }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: st.gain_m > 0 ? "var(--turf-emerald)" : "var(--crimson-warn)" }}>
                                 {st.gain_m > 0 ? `+${st.gain_m}m` : `${st.gain_m}m`}
                               </span>
                             )}
-                            <div style={{ fontSize: 10, color: "var(--text-tertiary)", textTransform: "uppercase" }}>
+                            <div style={{ fontSize: 12, color: "var(--text-tertiary)", textTransform: "uppercase" }}>
                               {st.outcome}
                             </div>
                           </div>
@@ -292,8 +292,8 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                             textAlign: "left",
                             padding: "6px 10px",
                             borderRadius: 6,
-                            background: "rgba(15, 23, 42, 0.5)",
-                            border: "1px solid var(--pitch-border)",
+                            background: "color-mix(in srgb, var(--slate-1) 50%, transparent)",
+                            border: "0.5px solid var(--pitch-border)",
                             color: "var(--text-secondary)",
                             fontSize: 12,
                             cursor: "pointer",
@@ -316,13 +316,13 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                       <span
                         key={pid}
                         style={{
-                          fontSize: 11,
+                          fontSize: 12,
                           fontWeight: 650,
                           padding: "3px 8px",
                           borderRadius: 6,
-                          background: "rgba(16, 185, 129, 0.12)",
-                          border: "1px solid rgba(16, 185, 129, 0.3)",
-                          color: "var(--turf-emerald)",
+                          background: "color-mix(in srgb, var(--green-9) 12%, transparent)",
+                          border: "0.5px solid color-mix(in srgb, var(--green-9) 30%, transparent)",
+                          color: "var(--text-emerald)",
                         }}
                       >
                         {players[seq.team]?.[pid] || pid}
@@ -333,7 +333,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
               </div>
             ) : (
               <div style={{ textAlign: "center", padding: "40px 16px", color: "var(--text-tertiary)" }}>
-                <div style={{ fontSize: 28, marginBottom: 8 }}>⚽</div>
+                
                 <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
                   {isZh ? "未选择控球序列或九宫格分区" : "No Sequence or Zone Selected"}
                 </div>
@@ -352,18 +352,18 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {receipt ? (
               <>
-                <div className="glass-card" style={{ borderLeft: "3px solid var(--tech-cyan)" }}>
-                  <div style={{ fontSize: 11, fontWeight: 750, color: "var(--tech-cyan)", textTransform: "uppercase" }}>
+                <div className="glass-card" style={{  }}>
+                  <div style={{ fontSize: 12, fontWeight: 750, color: "var(--text-cyan)", textTransform: "uppercase" }}>
                     {isZh ? "确定性指标计算收据" : "Deterministic Metric Receipt"}
                   </div>
-                  <div style={{ fontSize: 16, fontWeight: 800, marginTop: 4 }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, marginTop: 4 }}>
                     <code>{receipt.id}</code>
                   </div>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 8 }}>
                     <span style={{ fontSize: 24, fontWeight: 900, color: "var(--text-primary)" }}>
                       {receipt.value}
                     </span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--turf-emerald)" }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-emerald)" }}>
                       {receipt.unit}
                     </span>
                   </div>
@@ -381,18 +381,18 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                     <div
                       style={{
                         padding: "10px 14px",
-                        background: "rgba(15, 23, 42, 0.8)",
+                        background: "color-mix(in srgb, var(--slate-1) 80%, transparent)",
                         borderRadius: 6,
-                        border: "1px solid var(--glass-border)",
+                        border: "0.5px solid var(--glass-border)",
                         fontFamily: "Consolas, monospace",
-                        fontSize: 13,
+                        fontSize: 14,
                         textAlign: "center",
                       }}
                     >
                       <div>{isZh ? "分子 (k): " : "Numerator (k): "}<b>{receipt.numerator}</b></div>
-                      <div style={{ borderBottom: "1px solid var(--pitch-border)", margin: "4px auto", width: "60%" }} />
+                      <div style={{ borderBottom: "0.5px solid var(--pitch-border)", margin: "4px auto", width: "60%" }} />
                       <div>{isZh ? "分母 (N): " : "Denominator (N): "}<b>{receipt.denominator}</b></div>
-                      <div style={{ marginTop: 6, color: "var(--turf-emerald)", fontWeight: 700 }}>
+                      <div style={{ marginTop: 6, color: "var(--text-emerald)", fontWeight: 700 }}>
                         = {(receipt.numerator / (receipt.denominator || 1)).toFixed(3)} ({receipt.value} {receipt.unit})
                       </div>
                     </div>
@@ -404,7 +404,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                     </div>
                   )}
 
-                  <div style={{ marginTop: 12, fontSize: 11, color: "var(--text-tertiary)" }}>
+                  <div style={{ marginTop: 12, fontSize: 12, color: "var(--text-tertiary)" }}>
                     {isZh
                       ? `时间窗口: ${clock(receipt.start)} (${receipt.start}秒) → ${clock(receipt.end)} (${receipt.end}秒)`
                       : `Time Window: ${clock(receipt.start)} (${receipt.start}s) → ${clock(receipt.end)} (${receipt.end}s)`}
@@ -423,12 +423,12 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                         type="button"
                         onClick={() => onSelectEvent?.(eid)}
                         style={{
-                          fontSize: 10,
+                          fontSize: 12,
                           padding: "2px 6px",
                           borderRadius: 4,
-                          background: "rgba(56, 189, 248, 0.12)",
-                          border: "1px solid rgba(56, 189, 248, 0.3)",
-                          color: "var(--tech-cyan)",
+                          background: "color-mix(in srgb, var(--cyan-9) 12%, transparent)",
+                          border: "0.5px solid color-mix(in srgb, var(--cyan-9) 30%, transparent)",
+                          color: "var(--text-cyan)",
                           cursor: "pointer",
                         }}
                       >
@@ -440,7 +440,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
               </>
             ) : (
               <div style={{ textAlign: "center", padding: "40px 16px", color: "var(--text-tertiary)" }}>
-                <div style={{ fontSize: 28, marginBottom: 8 }}>📐</div>
+                <div style={{ fontSize: 24, marginBottom: 8 }}>📐</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
                   {isZh ? "未选择指标收据" : "No Metric Receipt Selected"}
                 </div>
@@ -454,31 +454,31 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
           </div>
         )}
 
-        {/* Tab 3: Claim & Gate 2.0 Audit */}
+        {/* Tab 3: Claim & Publication Gate Audit */}
         {activeTab === "claim" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {claim ? (
               <>
-                <div className="glass-card" style={{ borderLeft: "3px solid var(--electric-gold)" }}>
+                <div className="glass-card" style={{  }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: "var(--electric-gold)" }}>
-                      {isZh ? `GATE 2.0 门禁审计 · 论断 ${claim.claim_id}` : `GATE 2.0 AUDIT · CLAIM ${claim.claim_id}`}
+                    <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-gold)" }}>
+                      {isZh ? `GATE 2.0 门禁审计 论断 ${claim.claim_id}` : `GATE 2.0 AUDIT CLAIM ${claim.claim_id}`}
                     </span>
                     <span
                       style={{
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: 800,
                         padding: "2px 8px",
                         borderRadius: 4,
                         background:
                           claim.verdict === "publish"
-                            ? "rgba(16, 185, 129, 0.2)"
-                            : "rgba(245, 158, 11, 0.2)",
+                            ? "color-mix(in srgb, var(--green-9) 20%, transparent)"
+                            : "color-mix(in srgb, var(--amber-9) 20%, transparent)",
                         color:
                           claim.verdict === "publish"
                             ? "var(--turf-emerald)"
                             : "var(--electric-gold)",
-                        border: `1px solid ${
+                        border: `0.5px solid ${
                           claim.verdict === "publish"
                             ? "var(--turf-emerald)"
                             : "var(--electric-gold)"
@@ -493,21 +493,21 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                     &ldquo;{claim.assertion}&rdquo;
                   </div>
 
-                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 8 }}>
+                  <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 8 }}>
                     <b>{isZh ? "分析师因果推论" : "Analyst Reasoning"}</b>: {claim.analyst}
                   </div>
                 </div>
 
-                {/* Gate 2.0 Checks */}
+                {/* Publication Gate Checks */}
                 <div className="glass-card">
                   <div style={{ fontSize: 12, fontWeight: 750, color: "var(--text-primary)", marginBottom: 8 }}>
-                    {isZh ? "Publication Gate 2.0 严格核验" : "Publication Gate 2.0 Rigor Checks"}
+                    {isZh ? "Publication Publication Gate 严格核验" : "Publication Publication Gate Rigor Checks"}
                   </div>
 
                   <div style={{ display: "grid", gap: 6, fontSize: 12 }}>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: "var(--text-secondary)" }}>{isZh ? "论断层级:" : "Claim Level:"}</span>
-                      <span style={{ fontWeight: 700, color: "var(--turf-emerald)" }}>
+                      <span style={{ fontWeight: 700, color: "var(--text-emerald)" }}>
                         {isZh
                           ? `Level ${claim.claim_level || 2} (${claim.claim_level === 1 ? "纯描述性观察" : claim.claim_level === 3 ? "因果推论假设" : "公式分解"})`
                           : `Level ${claim.claim_level || 2} (${claim.claim_level === 1 ? "Pure Observation" : claim.claim_level === 3 ? "Causal Hypothesis" : "Formula Decomposition"})`}
@@ -525,7 +525,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
 
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: "var(--text-secondary)" }}>{isZh ? "SHA-256 事实绑定:" : "SHA256 Bound Facts:"}</span>
-                      <span style={{ fontFamily: "Consolas, monospace", fontSize: 11, color: "var(--tech-cyan)" }}>
+                      <span style={{ fontFamily: "Consolas, monospace", fontSize: 12, color: "var(--text-cyan)" }}>
                         {claim.snapshot_id.slice(0, 12)}...
                       </span>
                     </div>
@@ -538,7 +538,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                     <div style={{ fontSize: 12, fontWeight: 750, color: "var(--text-primary)", marginBottom: 6 }}>
                       {isZh ? "已声明的方法局限性 (Limitations)" : "Documented Methodological Limitations"}
                     </div>
-                    <ul style={{ margin: 0, paddingLeft: 18, fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                    <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
                       {claim.limitations.map((lim, i) => (
                         <li key={i}>{lim}</li>
                       ))}
@@ -548,14 +548,14 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
               </>
             ) : (
               <div style={{ textAlign: "center", padding: "40px 16px", color: "var(--text-tertiary)" }}>
-                <div style={{ fontSize: 28, marginBottom: 8 }}>🛡️</div>
+                <div style={{ fontSize: 24, marginBottom: 8 }}>🛡️</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
                   {isZh ? "未选择论断" : "No Claim Selected"}
                 </div>
                 <div style={{ fontSize: 12, marginTop: 4 }}>
                   {isZh
-                    ? "在战报与智能体研报中点击任意 AI 假设或审计卡片，即可查看 Gate 2.0 认证明细。"
-                    : "Select an AI hypothesis or audit card in Story & Agent Workbench to view Gate 2.0 verification details."}
+                    ? "在战报与智能体研报中点击任意 AI 假设或审计卡片，即可查看 Publication Gate 认证明细。"
+                    : "Select an AI hypothesis or audit card in Story & Agent Workbench to view Publication Gate verification details."}
                 </div>
               </div>
             )}
@@ -565,11 +565,11 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
         {/* Tab 4: Data Sufficiency Advisory (Track C BL-11) */}
         {activeTab === "sufficiency" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div className="glass-card" style={{ borderLeft: "3px solid var(--turf-emerald)" }}>
-              <div style={{ fontSize: 11, fontWeight: 750, color: "var(--turf-emerald)", textTransform: "uppercase" }}>
+            <div className="glass-card" style={{  }}>
+              <div style={{ fontSize: 12, fontWeight: 750, color: "var(--text-emerald)", textTransform: "uppercase" }}>
                 {isZh ? "科学数据充分性评估标识 (Track C BL-11)" : "Scientific Data Sufficiency Advisory (Track C BL-11)"}
               </div>
-              <div style={{ fontSize: 15, fontWeight: 800, marginTop: 4, color: "var(--text-primary)" }}>
+              <div style={{ fontSize: 18, fontWeight: 800, marginTop: 4, color: "var(--text-primary)" }}>
                 {isZh ? "光学追踪数据 vs 事件流边界" : "Tracking vs. Event Stream Boundary"}
               </div>
               <p style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 8, lineHeight: 1.55 }}>
@@ -581,8 +581,8 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
 
             <div className="glass-card">
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 16 }}>⏱️</span>
-                <span style={{ fontSize: 13, fontWeight: 750, color: "var(--text-primary)" }}>
+                <span style={{ fontSize: 18 }}>⏱️</span>
+                <span style={{ fontSize: 14, fontWeight: 750, color: "var(--text-primary)" }}>
                   {isZh ? "1. 6秒快速反抢时间窗口 (BL-03)" : "1. 6-Second Quick Recovery Window (BL-03)"}
                 </span>
               </div>
@@ -595,8 +595,8 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
 
             <div className="glass-card">
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 16 }}>🗺️</span>
-                <span style={{ fontSize: 13, fontWeight: 750, color: "var(--text-primary)" }}>
+                <span style={{ fontSize: 18 }}>🗺️</span>
+                <span style={{ fontSize: 14, fontWeight: 750, color: "var(--text-primary)" }}>
                   {isZh ? "2. 九宫格场区行动占比差分 ΔD(z) (BL-04)" : "2. 9-Zone Action Density Differential ΔD(z) (BL-04)"}
                 </span>
               </div>
@@ -609,8 +609,8 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
 
             <div className="glass-card">
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 16 }}>📈</span>
-                <span style={{ fontSize: 13, fontWeight: 750, color: "var(--text-primary)" }}>
+                <span style={{ fontSize: 18 }}>📈</span>
+                <span style={{ fontSize: 14, fontWeight: 750, color: "var(--text-primary)" }}>
                   {isZh ? "3. 期望威胁 (xT) 网格收缩拟合矩阵 (BL-09)" : "3. Expected Threat (xT) Grid Contraction Matrix (BL-09)"}
                 </span>
               </div>

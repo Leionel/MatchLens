@@ -64,7 +64,11 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
   const isZh = locale === "zh";
 
   const clockText = clock(state.at || 0);
-  const posValue = state.receipts?.["H.possession.current"]?.value ?? 50;
+  const rawPossession = state.receipts?.["H.possession.current"]?.value;
+  const posValue =
+    typeof rawPossession === "number" && state.receipts?.["H.possession.current"]?.status !== "unobserved"
+      ? rawPossession
+      : null;
   const activeMoment = state.active_moment;
   const selectedEvent =
     state.events?.find((e) => e.id === selectedEventId) || null;
@@ -74,13 +78,11 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
   const homeTeam = state.teams?.H || "Harbor FC";
   const awayTeam = state.teams?.N || "Northbridge United";
 
-  // Exact cumulative xG based on receipts or verified shot danger
+  // xG is shown only when a receipt actually exists. No per-shot 0.12 default.
   const receiptXgH = state.receipts?.["H.xg.cumulative"]?.value;
   const receiptXgN = state.receipts?.["N.xg.cumulative"]?.value;
-  const shotsH = state.events?.filter((e) => (e.team === "H" || e.team === homeTeam) && (e.kind === "shot" || String((e as any).action_type || "").toLowerCase().includes("shot"))) || [];
-  const shotsN = state.events?.filter((e) => (e.team === "N" || e.team === awayTeam) && (e.kind === "shot" || String((e as any).action_type || "").toLowerCase().includes("shot"))) || [];
-  const xgH = receiptXgH !== undefined ? Number(receiptXgH).toFixed(2) : (shotsH.reduce((acc, ev: any) => acc + (ev.xg ? Number(ev.xg) : 0.12), 0)).toFixed(2);
-  const xgN = receiptXgN !== undefined ? Number(receiptXgN).toFixed(2) : (shotsN.reduce((acc, ev: any) => acc + (ev.xg ? Number(ev.xg) : 0.12), 0)).toFixed(2);
+  const xgH = typeof receiptXgH === "number" ? receiptXgH.toFixed(2) : "—";
+  const xgN = typeof receiptXgN === "number" ? receiptXgN.toFixed(2) : "—";
 
   return (
     <div className="workspace-pane-fade" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -96,54 +98,32 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
           focus={state.focus}
           activeMomentBadge={activeMoment?.badge}
           possessionH={posValue}
+          officialScore={state.official_score}
+          teams={state.teams}
+          coverage={state.coverage}
+          competition={state.match_context?.competition || null}
+          season={state.match_context?.season || null}
           locale={locale}
         />
       </div>
 
-      {/* Perspective Info Pill Banner */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: "8px 16px",
-          background: "rgba(15, 23, 42, 0.7)",
-          border: "1px solid var(--glass-border)",
-          borderRadius: 8,
-          fontSize: 12,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontWeight: 800, color: "var(--turf-emerald)" }}>
-            {t.workspaceMatchCenter.toUpperCase()}
+      <div className="match-quickstats" role="group" aria-label={isZh ? "核心指标" : "Key metrics"}>
+        <span>
+          {t.possession}{" "}
+          <b>{posValue === null ? (isZh ? "未观测" : "Unknown") : `${posValue.toFixed(0)}%`}</b>
+        </span>
+        <span>
+          {isZh ? "射门" : "Shots"}{" "}
+          <b>{state.events?.filter((e) => e.kind === "shot").length || 0}</b>
+        </span>
+        <span>
+          {isZh ? "事件" : "Events"} <b>{state.events?.length || 0}</b>
+        </span>
+        {(typeof receiptXgH === "number" || typeof receiptXgN === "number") && (
+          <span>
+            xG <b>{xgH} / {xgN}</b>
           </span>
-          <span style={{ color: "var(--text-tertiary)" }}>•</span>
-          <span style={{ color: "var(--text-secondary)" }}>
-            {isZh ? "当前视角: " : "Perspective: "}
-            <b style={{ color: "var(--text-primary)", textTransform: "capitalize" }}>
-              {perspective === "coach" ? t.perspectiveCoach : perspective === "media" ? t.perspectiveMedia : t.perspectiveFan}
-            </b>{" "}
-            {perspective === "coach"
-              ? isZh ? "（聚焦通道推进率与禁区触球）" : "(Focus: Corridor Penetration & Box Entries)"
-              : perspective === "media"
-              ? isZh ? "（聚焦 OAAI 动量波峰与战术转折点）" : "(Focus: Momentum Waves & Turning Points)"
-              : isZh ? "（聚焦核心射门与球星精彩传控）" : "(Focus: Key Shots & Star Highlights)"}
-          </span>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <span style={{ color: "var(--text-secondary)" }}>
-            {t.xgEstimated}: <b style={{ color: "var(--turf-emerald)" }}>{xgH}</b> -{" "}
-            <b style={{ color: "var(--tech-cyan)" }}>{xgN}</b>
-          </span>
-          <span style={{ color: "var(--text-secondary)" }}>
-            {t.possession}: <b style={{ color: "var(--turf-emerald)" }}>{posValue}%</b> -{" "}
-            <b style={{ color: "var(--tech-cyan)" }}>{100 - posValue}%</b>
-          </span>
-          <span style={{ color: "var(--text-secondary)" }}>
-            {t.eventsLogged}: <b style={{ color: "var(--text-primary)" }}>{state.events?.length || 0}</b>
-          </span>
-        </div>
+        )}
       </div>
 
       {/* 2. OAAI Momentum Wave Chart (Full Width Card) */}
@@ -181,17 +161,8 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
         {/* Left Column: 2D Pitch Stage & Corridors */}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div className="glass-panel" style={{ padding: 14 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text-primary)" }}>
-                  {isZh ? "2D 战术球场实况" : "2D THEATER STAGE"}
-                </span>
-                <span style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, background: "rgba(16, 185, 129, 0.15)", color: "var(--turf-emerald)", fontWeight: 700 }}>
-                  {isZh ? "实时球权与动作" : "LIVE BALL & ACTIONS"}
-                </span>
-              </div>
-
-              {selectedSeq && (
+            {selectedSeq && (
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
                 <button
                   type="button"
                   onClick={() =>
@@ -202,28 +173,30 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
                     })
                   }
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 700,
                     padding: "3px 8px",
                     borderRadius: 6,
-                    background: "rgba(56, 189, 248, 0.15)",
-                    border: "1px solid rgba(56, 189, 248, 0.4)",
-                    color: "var(--tech-cyan)",
+                    background: "color-mix(in srgb, var(--cyan-9) 15%, transparent)",
+                    border: "0.5px solid color-mix(in srgb, var(--cyan-9) 40%, transparent)",
+                    color: "var(--text-cyan)",
                     cursor: "pointer",
                   }}
                 >
                   {isZh ? `在抽屉中拆解序列 ${selectedSeq.sequence_id} →` : `Inspect ${selectedSeq.sequence_id} In Drawer →`}
                 </button>
-              )}
-            </div>
+              </div>
+            )}
 
             <MatchStage
-              events={state.events}
-              selectedEvent={selectedEvent}
+              events={state.events.filter((e) => e.start && e.end) as any}
+              selectedEvent={selectedEvent as any}
               selectedSequence={selectedSeq}
               ball={state.ball}
               players={state.players}
+              teamNames={state.teams}
               clockText={clockText}
+              locale={locale}
               focusTeam={state.focus_team || "H"}
               tactical={state.tactical}
               selectedPlayerId={selectedPlayerId}
@@ -256,6 +229,8 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
           {state.highlights && state.highlights.length > 0 && (
             <HighlightLocator
               highlights={state.highlights}
+              homeTeamName={homeTeam}
+              awayTeamName={awayTeam}
               locale={locale}
               onSelectHighlight={(hl) => {
                 onSelectHighlight(hl);
@@ -273,14 +248,13 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
                 }
               }}
               selectedHighlightId={selectedHighlightId}
-              homeTeamName={homeTeam}
-              awayTeamName={awayTeam}
             />
           )}
 
           {/* Real-time Event Feed */}
           <EventFeed
-            events={state.events}
+            events={state.events.filter((e) => e.start && e.end) as any}
+            teamNames={state.teams}
             selectedId={selectedEventId}
             players={state.players}
             locale={locale}

@@ -12,17 +12,20 @@ export type FootballEvent = {
   actor_name?: string;
   receiver: string | null;
   receiver_name?: string | null;
-  start: [number, number];
-  end: [number, number];
+  start: [number, number] | null;
+  end: [number, number] | null;
+  located?: boolean;
+  coordinate_frame?: "fixed" | "team_relative";
   outcome: string;
   possession_id: number;
-  gain_m?: number;
+  gain_m?: number | null;
   xt_value?: number;
 };
 
 export type Receipt = {
   id: string;
-  value: number;
+  value: number | null;
+  status?: "ok" | "unobserved" | "not_applicable" | "missing_input";
   unit: string;
   event_ids: string[];
   definition: string;
@@ -49,6 +52,14 @@ export type Card = {
   assumptions?: string[];
   verification_method?: string;
   counterevidence_checked?: boolean;
+  gate_status?: "approved" | "disputed" | "rejected";
+  gate_version?: string;
+  gate_violations?: string[];
+  editorial_status?: "pending" | "approved" | "rejected";
+  editorial_approver?: string | null;
+  evidence_hash?: string;
+  source_run?: string;
+  published?: boolean;
 };
 
 export type Audit = {
@@ -176,10 +187,25 @@ export type CockpitState = {
   teams?: { H?: string; N?: string };
   match_context?: any;
   score: { H: number; N: number };
+  score_basis?: "observed_prefix" | "official_final";
+  official_score?: { H: number | null; N: number | null } | null;
+  coverage?: {
+    format_seconds: number;
+    observed_start: number | null;
+    observed_end: number | null;
+    controlled_seconds: number;
+    unobserved_seconds: number;
+    continuous: boolean;
+    time_coverage: number;
+    event_coverage: number | null;
+    event_coverage_status: "complete" | "unknown";
+    event_count: number;
+    score_status: string;
+  };
   paused: boolean;
   speed: number;
   focus: string | null;
-  ball: [number, number];
+  ball: [number, number] | null;
   events: FootballEvent[];
   receipts: Record<string, Receipt>;
   sequences?: PossessionSequence[];
@@ -212,6 +238,7 @@ export type CockpitState = {
   format_seconds?: number;
   match_id?: string;
   session_analyses_remaining: number;
+  moments_scan_truncated?: boolean;
 };
 
 export type InspectorPayload = {

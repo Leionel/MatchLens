@@ -42,12 +42,12 @@ export const HighlightLocator: React.FC<HighlightLocatorProps> = ({
     return (
       <div
         style={{
-          background: "rgba(15, 23, 42, 0.7)",
-          border: "1px solid var(--glass-border)",
-          borderRadius: "14px",
+          background: "color-mix(in srgb, var(--slate-1) 70%, transparent)",
+          border: "0.5px solid var(--glass-border)",
+          borderRadius: "var(--radius-panel)",
           padding: "20px",
           color: "var(--text-tertiary)",
-          fontSize: "13px",
+          fontSize: "14px",
           textAlign: "center",
         }}
       >
@@ -59,11 +59,11 @@ export const HighlightLocator: React.FC<HighlightLocatorProps> = ({
   return (
     <div
       style={{
-        background: "rgba(15, 23, 42, 0.75)",
-        border: "1px solid var(--glass-border)",
-        borderRadius: "14px",
+        background: "color-mix(in srgb, var(--slate-1) 75%, transparent)",
+        border: "0.5px solid var(--glass-border)",
+        borderRadius: "var(--radius-panel)",
         padding: "18px 20px",
-        boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5)",
+        boxShadow: "none",
         backdropFilter: "blur(12px)",
         display: "flex",
         flexDirection: "column",
@@ -74,33 +74,7 @@ export const HighlightLocator: React.FC<HighlightLocatorProps> = ({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 800,
-                padding: "2px 6px",
-                borderRadius: 4,
-                background: "rgba(16, 185, 129, 0.15)",
-                color: "var(--turf-emerald)",
-                border: "1px solid rgba(16, 185, 129, 0.3)",
-              }}
-            >
-              BL-12 · HIGHLIGHT LOCATOR
-            </span>
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 800,
-                padding: "2px 6px",
-                borderRadius: 4,
-                background: "rgba(168, 85, 247, 0.15)",
-                color: "#c084fc",
-                border: "1px solid rgba(168, 85, 247, 0.3)",
-              }}
-            >
-              WAVE INDEX
-            </span>
-            <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>
               {t.highlightLocatorTitle}
             </h3>
           </div>
@@ -111,14 +85,14 @@ export const HighlightLocator: React.FC<HighlightLocatorProps> = ({
 
         <span
           style={{
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: 700,
             fontFamily: "monospace",
             color: "var(--text-secondary)",
-            background: "rgba(255, 255, 255, 0.05)",
+            background: "color-mix(in srgb, var(--slate-12) 5%, transparent)",
             padding: "3px 8px",
             borderRadius: 6,
-            border: "1px solid rgba(255, 255, 255, 0.08)",
+            border: "0.5px solid color-mix(in srgb, var(--slate-12) 8%, transparent)",
           }}
         >
           {highlights.length} {isZh ? "个波次" : "surges detected"}
@@ -143,20 +117,20 @@ export const HighlightLocator: React.FC<HighlightLocatorProps> = ({
           const isHome = hl.team === "H";
           const teamLabel = isHome ? homeTeamName : awayTeamName;
 
-          let badgeBg = "rgba(56, 189, 248, 0.15)";
+          let badgeBg = "color-mix(in srgb, var(--cyan-9) 15%, transparent)";
           let badgeColor = "var(--tech-cyan)";
-          let badgeBorder = "rgba(56, 189, 248, 0.3)";
+          let badgeBorder = "color-mix(in srgb, var(--cyan-9) 30%, transparent)";
           let catLabel = t.waveCategorySurge;
 
           if (isGoal) {
-            badgeBg = "rgba(16, 185, 129, 0.2)";
+            badgeBg = "color-mix(in srgb, var(--green-9) 20%, transparent)";
             badgeColor = "var(--turf-emerald)";
-            badgeBorder = "rgba(16, 185, 129, 0.4)";
+            badgeBorder = "color-mix(in srgb, var(--green-9) 40%, transparent)";
             catLabel = t.waveCategoryGoal;
           } else if (isShot) {
-            badgeBg = "rgba(245, 158, 11, 0.2)";
+            badgeBg = "color-mix(in srgb, var(--amber-9) 20%, transparent)";
             badgeColor = "var(--amber-gold)";
-            badgeBorder = "rgba(245, 158, 11, 0.4)";
+            badgeBorder = "color-mix(in srgb, var(--amber-9) 40%, transparent)";
             catLabel = t.waveCategoryShot;
           }
 
@@ -173,16 +147,16 @@ export const HighlightLocator: React.FC<HighlightLocatorProps> = ({
                 justifyContent: "space-between",
                 gap: 10,
                 padding: "14px",
-                borderRadius: "12px",
+                borderRadius: "var(--radius-panel)",
                 cursor: "pointer",
                 background: isSelected
-                  ? "rgba(16, 185, 129, 0.12)"
-                  : "rgba(11, 15, 25, 0.7)",
+                  ? "color-mix(in srgb, var(--green-9) 12%, transparent)"
+                  : "color-mix(in srgb, var(--slate-1) 70%, transparent)",
                 border: isSelected
-                  ? "1px solid var(--turf-emerald)"
-                  : "1px solid rgba(255, 255, 255, 0.08)",
-                boxShadow: isSelected ? "0 0 16px rgba(16, 185, 129, 0.25)" : "none",
-                transition: "all 0.2s ease",
+                  ? "0.5px solid var(--turf-emerald)"
+                  : "0.5px solid color-mix(in srgb, var(--slate-12) 8%, transparent)",
+                boxShadow: isSelected ? "0 0 16px color-mix(in srgb, var(--green-9) 25%, transparent)" : "none",
+                transition: "none",
               }}
             >
               {/* Row 1: Category Badge, Time span & Impact Score */}
@@ -190,13 +164,13 @@ export const HighlightLocator: React.FC<HighlightLocatorProps> = ({
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <span
                     style={{
-                      fontSize: 10,
+                      fontSize: 12,
                       fontWeight: 800,
                       padding: "2px 6px",
                       borderRadius: 4,
                       background: badgeBg,
                       color: badgeColor,
-                      border: `1px solid ${badgeBorder}`,
+                      border: `0.5px solid ${badgeBorder}`,
                       letterSpacing: "0.3px",
                     }}
                   >
@@ -204,10 +178,10 @@ export const HighlightLocator: React.FC<HighlightLocatorProps> = ({
                   </span>
                   <span
                     style={{
-                      fontSize: 11,
+                      fontSize: 12,
                       fontFamily: "monospace",
                       color: "var(--text-secondary)",
-                      background: "rgba(255, 255, 255, 0.04)",
+                      background: "color-mix(in srgb, var(--slate-12) 4%, transparent)",
                       padding: "2px 6px",
                       borderRadius: 4,
                     }}
@@ -218,13 +192,13 @@ export const HighlightLocator: React.FC<HighlightLocatorProps> = ({
 
                 <span
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 800,
-                    color: "var(--amber-gold)",
-                    background: "rgba(245, 158, 11, 0.15)",
+                    color: "var(--text-gold)",
+                    background: "color-mix(in srgb, var(--amber-9) 15%, transparent)",
                     padding: "2px 7px",
                     borderRadius: 5,
-                    border: "1px solid rgba(245, 158, 11, 0.3)",
+                    border: "0.5px solid color-mix(in srgb, var(--amber-9) 30%, transparent)",
                   }}
                 >
                   ★ {hl.impact_score.toFixed(1)}
@@ -233,10 +207,10 @@ export const HighlightLocator: React.FC<HighlightLocatorProps> = ({
 
               {/* Row 2: Title & Narrative */}
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", marginBottom: 3 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", marginBottom: 3 }}>
                   {hl.title}
                 </div>
-                <div style={{ fontSize: 11, color: "var(--text-tertiary)", lineHeight: 1.5 }}>
+                <div style={{ fontSize: 12, color: "var(--text-tertiary)", lineHeight: 1.5 }}>
                   {hl.description}
                 </div>
               </div>
@@ -248,12 +222,12 @@ export const HighlightLocator: React.FC<HighlightLocatorProps> = ({
                   justifyContent: "space-between",
                   alignItems: "center",
                   paddingTop: 8,
-                  borderTop: "1px solid rgba(255, 255, 255, 0.06)",
+                  borderTop: "0.5px solid color-mix(in srgb, var(--slate-12) 6%, transparent)",
                 }}
               >
                 <span
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 600,
                     color: isHome ? "var(--turf-emerald)" : "var(--tech-cyan)",
                   }}
@@ -266,12 +240,12 @@ export const HighlightLocator: React.FC<HighlightLocatorProps> = ({
                   style={{
                     minHeight: "auto",
                     padding: "3px 10px",
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 700,
                     borderRadius: 6,
-                    background: isSelected ? "var(--turf-emerald)" : "rgba(56, 189, 248, 0.15)",
-                    color: isSelected ? "#052e16" : "var(--tech-cyan)",
-                    border: isSelected ? "none" : "1px solid rgba(56, 189, 248, 0.3)",
+                    background: isSelected ? "var(--turf-emerald)" : "color-mix(in srgb, var(--cyan-9) 15%, transparent)",
+                    color: isSelected ? "var(--green-3)" : "var(--tech-cyan)",
+                    border: isSelected ? "none" : "0.5px solid color-mix(in srgb, var(--cyan-9) 30%, transparent)",
                     cursor: "pointer",
                   }}
                 >

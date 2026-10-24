@@ -53,12 +53,12 @@ export const ActionDensityDifferential: React.FC<ActionDensityDifferentialProps>
     return (
       <div
         style={{
-          background: "rgba(15, 23, 42, 0.7)",
-          border: "1px solid var(--glass-border)",
-          borderRadius: "14px",
+          background: "color-mix(in srgb, var(--slate-1) 70%, transparent)",
+          border: "0.5px solid var(--glass-border)",
+          borderRadius: "var(--radius-panel)",
           padding: "20px",
           color: "var(--text-tertiary)",
-          fontSize: "13px",
+          fontSize: "14px",
           textAlign: "center",
         }}
       >
@@ -70,11 +70,11 @@ export const ActionDensityDifferential: React.FC<ActionDensityDifferentialProps>
   return (
     <div
       style={{
-        background: "rgba(15, 23, 42, 0.75)",
-        border: "1px solid var(--glass-border)",
-        borderRadius: "14px",
+        background: "color-mix(in srgb, var(--slate-1) 75%, transparent)",
+        border: "0.5px solid var(--glass-border)",
+        borderRadius: "var(--radius-panel)",
         padding: "18px 20px",
-        boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5)",
+        boxShadow: "none",
         backdropFilter: "blur(12px)",
         display: "flex",
         flexDirection: "column",
@@ -87,31 +87,18 @@ export const ActionDensityDifferential: React.FC<ActionDensityDifferentialProps>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span
               style={{
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: 800,
                 padding: "2px 6px",
                 borderRadius: 4,
-                background: "rgba(16, 185, 129, 0.15)",
-                color: "var(--turf-emerald)",
-                border: "1px solid rgba(16, 185, 129, 0.3)",
+                background: "color-mix(in srgb, var(--green-9) 15%, transparent)",
+                color: "var(--text-emerald)",
+                border: "0.5px solid color-mix(in srgb, var(--green-9) 30%, transparent)",
               }}
             >
-              BL-04 · DENSITY ΔD(z)
+              BL-04 DENSITY ΔD(z)
             </span>
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 800,
-                padding: "2px 6px",
-                borderRadius: 4,
-                background: "rgba(56, 189, 248, 0.15)",
-                color: "var(--tech-cyan)",
-                border: "1px solid rgba(56, 189, 248, 0.3)",
-              }}
-            >
-              LEVEL 1 OBSERVED
-            </span>
-            <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>
               {t.densityTitle}
             </h3>
           </div>
@@ -121,25 +108,25 @@ export const ActionDensityDifferential: React.FC<ActionDensityDifferentialProps>
         </div>
 
         {/* Legend */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
-          <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--turf-emerald)", fontWeight: 700 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--text-emerald)", fontWeight: 700 }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--turf-emerald)" }} />
             {homeTeamName} (+)
           </span>
-          <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--tech-cyan)", fontWeight: 700 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--text-cyan)", fontWeight: 700 }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--tech-cyan)" }} />
             {awayTeamName} (-)
           </span>
           {data.overlap_zones_count > 0 && (
             <span
               style={{
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: 700,
-                background: "rgba(245, 158, 11, 0.15)",
-                color: "var(--amber-gold)",
+                background: "color-mix(in srgb, var(--amber-9) 15%, transparent)",
+                color: "var(--text-gold)",
                 padding: "2px 6px",
                 borderRadius: 4,
-                border: "1px solid rgba(245, 158, 11, 0.3)",
+                border: "0.5px solid color-mix(in srgb, var(--amber-9) 30%, transparent)",
               }}
             >
               {data.overlap_zones_count} {t.overlapZonesCount}
@@ -154,10 +141,10 @@ export const ActionDensityDifferential: React.FC<ActionDensityDifferentialProps>
           display: "grid",
           gridTemplateColumns: "repeat(3, 1fr)",
           gap: "8px",
-          background: "rgba(5, 10, 20, 0.6)",
+          background: "color-mix(in srgb, var(--slate-1) 60%, transparent)",
           padding: "10px",
-          borderRadius: "12px",
-          border: "1px solid rgba(255, 255, 255, 0.06)",
+          borderRadius: "var(--radius-panel)",
+          border: "0.5px solid color-mix(in srgb, var(--slate-12) 6%, transparent)",
         }}
       >
         {data.zones.map((zone) => {
@@ -166,23 +153,23 @@ export const ActionDensityDifferential: React.FC<ActionDensityDifferentialProps>
           const isAwayAdv = zone.advantage === "away";
           const diffPct = zone.delta_density_pct;
 
-          let cellBorder = "rgba(255, 255, 255, 0.06)";
-          let cellBg = "rgba(15, 23, 42, 0.5)";
+          let cellBorder = "color-mix(in srgb, var(--slate-12) 6%, transparent)";
+          let cellBg = "color-mix(in srgb, var(--slate-1) 50%, transparent)";
           let accentColor = "var(--text-tertiary)";
 
           if (isHomeAdv) {
-            cellBg = "rgba(16, 185, 129, 0.08)";
-            cellBorder = "rgba(16, 185, 129, 0.25)";
+            cellBg = "color-mix(in srgb, var(--green-9) 8%, transparent)";
+            cellBorder = "color-mix(in srgb, var(--green-9) 25%, transparent)";
             accentColor = "var(--turf-emerald)";
           } else if (isAwayAdv) {
-            cellBg = "rgba(56, 189, 248, 0.08)";
-            cellBorder = "rgba(56, 189, 248, 0.25)";
+            cellBg = "color-mix(in srgb, var(--cyan-9) 8%, transparent)";
+            cellBorder = "color-mix(in srgb, var(--cyan-9) 25%, transparent)";
             accentColor = "var(--tech-cyan)";
           }
 
           if (isSelected) {
             cellBorder = "var(--turf-emerald)";
-            cellBg = "rgba(16, 185, 129, 0.16)";
+            cellBg = "color-mix(in srgb, var(--green-9) 16%, transparent)";
           }
 
           const homeShare = Math.round(zone.home_action_share * 100);
@@ -201,24 +188,24 @@ export const ActionDensityDifferential: React.FC<ActionDensityDifferentialProps>
                 borderRadius: "8px",
                 cursor: "pointer",
                 background: cellBg,
-                border: `1px solid ${cellBorder}`,
-                boxShadow: isSelected ? "0 0 12px rgba(16, 185, 129, 0.3)" : "none",
-                transition: "all 0.15s ease",
+                border: `0.5px solid ${cellBorder}`,
+                boxShadow: isSelected ? "0 0 12px color-mix(in srgb, var(--green-9) 30%, transparent)" : "none",
+                transition: "none",
               }}
             >
               {/* Zone Top: Name & Overlap Badge */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>
                   {zone.name}
                 </span>
 
                 {zone.is_high_density_overlap && (
                   <span
                     style={{
-                      fontSize: 9,
+                      fontSize: 12,
                       fontWeight: 800,
-                      color: "var(--amber-gold)",
-                      background: "rgba(245, 158, 11, 0.2)",
+                      color: "var(--text-gold)",
+                      background: "color-mix(in srgb, var(--amber-9) 20%, transparent)",
                       padding: "1px 4px",
                       borderRadius: 3,
                     }}
@@ -231,7 +218,7 @@ export const ActionDensityDifferential: React.FC<ActionDensityDifferentialProps>
 
               {/* Delta Density Value */}
               <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>ΔD:</span>
+                <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>ΔD:</span>
                 <span
                   style={{
                     fontSize: 14,
@@ -246,11 +233,11 @@ export const ActionDensityDifferential: React.FC<ActionDensityDifferentialProps>
 
               {/* Share Compare Bar */}
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--text-tertiary)", marginBottom: 2 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-tertiary)", marginBottom: 2 }}>
                   <span>HAR {homeShare}% ({zone.home_actions_count})</span>
                   <span>NOR {awayShare}% ({zone.away_actions_count})</span>
                 </div>
-                <div style={{ width: "100%", height: 4, background: "rgba(255, 255, 255, 0.08)", borderRadius: 2, display: "flex", overflow: "hidden" }}>
+                <div style={{ width: "100%", height: 4, background: "color-mix(in srgb, var(--slate-12) 8%, transparent)", borderRadius: 2, display: "flex", overflow: "hidden" }}>
                   <div style={{ width: `${homeShare}%`, height: "100%", background: "var(--turf-emerald)" }} />
                   <div style={{ width: `${awayShare}%`, height: "100%", background: "var(--tech-cyan)" }} />
                 </div>

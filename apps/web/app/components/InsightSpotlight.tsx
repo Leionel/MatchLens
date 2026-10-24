@@ -57,7 +57,7 @@ type Moment = {
 
 type Receipt = {
   id: string;
-  value: number;
+  value: number | null;
   unit: string;
 };
 
@@ -131,9 +131,7 @@ export function InsightSpotlight({
     <section className={`insight-spotlight-panel ${card ? "has-insight" : ""}`} aria-labelledby="spotlight-heading">
       <div className="spotlight-top-strip">
         <div className="spotlight-title-group">
-          <span className="live-ai-badge">
-            {isZh ? "MATCHLENS R2 · 交互式战术研究工作台" : "MATCHLENS R2 · INTERACTIVE RESEARCH WORKBENCH"}
-          </span>
+
           <h2 id="spotlight-heading" className="spotlight-main-heading">
             {isZh ? "战术智能洞察" : "Tactical intelligence"}
           </h2>
@@ -148,35 +146,35 @@ export function InsightSpotlight({
           className={`workbench-tab ${activeTab === "insight" ? "active" : ""}`}
           onClick={() => setActiveTab("insight")}
         >
-          {isZh ? "✨ 认证洞察" : "✨ Verified Insight"}
+          {isZh ? "洞察" : "Insight"}
         </button>
         <button
           type="button"
           className={`workbench-tab ${activeTab === "hypotheses" ? "active" : ""}`}
           onClick={() => setActiveTab("hypotheses")}
         >
-          {isZh ? "🧪 假设实验室" : "🧪 Hypothesis Lab"}
+          {isZh ? "假设" : "Hypotheses"}
         </button>
         <button
           type="button"
           className={`workbench-tab ${activeTab === "ask" ? "active" : ""}`}
           onClick={() => setActiveTab("ask")}
         >
-          {isZh ? "💬 战术对话" : "💬 Ask the Match"}
+          {isZh ? "提问" : "Ask"}
         </button>
         <button
           type="button"
           className={`workbench-tab ${activeTab === "timeline" ? "active" : ""}`}
           onClick={() => setActiveTab("timeline")}
         >
-          {isZh ? `📜 迭代修订 ${revisions.length > 0 ? `(${revisions.length})` : ""}` : `📜 Revisions ${revisions.length > 0 ? `(${revisions.length})` : ""}`}
+          {isZh ? `修订 ${revisions.length > 0 ? `(${revisions.length})` : ""}` : `Revisions ${revisions.length > 0 ? `(${revisions.length})` : ""}`}
         </button>
         <button
           type="button"
           className={`workbench-tab ${activeTab === "flow" ? "active" : ""}`}
           onClick={() => setActiveTab("flow")}
         >
-          {isZh ? "🤖 智能体流水线" : "🤖 Agent Pipeline"}
+          {isZh ? "流水线" : "Pipeline"}
         </button>
       </div>
 
@@ -194,12 +192,12 @@ export function InsightSpotlight({
               </span>
             </div>
             <h3 className="candidate-title">
-              {activeChapter?.question || activeMoment?.question || "A match full of questions. Find the evidence."}
+              {activeChapter?.question || activeMoment?.question || "No moment selected yet."}
             </h3>
             <p className="candidate-desc">
               {activeMoment?.summary ||
                 activeChapter?.title ||
-                "Press Play Replay. We'll detect changes in possession, attacking activity and scoring moves as the match unfolds."}
+                "Press play to detect possession and attacking changes."}
             </p>
           </div>
 
@@ -264,8 +262,8 @@ export function InsightSpotlight({
                   </span>
                 </div>
                 <div className="seal-provenance">
-                  <span>{result?.reused ? "Historical real analysis" : "Real model analysis"} · As of {clock(card.as_of)}</span>
-                  <span className="dot-sep">·</span>
+                  <span>{result?.reused ? "Historical real analysis" : "Real model analysis"} As of {clock(card.as_of)}</span>
+                  <span className="dot-sep"></span>
                   <span>Scope: {card.scope.toUpperCase()}</span>
                 </div>
               </div>
@@ -348,7 +346,7 @@ export function InsightSpotlight({
                 The review or factual publication checks did not approve this explanation. Inspect the recorded statistics and events instead.
               </p>
               {mode === "analyst" && (
-                <p className="action-hint">{result?.rejected.map((r) => r.gate || r.verdict).join(" · ")}</p>
+                <p className="action-hint">{result?.rejected.map((r) => r.gate || r.verdict).join(" ")}</p>
               )}
               <button type="button" onClick={() => snapshotId && onChallenge("H.shots.current", snapshotId)}>
                 Inspect source evidence
@@ -380,7 +378,7 @@ export function InsightSpotlight({
                     : autoStatus === "budget_limited"
                       ? "Automatic analysis paused: insufficient whole-workflow allowance."
                       : "Automatic detection is free. Live analysis is enabled by the host."
-                  : "Model unavailable · Automatic detection and source evidence remain available."}
+                  : "Model unavailable Automatic detection and source evidence remain available."}
               </span>
             </div>
           )}

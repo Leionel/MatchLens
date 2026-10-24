@@ -36,7 +36,7 @@ export function MatchRecap({ score, history, locale = "zh", onInspect }: MatchRe
       <div className="recap-header">
         <div className="recap-tag-group">
           <span className="recap-badge">
-            {isZh ? "全场终局 · 认证事实研报" : "FULL-TIME · APPROVED FINDINGS"}
+            {isZh ? "全场终局 认证事实研报" : "FULL-TIME APPROVED FINDINGS"}
           </span>
           <span className="final-score-pill">
             Harbor FC {score.H} – {score.N} Northbridge United
@@ -47,7 +47,7 @@ export function MatchRecap({ score, history, locale = "zh", onInspect }: MatchRe
         </h2>
         <p className="recap-intro">
           {isZh
-            ? "回顾各个时刻经由 Gate 2.0 门禁严苛认证的战术论断。每条论断均可一键回溯至对应时刻的确定性事件序列与数学收据。"
+            ? "回顾各个时刻经由 Publication Gate 门禁严苛认证的战术论断。每条论断均可一键回溯至对应时刻的确定性事件序列与数学收据。"
             : "Revisit approved findings at their original analysis times. Each opens the exact events and metrics used in its review."}
         </p>
       </div>
@@ -69,7 +69,7 @@ export function MatchRecap({ score, history, locale = "zh", onInspect }: MatchRe
                   {item.verdict === "qualify" ? (isZh ? "限制合格" : "QUALIFIED") : (isZh ? "核验通过" : "VERIFIED")}
                 </span>
                 <span className="milestone-assertion">
-                  {item.historical ? (isZh ? "历史真实分析 · " : "HISTORICAL REAL ANALYSIS · ") : ""}{item.assertion.replaceAll("_", " ").toUpperCase()}
+                  {item.historical ? (isZh ? "历史真实分析 " : "HISTORICAL REAL ANALYSIS ") : ""}{item.assertion.replaceAll("_", " ").toUpperCase()}
                 </span>
               </div>
               <p className="milestone-fan-text">{item.fan}</p>

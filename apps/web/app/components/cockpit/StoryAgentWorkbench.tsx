@@ -46,12 +46,6 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
   const [showTrace, setShowTrace] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
 
-  // Content Approval State for Track D Match Story
-  const [approvedClaimIds, setApprovedClaimIds] = useState<Record<string, boolean>>({
-    "claim_1": true,
-    "claim_box_prog": true,
-  });
-
   const [copiedNotification, setCopiedNotification] = useState("");
   const [backendStory, setBackendStory] = useState<any>(null);
   const [backendAttribution, setBackendAttribution] = useState<any>(null);
@@ -106,6 +100,39 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
     ...(result?.accepted || []),
     ...(state.history || []),
   ].filter((c, idx, arr) => arr.findIndex((x) => x.claim_id === c.claim_id) === idx);
+
+  // Registry-backed story claims are the only source of approval truth.
+  const storyClaims: Card[] = (backendStory?.claims || []).map((c: any) => ({
+    claim_id: c.claim_id,
+    assertion: c.assertion,
+    verdict: c.gate_status,
+    fan: "",
+    analyst: c.statement || "",
+    refs: c.evidence_scope?.metric_ids || [],
+    scope: "match",
+    reason: (c.gate_violations || []).join("; "),
+    limitations: [],
+    snapshot_id: backendStory?.snapshot_id || "",
+    as_of: c.as_of || 0,
+    claim_level: c.claim_level,
+    gate_status: c.gate_status,
+    gate_version: c.gate_version,
+    gate_violations: c.gate_violations || [],
+    editorial_status: c.editorial_status || "pending",
+    editorial_approver: c.editorial_approver || null,
+    evidence_hash: c.evidence_hash,
+    source_run: c.source_run,
+    published: Boolean(c.gate_status === "approved" && c.editorial_status === "approved"),
+  }));
+  const claimLabel: Record<string, string> = {
+    goal_sequence: isZh ? "进球序列" : "Scoring sequence",
+    possession_without_penetration: isZh ? "控球未转化为渗透" : "Possession without penetration",
+    attacking_threat_increased: isZh ? "进攻威胁上升" : "Attacking threat increased",
+    recoveries_followed_by_shots: isZh ? "夺回球权后射门" : "Recovery to shot",
+    recoveries_caused_shots: isZh ? "夺回球权导致射门" : "Recovery caused shot",
+  };
+  const storyGateVerified = storyClaims.filter((c) => c.gate_status === "approved").length;
+  const storyEditorial = storyClaims.filter((c) => c.published).length;
 
   // Dynamic Contributing Actions from backend attribution or real sequences / events
   const dynamicContributingActions = React.useMemo<Array<{
@@ -249,7 +276,7 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
         step: `T-0s`,
         desc: isZh
           ? `快照截面锁定，生成验证凭据并提交门禁`
-          : `Snapshot frozen at ${clock(at)}, receipts certified by Gate 2.0`,
+          : `Snapshot frozen at ${clock(at)}, receipts certified by Publication Gate`,
         link: isZh ? "进攻拐点" : "Inflection",
       },
     ];
@@ -272,66 +299,46 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
     return null;
   }, [backendAttribution, state.hypotheses_matrix]);
 
-  // Dynamic Chapters from state.chapters and real events
+  // Story chapters come from the registry-backed backend story. The local
+  // event count is only a fallback when no story has been loaded yet.
   const dynamicChapters = React.useMemo(() => {
-    if (state.chapters && state.chapters.length > 0) {
-      return state.chapters.map((ch, idx) => {
-        const startSec = idx === 0 ? 0 : state.chapters[idx - 1].at;
-        const endSec = ch.at;
-        const eventsInWindow = (state.events || []).filter((e) => e.t >= startSec && e.t <= endSec);
-        const passCount = eventsInWindow.filter((e) => e.kind === "pass").length;
-        const shotCount = eventsInWindow.filter((e) => e.kind === "shot").length;
-        const recCount = eventsInWindow.filter((e) => e.kind === "recovery").length;
-        const hEvents = eventsInWindow.filter((e) => e.team === "H").length;
-        const nEvents = eventsInWindow.filter((e) => e.team === "N").length;
-        const dominantTeam = hEvents >= nEvents ? homeTeam : awayTeam;
-
-        return {
-          id: `ch_${ch.id}`,
-          title: ch.title || (isZh ? `阶段 ${ch.id}: ${ch.question || "战术演变"}` : `Phase ${ch.id}: Tactical Development`),
-          time: `${clock(startSec)} – ${clock(endSec)}`,
-          narrative: isZh
-            ? `${dominantTeam} 在该时段展现更活跃的战术控制，共记录 ${eventsInWindow.length} 次触球动作 (传球 ${passCount} 次，反抢 ${recCount} 次，射门 ${shotCount} 次)。`
-            : `${dominantTeam} demonstrated territorial initiative, logging ${eventsInWindow.length} on-ball events (${passCount} passes, ${recCount} recoveries, ${shotCount} shots).`,
-          stat: isZh
-            ? `比分 ${state.score.H}–${state.score.N} · 射门 ${shotCount} · 传球 ${passCount} · 反抢 ${recCount}`
-            : `Score ${state.score.H}–${state.score.N} · ${shotCount} Shots · ${passCount} Passes · ${recCount} Recoveries`,
-        };
-      });
+    if (backendStory?.chapters?.length) {
+      return backendStory.chapters.map((ch: any, idx: number) => ({
+        id: ch.chapter_id || `ch_${idx}`,
+        title: ch.title || `${ch.minute_span} recorded events`,
+        time: ch.minute_span,
+        narrative: ch.narrative,
+        stat: `${isZh ? "OAAI 趋势" : "OAAI trend"}: ${ch.oaai_trend}${ch.dominant_team && ch.dominant_team !== "NONE" ? `, ${isZh ? "主导" : "dominant"}: ${ch.dominant_team}` : ""}, ${isZh ? "事件" : "events"}: ${(ch.supporting_event_ids || []).length}`,
+        eventIds: ch.supporting_event_ids || [],
+      }));
     }
     return [];
-  }, [state.chapters, state.events, state.score, isZh, homeTeam, awayTeam]);
+  }, [backendStory, isZh]);
 
-  // Generate Match Story text
+  // Generate Match Story text from the registry-backed story.
   const generateStoryMarkdown = () => {
-    if (backendStory?.markdown_export) {
-      return backendStory.markdown_export;
+    if (backendStory) {
+      const lines = [
+        `# ${backendStory.headline}`,
+        `*${backendStory.subtitle}*`,
+        `**Match**: ${homeTeam} vs ${awayTeam}`,
+        `**Snapshot**: ${backendStory.snapshot_id} at ${clock(backendStory.as_of || state.at || 0)}`,
+        `**Approval**: ${backendStory.approval_status}`,
+        "",
+        "---",
+        "",
+      ];
+      (backendStory.chapters || []).forEach((ch: any) => {
+        lines.push(`### ${ch.minute_span} — ${ch.title}`);
+        lines.push(ch.narrative);
+        lines.push(`*Gate-verified claims*: ${(ch.verified_claim_refs || []).join(", ") || "None"}`);
+        lines.push("");
+      });
+      lines.push("---");
+      lines.push(`**Verdict**: ${backendStory.summary_verdict}`);
+      return lines.join("\n");
     }
-    const verifiedClaims = allClaims.filter(
-      (c) => approvedClaimIds[c.claim_id] !== false && (c.verdict === "publish" || c.verdict === "qualify")
-    );
-
-    return `# MATCHLENS AI MATCH STORY REPORT
-**Match**: ${homeTeam} (${state.score.H}) vs ${awayTeam} (${state.score.N})
-**Snapshot**: ${state.snapshot_id || "live-stream"} (at ${clockText})
-**Generated by**: Tri-Agent Deliberation Pipeline (Analyst + Event Attribution + Verifier)
-**Publication Gate**: Gate 2.0 Deterministic Verification (SHA256 Bound)
-
----
-
-## Executive Summary
-${backendStory?.executive_summary || card?.assertion || `${homeTeam} exerted high territorial dominance through half-space penetration and rapid 6-second quick recoveries.`}
-
-### Verified Tactical Claims (${verifiedClaims.length} Approved):
-${verifiedClaims
-  .map(
-    (c, i) =>
-      `${i + 1}. **[Level ${c.claim_level || 2} · ${c.verdict.toUpperCase()}]** ${c.assertion}\n   - *Analyst Context*: ${c.reason || c.analyst}\n   - *Verifiable Receipts*: ${c.refs?.join(", ") || "N/A"}`
-  )
-  .join("\n\n")}
-
----
-*Report certified by MatchLens Gate 2.0 Engine. All statistics backed by deterministic event receipts.*`;
+    return "# Match summary\n\nNo gate-approved claims are registered for this snapshot. Only recorded event counts are shown.";
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -349,32 +356,32 @@ ${verifiedClaims
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 18 }}>🤖</span>
+              
               <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>
                 {t.pipelineTitle}
               </span>
               <span
                 style={{
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: 800,
                   padding: "2px 7px",
                   borderRadius: 6,
-                  background: "rgba(168, 85, 247, 0.18)",
-                  border: "1px solid rgba(168, 85, 247, 0.4)",
-                  color: "var(--agent-violet)",
+                  background: "color-mix(in srgb, var(--violet-9) 18%, transparent)",
+                  border: "0.5px solid color-mix(in srgb, var(--violet-9) 40%, transparent)",
+                  color: "var(--violet-11)",
                 }}
               >
-                {t.specialistActiveBadge}
+                {isZh ? "2 AGENTS + TOOLS" : "2 AGENTS + TOOLS"}
               </span>
             </div>
-            <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 2 }}>
               {t.pipelineSubtitle}
             </div>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {copiedNotification && (
-              <span style={{ fontSize: 11, color: "var(--turf-emerald)", fontWeight: 700 }}>
+              <span style={{ fontSize: 12, color: "var(--text-emerald)", fontWeight: 700 }}>
                 {copiedNotification}
               </span>
             )}
@@ -388,10 +395,10 @@ ${verifiedClaims
                 padding: "6px 14px",
                 borderRadius: 8,
                 background: "var(--turf-emerald)",
-                color: "#0b0f19",
+                color: "var(--slate-1)",
                 border: "none",
                 cursor: "pointer",
-                boxShadow: "var(--shadow-glow-emerald)",
+                boxShadow: "none",
               }}
             >
               {pending ? t.deliberatingState : t.runDeliberationBtn}
@@ -430,35 +437,36 @@ ${verifiedClaims
 
           <div className="collab-step-arrow">→</div>
 
-          {/* Stage 2: Event Attribution Specialist (Track C Third Agent) */}
+          {/* Stage 2: deterministic tool layer (not an agent) */}
           <div
             className={`collab-step-card ${
               pending ? "active" : result ? "completed" : ""
             }`}
             style={{
-              borderColor: "rgba(168, 85, 247, 0.4)",
-              background: "rgba(168, 85, 247, 0.06)",
+              borderColor: "color-mix(in srgb, var(--violet-9) 40%, transparent)",
+              background: "color-mix(in srgb, var(--violet-9) 6%, transparent)",
             }}
           >
             <div
               className="step-num-badge"
-              style={{ background: "var(--agent-violet)", color: "#fff" }}
+              style={{ background: "var(--agent-violet)", color: "var(--white)" }}
             >
               2
             </div>
             <div className="step-card-header">
-              <span className="step-agent-name" style={{ color: "var(--agent-violet)" }}>
-                {t.stage2Name}
+              <span className="step-agent-name" style={{ color: "var(--violet-11)" }}>
+                {isZh ? "确定性归因工具" : "Deterministic tools"}
               </span>
-              <span className="step-agent-role">{t.stage2Role}</span>
+              <span className="step-agent-role">{isZh ? "非智能体 不调用模型" : "Not an agent, no model call"}</span>
             </div>
             <p className="step-desc">
-              {t.stage2Desc}
+              {isZh
+                ? "decompose_window / query_causal_chain / assess_alternative_hypotheses 由两位智能体按需调用；工具本身不做推理或生成观点。"
+                : "decompose_window / query_causal_chain / assess_alternative_hypotheses are called by both agents; the tools do not reason or generate claims."}
             </p>
             <div className="step-foot-stats">
               <span>{isZh ? "工具:" : "Tool:"} <code>TemporalDecomp</code></span>
-              <span style={{ color: "var(--agent-violet)", fontWeight: 700 }}>TRACK C</span>
-            </div>
+              </div>
           </div>
 
           <div className="collab-step-arrow">→</div>
@@ -485,19 +493,19 @@ ${verifiedClaims
 
           <div className="collab-step-arrow">→</div>
 
-          {/* Stage 4: Publication Gate 2.0 */}
+          {/* Stage 4: publication gate (deterministic, not an agent) */}
           <div className={`collab-step-card ${result ? "completed" : ""}`}>
             <div className="step-num-badge">4</div>
             <div className="step-card-header">
-              <span className="step-agent-name">{isZh ? "发布门禁 Gate 2.0" : "Publication Gate 2.0"}</span>
-              <span className="step-agent-role">{isZh ? "SHA256 事实绑定" : "SHA256 Bound Facts"}</span>
+              <span className="step-agent-name">{isZh ? "发布门禁" : "Publication gate"}</span>
+              <span className="step-agent-role">{isZh ? "回执绑定 非智能体" : "Receipt contract, not an agent"}</span>
             </div>
             <p className="step-desc">
-              {isZh ? "执行强约束事实契约：杜绝无凭据数值，所有指标严谨溯源至确定性事件收据。" : "Enforces strict bound-facts contract: zero hallucinated values and verified formulas."}
+              {isZh ? "只允许有回执引用的事实。" : "Typed facts and receipt references only."}
             </p>
             <div className="step-foot-stats">
-              <span>{isZh ? "状态:" : "Status:"} <b className="gate-ok">{isZh ? "100% 审计认证" : "100% AUDITED"}</b></span>
-              <span><code>bound-facts-v2</code></span>
+              <span>{isZh ? "通过:" : "Passed:"} <b className="gate-ok">{storyGateVerified}</b> / {(state.result?.rejected || []).length} {isZh ? "驳回" : "rejected"}</span>
+              <span><code>publication_gate</code></span>
             </div>
           </div>
         </div>
@@ -507,7 +515,7 @@ ${verifiedClaims
       <div
         style={{
           display: "flex",
-          borderBottom: "1px solid var(--glass-border)",
+          borderBottom: "0.5px solid var(--glass-border)",
           gap: 6,
         }}
       >
@@ -515,36 +523,36 @@ ${verifiedClaims
           type="button"
           onClick={() => setWorkbenchTab("deliberation")}
           className={`feed-filter-btn ${workbenchTab === "deliberation" ? "active" : ""}`}
-          style={{ fontSize: 13, padding: "8px 16px" }}
+          style={{ fontSize: 14, padding: "8px 16px" }}
         >
-          {isZh ? "🎙️ 智能体协作过程与事实聚焦" : "🎙️ Deliberation Workshop & Spotlight"}
+          {isZh ? "智能体协作" : "Deliberation"}
         </button>
 
         <button
           type="button"
           onClick={() => setWorkbenchTab("attribution")}
           className={`feed-filter-btn ${workbenchTab === "attribution" ? "active" : ""}`}
-          style={{ fontSize: 13, padding: "8px 16px" }}
+          style={{ fontSize: 14, padding: "8px 16px" }}
         >
-          {isZh ? "🔍 事件归因拆解与因果链 (Track C)" : "🔍 Event Attribution & Causal Chains (Track C)"}
+          {isZh ? "事件归因" : "Attribution"}
         </button>
 
         <button
           type="button"
           onClick={() => setWorkbenchTab("match_story")}
           className={`feed-filter-btn ${workbenchTab === "match_story" ? "active" : ""}`}
-          style={{ fontSize: 13, padding: "8px 16px" }}
+          style={{ fontSize: 14, padding: "8px 16px" }}
         >
-          {isZh ? "📰 BL-06 比赛战报与内容审批 (Track D)" : "📰 BL-06 Match Story & Content Approval (Track D)"}
+          {isZh ? "战报与审批" : "Story"}
         </button>
 
         <button
           type="button"
           onClick={() => setWorkbenchTab("gate_audit")}
           className={`feed-filter-btn ${workbenchTab === "gate_audit" ? "active" : ""}`}
-          style={{ fontSize: 13, padding: "8px 16px" }}
+          style={{ fontSize: 14, padding: "8px 16px" }}
         >
-          {isZh ? "🛡️ Gate 2.0 门禁与充分性审计" : "🛡️ Gate 2.0 & Data Sufficiency Audit"}
+          {isZh ? "门禁审计" : "Gate audit"}
         </button>
       </div>
 
@@ -592,12 +600,12 @@ ${verifiedClaims
           <div className="glass-panel" style={{ padding: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 16 }}>⏱️</span>
-                <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text-primary)" }}>
+                <span style={{ fontSize: 18 }}>⏱️</span>
+                <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>
                   {isZh ? "时序窗口贡献分解 (BL-02 & BL-10)" : "TEMPORAL WINDOW DECOMPOSITION (BL-02 & BL-10)"}
                 </span>
               </div>
-              <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(168, 85, 247, 0.2)", color: "var(--agent-violet)", fontWeight: 700 }}>
+              <span style={{ fontSize: 12, padding: "2px 6px", borderRadius: 4, background: "color-mix(in srgb, var(--violet-9) 20%, transparent)", color: "var(--violet-11)", fontWeight: 700 }}>
                 {isZh ? "工具 #1" : "TOOL #1"}
               </span>
             </div>
@@ -625,8 +633,8 @@ ${verifiedClaims
                       justifyContent: "space-between",
                       padding: "8px 12px",
                       borderRadius: 6,
-                      background: "rgba(15, 23, 42, 0.6)",
-                      border: "1px solid var(--pitch-border)",
+                      background: "color-mix(in srgb, var(--slate-1) 60%, transparent)",
+                      border: "0.5px solid var(--pitch-border)",
                       cursor: "pointer",
                     }}
                   >
@@ -636,9 +644,9 @@ ${verifiedClaims
                           width: 22,
                           height: 22,
                           borderRadius: "50%",
-                          background: "rgba(16, 185, 129, 0.2)",
-                          color: "var(--turf-emerald)",
-                          fontSize: 11,
+                          background: "color-mix(in srgb, var(--green-9) 20%, transparent)",
+                          color: "var(--text-emerald)",
+                          fontSize: 12,
                           fontWeight: 800,
                           display: "flex",
                           alignItems: "center",
@@ -651,13 +659,13 @@ ${verifiedClaims
                         <div style={{ fontSize: 12, fontWeight: 750, color: "var(--text-primary)" }}>
                           {item.action}
                         </div>
-                        <div style={{ fontSize: 10, color: "var(--text-tertiary)" }}>
-                          {isZh ? "执行人:" : "Actor:"} {item.player} · {isZh ? "事件编号:" : "Action ID:"} <code>{item.eventId}</code>
+                        <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                          {isZh ? "执行人:" : "Actor:"} {item.player} {isZh ? "事件编号:" : "Action ID:"} <code>{item.eventId}</code>
                         </div>
                       </div>
                     </div>
 
-                    <span style={{ fontSize: 13, fontWeight: 800, color: "var(--turf-emerald)" }}>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-emerald)" }}>
                       {item.weight} OAAI
                     </span>
                   </div>
@@ -672,12 +680,12 @@ ${verifiedClaims
             <div className="glass-panel" style={{ padding: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 16 }}>⛓️</span>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text-primary)" }}>
+                  <span style={{ fontSize: 18 }}>⛓️</span>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>
                     {isZh ? "因果链回溯检索 (BACKWARDS TRACE)" : "CAUSAL CHAIN QUERY (BACKWARDS TRACE)"}
                   </span>
                 </div>
-                <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(56, 189, 248, 0.2)", color: "var(--tech-cyan)", fontWeight: 700 }}>
+                <span style={{ fontSize: 12, padding: "2px 6px", borderRadius: 4, background: "color-mix(in srgb, var(--cyan-9) 20%, transparent)", color: "var(--text-cyan)", fontWeight: 700 }}>
                   {isZh ? "工具 #2" : "TOOL #2"}
                 </span>
               </div>
@@ -692,16 +700,16 @@ ${verifiedClaims
                       gap: 10,
                       padding: "6px 10px",
                       borderRadius: 6,
-                      background: "rgba(11, 15, 25, 0.4)",
-                      border: "1px solid var(--glass-border)",
+                      background: "color-mix(in srgb, var(--slate-1) 40%, transparent)",
+                      border: "0.5px solid var(--glass-border)",
                       fontSize: 12,
                     }}
                   >
-                    <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--tech-cyan)", minWidth: 42 }}>
+                    <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--text-cyan)", minWidth: 42 }}>
                       {s.step}
                     </span>
                     <span style={{ flex: 1, color: "var(--text-primary)" }}>{s.desc}</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase" }}>
                       {s.link}
                     </span>
                   </div>
@@ -713,12 +721,12 @@ ${verifiedClaims
             <div className="glass-panel" style={{ padding: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 16 }}>⚖️</span>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text-primary)" }}>
+                  <span style={{ fontSize: 18 }}>⚖️</span>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>
                     {isZh ? "对立战术假设与争议评估" : "ALTERNATIVE HYPOTHESIS ASSESSMENT"}
                   </span>
                 </div>
-                <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(245, 158, 11, 0.2)", color: "var(--electric-gold)", fontWeight: 750 }}>
+                <span style={{ fontSize: 12, padding: "2px 6px", borderRadius: 4, background: "color-mix(in srgb, var(--amber-9) 20%, transparent)", color: "var(--text-gold)", fontWeight: 750 }}>
                   {isZh ? "工具 #3" : "TOOL #3"}
                 </span>
               </div>
@@ -729,19 +737,19 @@ ${verifiedClaims
                     const isSupported = h.status === "supported";
                     const isRejected = h.status === "rejected";
                     const borderColor = isSupported
-                      ? "rgba(16, 185, 129, 0.35)"
+                      ? "color-mix(in srgb, var(--green-9) 35%, transparent)"
                       : isRejected
-                      ? "rgba(239, 68, 68, 0.35)"
-                      : "rgba(245, 158, 11, 0.35)";
+                      ? "color-mix(in srgb, var(--red-9) 35%, transparent)"
+                      : "color-mix(in srgb, var(--amber-9) 35%, transparent)";
                     const bgColor = isSupported
-                      ? "rgba(16, 185, 129, 0.08)"
+                      ? "color-mix(in srgb, var(--green-9) 8%, transparent)"
                       : isRejected
-                      ? "rgba(239, 68, 68, 0.08)"
-                      : "rgba(245, 158, 11, 0.08)";
+                      ? "color-mix(in srgb, var(--red-9) 8%, transparent)"
+                      : "color-mix(in srgb, var(--amber-9) 8%, transparent)";
                     const badgeColor = isSupported
                       ? "var(--turf-emerald)"
                       : isRejected
-                      ? "var(--sunset-rose, #ef4444)"
+                      ? "var(--sunset-rose, var(--red-9))"
                       : "var(--electric-gold)";
 
                     return (
@@ -751,7 +759,7 @@ ${verifiedClaims
                           padding: "8px 12px",
                           borderRadius: 6,
                           background: bgColor,
-                          border: `1px solid ${borderColor}`,
+                          border: `0.5px solid ${borderColor}`,
                         }}
                       >
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -760,11 +768,11 @@ ${verifiedClaims
                           </span>
                           <span
                             style={{
-                              fontSize: 10,
+                              fontSize: 12,
                               fontWeight: 800,
                               padding: "1px 6px",
                               borderRadius: 4,
-                              background: "rgba(15, 23, 42, 0.6)",
+                              background: "color-mix(in srgb, var(--slate-1) 60%, transparent)",
                               color: badgeColor,
                               textTransform: "uppercase",
                             }}
@@ -776,7 +784,7 @@ ${verifiedClaims
                           {h.reason}
                         </div>
                         {h.counterevidence && h.counterevidence.length > 0 && (
-                          <div style={{ fontSize: 10, color: "var(--sunset-rose, #ef4444)", marginTop: 4 }}>
+                          <div style={{ fontSize: 12, color: "var(--sunset-rose, var(--red-9))", marginTop: 4 }}>
                             {isZh ? "检索到反证指标: " : "Counterevidence audited: "}
                             <code>{h.counterevidence.join(", ")}</code>
                           </div>
@@ -804,10 +812,10 @@ ${verifiedClaims
           <div className="glass-panel" style={{ padding: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <div>
-                <span style={{ fontSize: 10, fontWeight: 800, color: "var(--turf-emerald)", textTransform: "uppercase" }}>
-                  {isZh ? "BL-06 自动生成结构化叙事" : "BL-06 AUTOMATED NARRATIVE"}
+                <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-emerald)", textTransform: "uppercase" }}>
+                  {isZh ? "比赛战报" : "Match story"}
                 </span>
-                <h3 style={{ fontSize: 15, fontWeight: 750, margin: "2px 0 0" }}>
+                <h3 style={{ fontSize: 18, fontWeight: 750, margin: "2px 0 0" }}>
                   {isZh ? `比赛战报分章节 (${state.chapters?.length || 3} 个赛段)` : `Match Story Chapters (${state.chapters?.length || 3} Segments)`}
                 </h3>
               </div>
@@ -817,13 +825,13 @@ ${verifiedClaims
                   type="button"
                   onClick={() => copyToClipboard(generateStoryMarkdown(), isZh ? "战报研报" : "Match Story Report")}
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 700,
                     padding: "4px 10px",
                     borderRadius: 6,
-                    background: "rgba(16, 185, 129, 0.2)",
-                    border: "1px solid var(--turf-emerald)",
-                    color: "var(--turf-emerald)",
+                    background: "color-mix(in srgb, var(--green-9) 20%, transparent)",
+                    border: "0.5px solid var(--turf-emerald)",
+                    color: "var(--text-emerald)",
                     cursor: "pointer",
                   }}
                 >
@@ -838,13 +846,13 @@ ${verifiedClaims
                     )
                   }
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 700,
                     padding: "4px 10px",
                     borderRadius: 6,
-                    background: "rgba(56, 189, 248, 0.2)",
-                    border: "1px solid var(--tech-cyan)",
-                    color: "var(--tech-cyan)",
+                    background: "color-mix(in srgb, var(--cyan-9) 20%, transparent)",
+                    border: "0.5px solid var(--tech-cyan)",
+                    color: "var(--text-cyan)",
                     cursor: "pointer",
                   }}
                 >
@@ -860,28 +868,28 @@ ${verifiedClaims
                   {isZh ? "未检测到赛段划分" : "No match chapters available"}
                 </div>
               ) : (
-                dynamicChapters.map((ch) => (
+                dynamicChapters.map((ch: any) => (
                   <div
                     key={ch.id}
                     style={{
                       padding: 12,
                       borderRadius: 8,
-                      background: "rgba(15, 23, 42, 0.6)",
-                      border: "1px solid var(--glass-border)",
+                      background: "color-mix(in srgb, var(--slate-1) 60%, transparent)",
+                      border: "0.5px solid var(--glass-border)",
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text-primary)" }}>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>
                         {ch.title}
                       </span>
-                      <span style={{ fontSize: 11, fontFamily: "monospace", color: "var(--tech-cyan)" }}>
+                      <span style={{ fontSize: 12, fontFamily: "monospace", color: "var(--text-cyan)" }}>
                         {ch.time}
                       </span>
                     </div>
                     <p style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 6, lineHeight: 1.5 }}>
                       {ch.narrative}
                     </p>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--turf-emerald)", marginTop: 6 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-emerald)", marginTop: 6 }}>
                       {isZh ? "核心指标:" : "Key Metric:"} {ch.stat}
                     </div>
                   </div>
@@ -894,27 +902,28 @@ ${verifiedClaims
           <div className="glass-panel" style={{ padding: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <div>
-                <span style={{ fontSize: 10, fontWeight: 800, color: "var(--electric-gold)", textTransform: "uppercase" }}>
-                  {isZh ? "内容审批流水线" : "CONTENT APPROVAL WORKFLOW"}
+                <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-gold)", textTransform: "uppercase" }}>
+                  {isZh ? "声明审批" : "CONTENT APPROVAL WORKFLOW"}
                 </span>
-                <h3 style={{ fontSize: 15, fontWeight: 750, margin: "2px 0 0" }}>
-                  {isZh ? `论断核准清单 (${allClaims.length})` : `Claims Approval (${allClaims.length})`}
+                <h3 style={{ fontSize: 18, fontWeight: 750, margin: "2px 0 0" }}>
+                  {isZh ? `注册声明与门禁 (${storyClaims.length || allClaims.length})` : `Registered claims & gate (${storyClaims.length || allClaims.length})`}
                 </h3>
               </div>
-              <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
-                {isZh ? "草稿 vs Gate 2.0 认证" : "Draft vs Gate 2.0 Certified"}
+              <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                {isZh ? "门禁通过 ≠ 编辑批准" : "Gate verified ≠ editorial approval"}
               </span>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {allClaims.length === 0 ? (
+              {(storyClaims.length ? storyClaims : allClaims).length === 0 ? (
                 <div style={{ padding: 20, textAlign: "center", color: "var(--text-tertiary)", fontSize: 12 }}>
-                  {isZh ? "尚未生成论断。点击上方运行三智能体审议。" : "No claims generated yet. Run Deliberation to populate claims."}
+                  {isZh ? "尚未生成论断。点击上方运行双智能体审议。" : "No claims generated yet. Run Deliberation to populate claims."}
                 </div>
               ) : (
-                allClaims.map((cl) => {
-                  const isApproved = approvedClaimIds[cl.claim_id] !== false;
-                  const isPublishable = cl.verdict === "publish" || cl.verdict === "qualify";
+                (storyClaims.length ? storyClaims : allClaims).map((cl) => {
+                  const gateApproved = cl.gate_status === "approved" || cl.verdict === "publish" || cl.verdict === "qualify";
+                  const editorialApproved = cl.published === true;
+                  const isApproved = gateApproved && editorialApproved;
 
                   return (
                     <div
@@ -923,43 +932,34 @@ ${verifiedClaims
                         padding: "10px 12px",
                         borderRadius: 8,
                         background: isApproved
-                          ? "rgba(16, 185, 129, 0.07)"
-                          : "rgba(15, 23, 42, 0.5)",
+                          ? "color-mix(in srgb, var(--green-9) 7%, transparent)"
+                          : "color-mix(in srgb, var(--slate-1) 50%, transparent)",
                         border: isApproved
-                          ? "1px solid rgba(16, 185, 129, 0.35)"
-                          : "1px solid var(--pitch-border)",
+                          ? "0.5px solid color-mix(in srgb, var(--green-9) 35%, transparent)"
+                          : "0.5px solid var(--pitch-border)",
                       }}
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-                        <label
-                          style={{
-                            display: "flex",
-                            alignItems: "flex-start",
-                            gap: 8,
-                            cursor: "pointer",
-                            flex: 1,
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isApproved}
-                            onChange={(e) =>
-                              setApprovedClaimIds((prev) => ({
-                                ...prev,
-                                [cl.claim_id]: e.target.checked,
-                              }))
-                            }
-                            style={{ marginTop: 2, accentColor: "var(--turf-emerald)" }}
-                          />
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, flex: 1 }}>
+                          <span
+                            className={`rail-chip ${gateApproved ? "verified" : "unknown"}`}
+                            title={isZh ? "由发布门禁实际执行后写入注册表" : "Written by the executed publication gate"}
+                          >
+                            {gateApproved ? (isZh ? "门禁通过" : "GATE PASS") : isZh ? "未通过" : "REJECTED"}
+                          </span>
+                          <span className={`rail-chip ${editorialApproved ? "verified" : "unknown"}`}>
+                            {editorialApproved ? (isZh ? "编辑批准" : "EDITORIAL") : isZh ? "待编辑" : "PENDING"}
+                          </span>
                           <div>
                             <div style={{ fontSize: 12, fontWeight: 750, color: "var(--text-primary)" }}>
-                              {cl.assertion}
+                              {claimLabel[cl.assertion] || cl.assertion}
                             </div>
-                            <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 2 }}>
-                              {isZh ? `Level ${cl.claim_level || 2} · 证据快照: ` : `Level ${cl.claim_level || 2} · Snapshot: `}<code>{cl.snapshot_id?.slice(0, 8)}</code>
+                            <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 2 }}>
+                              {isZh ? `Level ${cl.claim_level || 2} ` : `Level ${cl.claim_level || 2} `}
+                              <code>{cl.evidence_hash ? `sha256:${cl.evidence_hash.slice(0, 10)}` : cl.snapshot_id?.slice(0, 8)}</code>
                             </div>
                           </div>
-                        </label>
+                        </div>
 
                         <button
                           type="button"
@@ -971,14 +971,14 @@ ${verifiedClaims
                             })
                           }
                           style={{
-                            fontSize: 10,
+                            fontSize: 12,
                             fontWeight: 700,
                             padding: "2px 6px",
                             borderRadius: 4,
-                            background: isPublishable
-                              ? "rgba(16, 185, 129, 0.2)"
-                              : "rgba(245, 158, 11, 0.2)",
-                            color: isPublishable
+                            background: gateApproved
+                              ? "color-mix(in srgb, var(--green-9) 20%, transparent)"
+                              : "color-mix(in srgb, var(--amber-9) 20%, transparent)",
+                            color: gateApproved
                               ? "var(--turf-emerald)"
                               : "var(--electric-gold)",
                             border: "none",
@@ -986,7 +986,7 @@ ${verifiedClaims
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {cl.verdict.toUpperCase()} →
+                          {isZh ? "查看" : "Inspect"}
                         </button>
                       </div>
                     </div>
@@ -998,45 +998,45 @@ ${verifiedClaims
         </div>
       )}
 
-      {/* TAB D: Publication Gate 2.0 & Data Sufficiency Audit */}
+      {/* TAB D: Publication Publication Gate & Data Sufficiency Audit */}
       {workbenchTab === "gate_audit" && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <div className="glass-panel" style={{ padding: 18 }}>
             <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)", marginBottom: 12 }}>
-              {isZh ? "🛡️ Gate 2.0 强制发布审查准则" : "🛡️ Publication Gate 2.0 Enforced Criteria"}
+              {isZh ? "Publication Gate 强制发布审查准则" : "Publication Publication Gate Enforced Criteria"}
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ padding: 10, borderRadius: 6, background: "rgba(15, 23, 42, 0.7)", border: "1px solid var(--glass-border)" }}>
-                <div style={{ fontSize: 12, fontWeight: 750, color: "var(--turf-emerald)" }}>
+              <div style={{ padding: 10, borderRadius: 6, background: "color-mix(in srgb, var(--slate-1) 70%, transparent)", border: "0.5px solid var(--glass-border)" }}>
+                <div style={{ fontSize: 12, fontWeight: 750, color: "var(--text-emerald)" }}>
                   {isZh ? "Level 1: 纯描述性事实观察" : "Level 1: Pure Descriptive Observation"}
                 </div>
-                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
                   {isZh
                     ? "必须直接对应原始记录事件，禁止使用主观推理性动词。例如：'球员 H10 在第 10–15 分钟完成 12 次成功传球'。"
                     : "Must directly mirror raw recorded events without inferential verbs. E.g., \"Player H10 completed 12 passes in minutes 10–15.\""}
                 </div>
               </div>
 
-              <div style={{ padding: 10, borderRadius: 6, background: "rgba(15, 23, 42, 0.7)", border: "1px solid var(--glass-border)" }}>
-                <div style={{ fontSize: 12, fontWeight: 750, color: "var(--tech-cyan)" }}>
+              <div style={{ padding: 10, borderRadius: 6, background: "color-mix(in srgb, var(--slate-1) 70%, transparent)", border: "0.5px solid var(--glass-border)" }}>
+                <div style={{ fontSize: 12, fontWeight: 750, color: "var(--text-cyan)" }}>
                   {isZh ? "Level 2: 确定性数学公式分解" : "Level 2: Deterministic Formula Decomposition"}
                 </div>
-                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
                   {isZh
                     ? "必须引用绑定 SHA-256 签名的确定性数学凭证，具备明确分子分母。例如：'高位反抢率为 66.7% (4/6)'。"
                     : "Must reference SHA-256 bound mathematical receipts with defined numerator and denominator. E.g., \"High recovery rate was 66.7% (4/6).\""}
                 </div>
               </div>
 
-              <div style={{ padding: 10, borderRadius: 6, background: "rgba(15, 23, 42, 0.7)", border: "1px solid var(--glass-border)" }}>
-                <div style={{ fontSize: 12, fontWeight: 750, color: "var(--electric-gold)" }}>
+              <div style={{ padding: 10, borderRadius: 6, background: "color-mix(in srgb, var(--slate-1) 70%, transparent)", border: "0.5px solid var(--glass-border)" }}>
+                <div style={{ fontSize: 12, fontWeight: 750, color: "var(--text-gold)" }}>
                   {isZh ? "Level 3: 战术因果推论假设" : "Level 3: Causal Tactical Hypotheses"}
                 </div>
-                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
                   {isZh
-                    ? "强制前置条件：必须列出显式假设、验证机制，并检索反证事实。若存在反证或缺乏论据，Gate 2.0 将坚决拦截或降级。"
-                    : "Mandatory requirements: explicit assumptions list, defined verification method, and confirmed counterevidence search. Without these, Gate 2.0 rejects the claim."}
+                    ? "强制前置条件：必须列出显式假设、验证机制，并检索反证事实。若存在反证或缺乏论据，Publication Gate 将坚决拦截或降级。"
+                    : "Mandatory requirements: explicit assumptions list, defined verification method, and confirmed counterevidence search. Without these, Publication Gate rejects the claim."}
                 </div>
               </div>
             </div>
@@ -1054,17 +1054,17 @@ ${verifiedClaims
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "rgba(11, 15, 25, 0.4)", borderRadius: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "color-mix(in srgb, var(--slate-1) 40%, transparent)", borderRadius: 6 }}>
                 <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{isZh ? "触球事件数据覆盖度:" : "Event Data Coverage:"}</span>
-                <span style={{ fontSize: 11, fontWeight: 750, color: "var(--turf-emerald)" }}>{isZh ? "100% (完全可核验)" : "100% (Verifiable)"}</span>
+                <span style={{ fontSize: 12, fontWeight: 750, color: "var(--text-emerald)" }}>{isZh ? "100% (完全可核验)" : "100% (Verifiable)"}</span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "rgba(11, 15, 25, 0.4)", borderRadius: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "color-mix(in srgb, var(--slate-1) 40%, transparent)", borderRadius: 6 }}>
                 <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{isZh ? "无球跑动光学追踪数据:" : "Off-Ball Tracking Data:"}</span>
-                <span style={{ fontSize: 11, fontWeight: 750, color: "var(--electric-gold)" }}>{isZh ? "代理指标激活 (6s + ΔD)" : "Proxy Active (6s + ΔD)"}</span>
+                <span style={{ fontSize: 12, fontWeight: 750, color: "var(--text-gold)" }}>{isZh ? "代理指标激活 (6s + ΔD)" : "Proxy Active (6s + ΔD)"}</span>
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "rgba(11, 15, 25, 0.4)", borderRadius: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: "color-mix(in srgb, var(--slate-1) 40%, transparent)", borderRadius: 6 }}>
                 <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{isZh ? "数学虚构/幻觉风险:" : "Mathematical Hallucination Risk:"}</span>
-                <span style={{ fontSize: 11, fontWeight: 750, color: "var(--turf-emerald)" }}>{isZh ? "0.00% (完全收据锁定)" : "0.00% (Locked by Receipts)"}</span>
+                <span style={{ fontSize: 12, fontWeight: 750, color: "var(--text-emerald)" }}>{isZh ? "0.00% (完全收据锁定)" : "0.00% (Locked by Receipts)"}</span>
               </div>
             </div>
           </div>

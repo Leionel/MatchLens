@@ -12,6 +12,7 @@ import {
 } from "./components/cockpit/types";
 import { TacticalHeader } from "./components/cockpit/TacticalHeader";
 import { WorkspaceTabs } from "./components/cockpit/WorkspaceTabs";
+import { EvidenceRail } from "./components/cockpit/EvidenceRail";
 import { MatchCenterWorkspace } from "./components/cockpit/MatchCenterWorkspace";
 import { TacticalLabWorkspace } from "./components/cockpit/TacticalLabWorkspace";
 import { StoryAgentWorkbench } from "./components/cockpit/StoryAgentWorkbench";
@@ -328,6 +329,8 @@ export default function MatchLensCockpit() {
         />
       )}
 
+      {state && <EvidenceRail state={state} locale={locale} />}
+
       {/* 3. Cockpit Main Layout Area */}
       <div className="cockpit-main-layout">
         {/* Global Error Toast */}
@@ -370,12 +373,12 @@ export default function MatchLensCockpit() {
             }}
           >
             <div className="loader-ring" />
-            <h2 style={{ fontSize: 20, fontWeight: 800, color: "var(--text-primary)" }}>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)" }}>
               {locale === "zh" ? "正在初始化 MatchLens AI 黑曜石战术工作台..." : "Initializing MatchLens AI Obsidian Cockpit..."}
             </h2>
-            <p style={{ fontSize: 13, color: "var(--text-secondary)", maxWidth: 500, lineHeight: 1.5 }}>
+            <p style={{ fontSize: 14, color: "var(--text-secondary)", maxWidth: 500, lineHeight: 1.5 }}>
               {locale === "zh"
-                ? "连接确定性实时赛事流，载入 S2 控球推进序列，并预热三智能体审议与 Gate 2.0 核验引擎..."
+                ? "连接确定性实时赛事流，载入 S2 控球推进序列，并载入双智能体审议与发布门禁核验引擎..."
                 : "Connecting to real-time deterministic match stream, loading S2 possession sequences, and priming dual-agent deliberation runtime..."}
             </p>
           </div>
@@ -489,12 +492,12 @@ export default function MatchLensCockpit() {
         {/* Cockpit Footer */}
         <footer className="cockpit-footer" role="contentinfo">
           <div>
-            <b style={{ color: "var(--text-primary)" }}>MatchLens AI Cockpit 4.0</b> · {locale === "zh" ? "黑曜石战术暗夜架构" : "Obsidian Tactical Dark Architecture"}
+            <b style={{ color: "var(--text-primary)" }}>MatchLens AI Cockpit 4.0</b> {locale === "zh" ? "黑曜石战术暗夜架构" : "Obsidian Tactical Dark Architecture"}
           </div>
           <div>
             {locale === "zh"
-              ? "确定性事件流 · SHA-256 可核验证据凭证 · Gate 2.0 三智能体协作研报"
-              : "Deterministic Event Stream · SHA-256 Verifiable Receipts · Gate 2.0 Tri-Agent Intelligence"}
+              ? "确定性事件流。内容哈希证据凭证。双智能体与确定性工具。发布门禁。"
+              : "Deterministic event stream. Content-hashed receipts. Two agents and deterministic tools. Publication gate."}
           </div>
         </footer>
       </div>

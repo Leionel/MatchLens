@@ -64,7 +64,7 @@ export function ReplayControls({
         <span>
           {focus
             ? "Analysis is fixed at this moment. Exit Focus to continue replay."
-            : `Automatic moment detection · ${Math.ceil(720 / speed)}-second replay at ${speed}×`}
+            : `Automatic moment detection ${Math.ceil(720 / speed)}-second replay at ${speed}×`}
         </span>
       </div>
 

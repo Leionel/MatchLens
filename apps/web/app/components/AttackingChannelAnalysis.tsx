@@ -17,7 +17,7 @@ export type ChannelMetric = {
 export type AttackingChannelsData = {
   team: string;
   team_name: string;
-  attack_direction: "right" | "left";
+  attack_direction: "right" | "left" | "team_relative";
   channels: Record<"left" | "center" | "right", ChannelMetric>;
   disclaimer: string;
 };
@@ -42,12 +42,12 @@ export const AttackingChannelAnalysis: React.FC<AttackingChannelAnalysisProps> =
     return (
       <div
         style={{
-          background: "rgba(15, 23, 42, 0.7)",
-          border: "1px solid var(--glass-border)",
-          borderRadius: "14px",
+          background: "color-mix(in srgb, var(--slate-1) 70%, transparent)",
+          border: "0.5px solid var(--glass-border)",
+          borderRadius: "var(--radius-panel)",
           padding: "20px",
           color: "var(--text-tertiary)",
-          fontSize: "13px",
+          fontSize: "var(--text-body)",
           textAlign: "center",
         }}
       >
@@ -81,11 +81,11 @@ export const AttackingChannelAnalysis: React.FC<AttackingChannelAnalysisProps> =
   return (
     <div
       style={{
-        background: "rgba(15, 23, 42, 0.75)",
-        border: "1px solid var(--glass-border)",
-        borderRadius: "14px",
+        background: "color-mix(in srgb, var(--slate-1) 75%, transparent)",
+        border: "0.5px solid var(--glass-border)",
+        borderRadius: "var(--radius-panel)",
         padding: "18px 20px",
-        boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5)",
+        boxShadow: "none",
         backdropFilter: "blur(12px)",
         display: "flex",
         flexDirection: "column",
@@ -96,38 +96,12 @@ export const AttackingChannelAnalysis: React.FC<AttackingChannelAnalysisProps> =
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 800,
-                padding: "2px 6px",
-                borderRadius: 4,
-                background: "rgba(16, 185, 129, 0.15)",
-                color: "var(--turf-emerald)",
-                border: "1px solid rgba(16, 185, 129, 0.3)",
-              }}
-            >
-              BL-08 · CORRIDORS
-            </span>
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 800,
-                padding: "2px 6px",
-                borderRadius: 4,
-                background: "rgba(56, 189, 248, 0.15)",
-                color: "var(--tech-cyan)",
-                border: "1px solid rgba(56, 189, 248, 0.3)",
-              }}
-            >
-              LEVEL 1 OBSERVED
-            </span>
-            <h3 style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>
               {t.corridorTitle} ({data.team_name})
             </h3>
           </div>
           <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 4 }}>
-            {t.corridorSubtitle} · {isZh ? "进攻方向" : "Attack Dir"}: {data.attack_direction === "right" ? "左至右 →" : "← 右至左"}
+            
           </p>
         </div>
       </div>
@@ -146,8 +120,8 @@ export const AttackingChannelAnalysis: React.FC<AttackingChannelAnalysisProps> =
           const isSelected = selectedChannel === chKey;
           const meta = channelMeta[chKey];
 
-          const penetrationPct = Math.round(ch.final_third_penetration_rate * 100);
-          const conversionPct = Math.round(ch.box_conversion_rate * 100);
+          const penetrationPct = Math.round(ch.final_third_penetration_rate);
+          const conversionPct = Math.round(ch.box_conversion_rate);
 
           return (
             <div
@@ -158,27 +132,27 @@ export const AttackingChannelAnalysis: React.FC<AttackingChannelAnalysisProps> =
                 flexDirection: "column",
                 gap: 12,
                 padding: "16px",
-                borderRadius: "12px",
+                borderRadius: "var(--radius-panel)",
                 cursor: "pointer",
                 background: isSelected
-                  ? "rgba(16, 185, 129, 0.12)"
-                  : "rgba(11, 15, 25, 0.7)",
+                  ? "color-mix(in srgb, var(--green-9) 12%, transparent)"
+                  : "color-mix(in srgb, var(--slate-1) 70%, transparent)",
                 border: isSelected
-                  ? "1px solid var(--turf-emerald)"
-                  : "1px solid rgba(255, 255, 255, 0.08)",
-                boxShadow: isSelected ? "0 0 16px rgba(16, 185, 129, 0.25)" : "none",
-                transition: "all 0.2s ease",
+                  ? "0.5px solid var(--turf-emerald)"
+                  : "0.5px solid color-mix(in srgb, var(--slate-12) 8%, transparent)",
+                boxShadow: isSelected ? "0 0 16px color-mix(in srgb, var(--green-9) 25%, transparent)" : "none",
+                transition: "none",
               }}
             >
               {/* Card Top: Title, Icon & Attacks Count */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 16, color: "var(--turf-emerald)" }}>{meta.icon}</span>
+                  <span style={{ fontSize: 18, color: "var(--text-emerald)" }}>{meta.icon}</span>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>
                       {meta.label}
                     </div>
-                    <div style={{ fontSize: 10, color: "var(--text-tertiary)" }}>
+                    <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
                       {meta.desc}
                     </div>
                   </div>
@@ -186,14 +160,14 @@ export const AttackingChannelAnalysis: React.FC<AttackingChannelAnalysisProps> =
 
                 <span
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fontFamily: "monospace",
                     fontWeight: 700,
                     padding: "2px 8px",
                     borderRadius: 6,
-                    background: "rgba(16, 185, 129, 0.15)",
-                    color: "var(--turf-emerald)",
-                    border: "1px solid rgba(16, 185, 129, 0.3)",
+                    background: "color-mix(in srgb, var(--green-9) 15%, transparent)",
+                    color: "var(--text-emerald)",
+                    border: "0.5px solid color-mix(in srgb, var(--green-9) 30%, transparent)",
                   }}
                 >
                   {ch.attacks_count} {isZh ? "次发起" : "attacks"}
@@ -202,20 +176,20 @@ export const AttackingChannelAnalysis: React.FC<AttackingChannelAnalysisProps> =
 
               {/* Metric 1: Final Third Penetration Rate */}
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 4 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
                   <span style={{ color: "var(--text-secondary)" }}>{t.finalThirdPenetration}</span>
                   <span style={{ fontWeight: 700, color: "var(--text-primary)", fontFamily: "monospace" }}>
                     {penetrationPct}% ({ch.final_third_entries_count} {isZh ? "次进入" : "entries"})
                   </span>
                 </div>
-                <div style={{ width: "100%", height: 6, background: "rgba(255, 255, 255, 0.08)", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ width: "100%", height: 6, background: "color-mix(in srgb, var(--slate-12) 8%, transparent)", borderRadius: 3, overflow: "hidden" }}>
                   <div
                     style={{
                       width: `${penetrationPct}%`,
                       height: "100%",
-                      background: "linear-gradient(90deg, #0284c7 0%, #38bdf8 100%)",
+                      background: "var(--cyan-9)",
                       borderRadius: 3,
-                      transition: "width 0.4s ease",
+                      transition: "none",
                     }}
                   />
                 </div>
@@ -223,20 +197,20 @@ export const AttackingChannelAnalysis: React.FC<AttackingChannelAnalysisProps> =
 
               {/* Metric 2: Penalty Box Conversion Rate */}
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 4 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
                   <span style={{ color: "var(--text-secondary)" }}>{t.boxConversionRate}</span>
-                  <span style={{ fontWeight: 700, color: "var(--turf-emerald)", fontFamily: "monospace" }}>
+                  <span style={{ fontWeight: 700, color: "var(--text-emerald)", fontFamily: "monospace" }}>
                     {conversionPct}% ({ch.penalty_box_entries_count} {isZh ? "触球" : "touches"} / {ch.shots_count} {isZh ? "射门" : "shots"})
                   </span>
                 </div>
-                <div style={{ width: "100%", height: 6, background: "rgba(255, 255, 255, 0.08)", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ width: "100%", height: 6, background: "color-mix(in srgb, var(--slate-12) 8%, transparent)", borderRadius: 3, overflow: "hidden" }}>
                   <div
                     style={{
                       width: `${conversionPct}%`,
                       height: "100%",
-                      background: "linear-gradient(90deg, #10b981 0%, #34d399 100%)",
+                      background: "var(--green-9)",
                       borderRadius: 3,
-                      transition: "width 0.4s ease",
+                      transition: "none",
                     }}
                   />
                 </div>
@@ -250,9 +224,9 @@ export const AttackingChannelAnalysis: React.FC<AttackingChannelAnalysisProps> =
                   alignItems: "center",
                   padding: "6px 10px",
                   borderRadius: 6,
-                  background: "rgba(255, 255, 255, 0.03)",
-                  border: "1px solid rgba(255, 255, 255, 0.05)",
-                  fontSize: 11,
+                  background: "color-mix(in srgb, var(--slate-12) 3%, transparent)",
+                  border: "0.5px solid color-mix(in srgb, var(--slate-12) 5%, transparent)",
+                  fontSize: 12,
                 }}
               >
                 <span style={{ color: "var(--text-tertiary)" }}>{t.progressiveGainMeters}</span>
@@ -266,20 +240,6 @@ export const AttackingChannelAnalysis: React.FC<AttackingChannelAnalysisProps> =
       </div>
 
       {/* Footer Definition Note */}
-      <div
-        style={{
-          fontSize: 11,
-          color: "var(--text-tertiary)",
-          paddingTop: 8,
-          borderTop: "1px solid rgba(255, 255, 255, 0.06)",
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-        }}
-      >
-        <span>⚽</span>
-        <span>{t.channelDefinitionNote}</span>
-      </div>
     </div>
   );
 };

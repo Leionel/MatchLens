@@ -115,18 +115,18 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
           justifyContent: "space-between",
           alignItems: "center",
           padding: "10px 18px",
-          background: "rgba(15, 23, 42, 0.75)",
-          border: "1px solid var(--glass-border)",
+          background: "color-mix(in srgb, var(--slate-1) 75%, transparent)",
+          border: "0.5px solid var(--glass-border)",
           borderRadius: 10,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 20 }}>🧭</span>
+          <span style={{ fontSize: 18 }}>🧭</span>
           <div>
             <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>
               {t.tacticalLabTitle}
             </div>
-            <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+            <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
               {t.tacticalLabSubtitle}
             </div>
           </div>
@@ -138,13 +138,13 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
               type="button"
               onClick={() => onSelectZone(null)}
               style={{
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 700,
                 padding: "4px 10px",
                 borderRadius: 6,
-                background: "rgba(16, 185, 129, 0.2)",
-                border: "1px solid var(--turf-emerald)",
-                color: "var(--turf-emerald)",
+                background: "color-mix(in srgb, var(--green-9) 20%, transparent)",
+                border: "0.5px solid var(--turf-emerald)",
+                color: "var(--text-emerald)",
                 cursor: "pointer",
               }}
             >
@@ -157,13 +157,13 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
               type="button"
               onClick={() => onSelectPlayer(null)}
               style={{
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 700,
                 padding: "4px 10px",
                 borderRadius: 6,
-                background: "rgba(244, 63, 94, 0.15)",
-                border: "1px solid var(--crimson-warn)",
-                color: "var(--crimson-warn)",
+                background: "color-mix(in srgb, var(--red-9) 15%, transparent)",
+                border: "0.5px solid var(--crimson-warn)",
+                color: "var(--red-11)",
                 cursor: "pointer",
               }}
             >
@@ -173,13 +173,13 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
 
           <span
             style={{
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: 700,
               padding: "4px 10px",
               borderRadius: 6,
-              background: "rgba(56, 189, 248, 0.12)",
-              border: "1px solid rgba(56, 189, 248, 0.3)",
-              color: "var(--tech-cyan)",
+              background: "color-mix(in srgb, var(--cyan-9) 12%, transparent)",
+              border: "0.5px solid color-mix(in srgb, var(--cyan-9) 30%, transparent)",
+              color: "var(--text-cyan)",
             }}
           >
             {isZh ? `检测到 ${totalSeq} 条 S2 序列` : `${totalSeq} S2 Sequences Detected`}
@@ -200,10 +200,10 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
           <div className="glass-panel" style={{ padding: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text-primary)" }}>
+                <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>
                   {isZh ? "交互式战术球场画板" : "INTERACTIVE TACTICAL CANVAS"}
                 </span>
-                <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(16, 185, 129, 0.15)", color: "var(--turf-emerald)", fontWeight: 700 }}>
+                <span style={{ fontSize: 12, padding: "2px 6px", borderRadius: 4, background: "color-mix(in srgb, var(--green-9) 15%, transparent)", color: "var(--text-emerald)", fontWeight: 700 }}>
                   {isZh ? "5 大图层激活" : "5 LAYERS ACTIVE"}
                 </span>
               </div>
@@ -219,13 +219,13 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                     })
                   }
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 700,
                     padding: "3px 8px",
                     borderRadius: 6,
-                    background: "rgba(56, 189, 248, 0.15)",
-                    border: "1px solid rgba(56, 189, 248, 0.4)",
-                    color: "var(--tech-cyan)",
+                    background: "color-mix(in srgb, var(--cyan-9) 15%, transparent)",
+                    border: "0.5px solid color-mix(in srgb, var(--cyan-9) 40%, transparent)",
+                    color: "var(--text-cyan)",
                     cursor: "pointer",
                   }}
                 >
@@ -235,15 +235,16 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
             </div>
 
             <MatchStage
-              events={state.events}
-              selectedEvent={selectedEvent}
+              events={state.events.filter((e) => e.start && e.end) as any}
+              selectedEvent={selectedEvent as any}
               selectedSequence={selectedSeq}
               ball={state.ball}
               players={state.players}
+              teamNames={state.teams}
               clockText={clockText}
+              locale={locale}
               focusTeam={state.focus_team || "H"}
               tactical={state.tactical}
-              locale={locale}
               selectedPlayerId={selectedPlayerId}
               playerSpotlight={state.player_spotlight}
               selectedZoneId={selectedZoneId}
@@ -276,6 +277,8 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
               at={state.snapshot_as_of ?? state.at}
               snapshotId={state.snapshot_id}
               focusTeam={state.focus_team || "H"}
+              homeTeamName={state.teams?.H || "Harbor FC"}
+              awayTeamName={state.teams?.N || "Northbridge United"}
               locale={locale}
               onInspect={(id) => {
                 onInspectReceipt(id);
@@ -296,10 +299,10 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
             {/* Header with Sequences / Players Toggle */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <div>
-                <span style={{ fontSize: 10, fontWeight: 800, color: "var(--turf-emerald)", textTransform: "uppercase" }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-emerald)", textTransform: "uppercase" }}>
                   {isZh ? "基于事件事实的探测器" : "EVENT-GROUNDED EXPLORER"}
                 </span>
-                <h3 style={{ fontSize: 15, fontWeight: 750, margin: "2px 0 0" }}>
+                <h3 style={{ fontSize: 18, fontWeight: 750, margin: "2px 0 0" }}>
                   {explorerTab === "sequences" ? (isZh ? "控球进攻序列 (S2)" : "Possession Sequences (S2)") : (isZh ? "球员焦点聚光灯" : "Player Spotlight")}
                 </h3>
               </div>
@@ -309,7 +312,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                   type="button"
                   className={`feed-filter-btn ${explorerTab === "sequences" ? "active" : ""}`}
                   onClick={() => setExplorerTab("sequences")}
-                  style={{ fontSize: 11, padding: "4px 8px" }}
+                  style={{ fontSize: 12, padding: "4px 8px" }}
                 >
                   {isZh ? `控球序列 (${totalSeq})` : `Sequences (${totalSeq})`}
                 </button>
@@ -317,7 +320,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                   type="button"
                   className={`feed-filter-btn ${explorerTab === "players" ? "active" : ""}`}
                   onClick={() => setExplorerTab("players")}
-                  style={{ fontSize: 11, padding: "4px 8px" }}
+                  style={{ fontSize: 12, padding: "4px 8px" }}
                 >
                   {isZh ? `球员焦点 (${(state.player_spotlight || []).filter((p) => p.team === (state.focus_team || "H")).length})` : `Players (${(state.player_spotlight || []).filter((p) => p.team === (state.focus_team || "H")).length})`}
                 </button>
@@ -333,27 +336,27 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                     gridTemplateColumns: "repeat(4, 1fr)",
                     gap: 6,
                     padding: "8px 10px",
-                    background: "rgba(15, 23, 42, 0.7)",
+                    background: "color-mix(in srgb, var(--slate-1) 70%, transparent)",
                     borderRadius: 6,
                     marginBottom: 10,
                     textAlign: "center",
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: 9, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "总序列数" : "Total"}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "总序列数" : "Total"}</div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>{totalSeq}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "打入前场率" : "Final 3rd"}</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: "var(--turf-emerald)" }}>{entryRate}%</div>
+                    <div style={{ fontSize: 12, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "打入前场率" : "Final 3rd"}</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-emerald)" }}>{entryRate}%</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "场均传球" : "Avg Pass"}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "场均传球" : "Avg Pass"}</div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>{avgPasses}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "净向前推进" : "Avg Net"}</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: "var(--turf-emerald)" }}>+{avgProg}m</div>
+                    <div style={{ fontSize: 12, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "净向前推进" : "Avg Net"}</div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text-emerald)" }}>+{avgProg}m</div>
                   </div>
                 </div>
 
@@ -372,7 +375,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                       key={key}
                       type="button"
                       className={`feed-filter-btn ${sequenceFilter === key ? "active" : ""}`}
-                      style={{ fontSize: 11, padding: "2px 7px" }}
+                      style={{ fontSize: 12, padding: "2px 7px" }}
                       onClick={() => setSequenceFilter(key)}
                     >
                       {label}
@@ -392,7 +395,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                 >
                   {filteredSequences.length === 0 ? (
                     <div style={{ textAlign: "center", padding: "30px 10px", color: "var(--text-tertiary)" }}>
-                      <div style={{ fontSize: 20 }}>📍</div>
+                      <div style={{ fontSize: 18 }}>📍</div>
                       <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginTop: 4 }}>
                         {selectedZoneId
                           ? (isZh ? "无控球序列穿越此九宫格分区" : "No sequences crossing this 9-zone cell")
@@ -404,11 +407,11 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                           onClick={() => onSelectZone(null)}
                           style={{
                             marginTop: 8,
-                            fontSize: 11,
+                            fontSize: 12,
                             padding: "3px 8px",
                             borderRadius: 4,
                             background: "var(--turf-emerald)",
-                            color: "#0b0f19",
+                            color: "var(--slate-1)",
                             fontWeight: 700,
                             border: "none",
                             cursor: "pointer",
@@ -429,12 +432,12 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                             key={sq.sequence_id}
                             style={{
                               border: isSelected
-                                ? "1px solid var(--turf-emerald)"
-                                : "1px solid var(--pitch-border)",
+                                ? "0.5px solid var(--turf-emerald)"
+                                : "0.5px solid var(--pitch-border)",
                               borderRadius: 6,
                               background: isSelected
-                                ? "rgba(16, 185, 129, 0.08)"
-                                : "rgba(15, 23, 42, 0.5)",
+                                ? "color-mix(in srgb, var(--green-9) 8%, transparent)"
+                                : "color-mix(in srgb, var(--slate-1) 50%, transparent)",
                               overflow: "hidden",
                             }}
                           >
@@ -466,12 +469,12 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                 <span className="seq-id-badge">{sq.sequence_id}</span>
                                 <div>
-                                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>
-                                    {clock(sq.start_t)}–{clock(sq.end_t)} ({sq.duration}s) · {sq.pass_count} {isZh ? "次传球" : "passes"}
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>
+                                    {clock(sq.start_t)}–{clock(sq.end_t)} ({sq.duration}s) {sq.pass_count} {isZh ? "次传球" : "passes"}
                                   </div>
-                                  <div style={{ fontSize: 10, color: "var(--text-tertiary)" }}>
+                                  <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
                                     {isZh ? "净向前: " : "Net: "}{sq.territory_gained !== undefined ? `${sq.territory_gained > 0 ? `+${sq.territory_gained}` : sq.territory_gained}m` : `+${sq.progressive_distance}m`}
-                                    {sq.entered_final_third ? (isZh ? " · 进前场30米 ✓" : " · Final 3rd ✓") : ""}
+                                    {sq.entered_final_third ? (isZh ? " 进前场30米 ✓" : " Final 3rd ✓") : ""}
                                   </div>
                                 </div>
                               </div>
@@ -499,8 +502,8 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                                   flexWrap: "wrap",
                                   gap: 4,
                                   padding: "6px 10px 8px",
-                                  borderTop: "1px solid rgba(255, 255, 255, 0.06)",
-                                  background: "rgba(11, 15, 25, 0.4)",
+                                  borderTop: "0.5px solid color-mix(in srgb, var(--slate-12) 6%, transparent)",
+                                  background: "color-mix(in srgb, var(--slate-1) 40%, transparent)",
                                 }}
                               >
                                 {sq.events_detail.map((st) => (
@@ -511,7 +514,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                                       onSelectEvent(st.id);
                                     }}
                                     className="seq-step-pill"
-                                    style={{ cursor: "pointer", fontSize: 10 }}
+                                    style={{ cursor: "pointer", fontSize: 12 }}
                                   >
                                     {st.seq_step}. {st.actor_name?.split(" ")[1] || st.actor} {st.kind}
                                     {st.gain_m !== 0 ? ` (${st.gain_m > 0 ? `+${st.gain_m}` : st.gain_m}m)` : ""}
@@ -557,11 +560,11 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                           padding: "8px 10px",
                           borderRadius: 6,
                           background: isSelected
-                            ? "rgba(16, 185, 129, 0.12)"
-                            : "rgba(15, 23, 42, 0.5)",
+                            ? "color-mix(in srgb, var(--green-9) 12%, transparent)"
+                            : "color-mix(in srgb, var(--slate-1) 50%, transparent)",
                           border: isSelected
-                            ? "1px solid var(--turf-emerald)"
-                            : "1px solid var(--pitch-border)",
+                            ? "0.5px solid var(--turf-emerald)"
+                            : "0.5px solid var(--pitch-border)",
                           cursor: "pointer",
                           textAlign: "left",
                         }}
@@ -573,16 +576,16 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                               {p.name}
                             </span>
                           </div>
-                          <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginTop: 2 }}>
-                            {p.passes} {isZh ? "次传球" : "passes"} ({p.progressive_passes} {isZh ? "推进" : "prog"}, +{p.progressive_distance}m) · {p.recoveries} {isZh ? "夺回" : "rec"}
+                          <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 2 }}>
+                            {p.passes} {isZh ? "次传球" : "passes"} ({p.progressive_passes} {isZh ? "推进" : "prog"}, +{p.progressive_distance}m) {p.recoveries} {isZh ? "夺回" : "rec"}
                           </div>
                         </div>
 
                         <div style={{ textAlign: "right" }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--turf-emerald)" }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-emerald)" }}>
                             {p.goals > 0 ? (isZh ? `⚽ ${p.goals} 进球` : `⚽ ${p.goals} GOAL`) : `${p.shots} ${isZh ? "次射门" : "shots"}`}
                           </span>
-                          <div style={{ fontSize: 10, color: "var(--text-secondary)" }}>
+                          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                             {p.sequences_involved} {isZh ? "次参与" : "seqs"}
                           </div>
                         </div>
@@ -606,8 +609,8 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
         <div className="glass-panel" style={{ padding: 14 }}>
           <ActionDensityDifferential
             data={state.density_differential}
-            homeTeamName="Harbor FC"
-            awayTeamName="Northbridge United"
+            homeTeamName={state.teams?.H || "Harbor FC"}
+            awayTeamName={state.teams?.N || "Northbridge United"}
             locale={locale}
             onSelectZone={(zid) => {
               onSelectZone(zid);

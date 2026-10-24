@@ -1,146 +1,327 @@
+/* Radix Colors scales (1-12) and semantic mapping.
+   Usage: 1-2 page surfaces, 3-5 component fills, 6-8 borders,
+   9 solid accent, 10 hover, 11 accent text, 12 high-contrast text. */
+
 :root,
 [data-theme="dark"] {
-  /* Obsidian Tactical Dark Palette */
-  --pitch-bg: #0b0f19;
-  --pitch-surface: #111827;
-  --pitch-card: #162032;
-  --pitch-card-hover: #1e2c45;
-  --pitch-card-subtle: #0f172a;
-  --pitch-well: #070c14;
+  --slate-1: #151718;
+  --slate-2: #1a1d1e;
+  --slate-3: #202425;
+  --slate-4: #26292b;
+  --slate-5: #2b2f31;
+  --slate-6: #313538;
+  --slate-7: #3a3f42;
+  --slate-8: #4c5155;
+  --slate-9: #697177;
+  --slate-10: #787f85;
+  --slate-11: #9ba1a6;
+  --slate-12: #ecedee;
 
-  /* Glassmorphic Surfaces */
-  --glass-bg: rgba(15, 23, 42, 0.75);
-  --glass-bg-subtle: rgba(15, 23, 42, 0.55);
-  --glass-border: rgba(51, 65, 85, 0.6);
-  --glass-border-bright: rgba(148, 163, 184, 0.25);
-  --glass-blur: blur(12px);
+  --green-1: #0e1512;
+  --green-2: #121b17;
+  --green-3: #132d21;
+  --green-4: #113b29;
+  --green-5: #174933;
+  --green-6: #20573e;
+  --green-7: #28684a;
+  --green-8: #2f7c57;
+  --green-9: #30a46c;
+  --green-10: #33b074;
+  --green-11: #3dd68c;
+  --green-12: #b1f1cb;
 
-  /* Borders & Dividers */
-  --pitch-border: rgba(255, 255, 255, 0.08);
-  --pitch-border-bright: rgba(255, 255, 255, 0.16);
-  --pitch-border-active: #10b981;
+  --cyan-1: #0b161a;
+  --cyan-2: #101b20;
+  --cyan-3: #082c36;
+  --cyan-4: #003848;
+  --cyan-5: #004558;
+  --cyan-6: #045468;
+  --cyan-7: #12677e;
+  --cyan-8: #11809c;
+  --cyan-9: #00a2c7;
+  --cyan-10: #23afd0;
+  --cyan-11: #4ccce6;
+  --cyan-12: #b6ecf7;
 
-  /* Elevation Shadows */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
-  --shadow-glow-emerald: 0 0 20px rgba(16, 185, 129, 0.25);
-  --shadow-glow-cyan: 0 0 20px rgba(56, 189, 248, 0.25);
+  --amber-1: #1f1300;
+  --amber-2: #271700;
+  --amber-3: #341c00;
+  --amber-4: #3f2200;
+  --amber-5: #4a2900;
+  --amber-6: #573300;
+  --amber-7: #693f05;
+  --amber-8: #824e00;
+  --amber-9: #ffb224;
+  --amber-10: #ffcb47;
+  --amber-11: #f1a10d;
+  --amber-12: #fef3dd;
 
-  /* Accents & Brand */
-  --turf-emerald: #10b981;
-  --turf-emerald-glow: rgba(16, 185, 129, 0.25);
-  --turf-dark: #061a15;
-  --turf-line: rgba(16, 185, 129, 0.35);
+  --red-1: #191111;
+  --red-2: #201314;
+  --red-3: #3b1219;
+  --red-4: #500f1c;
+  --red-5: #611623;
+  --red-6: #72232d;
+  --red-7: #8c333a;
+  --red-8: #b54548;
+  --red-9: #e5484d;
+  --red-10: #ec5d5e;
+  --red-11: #ff9592;
+  --red-12: #ffd1d9;
 
-  --tech-cyan: #38bdf8;
-  --tech-cyan-glow: rgba(56, 189, 248, 0.2);
-  --sofa-blue: #38bdf8;
-  --sofa-blue-glow: rgba(56, 189, 248, 0.2);
-  --ice-blue: #38bdf8;
+  --violet-1: #14121f;
+  --violet-2: #1b1525;
+  --violet-3: #291f43;
+  --violet-4: #33255b;
+  --violet-5: #3c2e69;
+  --violet-6: #473876;
+  --violet-7: #56468b;
+  --violet-8: #6558a0;
+  --violet-9: #6e56cf;
+  --violet-10: #7d66d9;
+  --violet-11: #baa7ff;
+  --violet-12: #e2ddfe;
 
-  --electric-gold: #f59e0b;
-  --amber-gold: #f59e0b;
-  --crimson-warn: #f43f5e;
-  --crimson-warn-bg: rgba(244, 63, 94, 0.12);
-  --agent-violet: #a855f7;
-  --agent-violet-glow: rgba(168, 85, 247, 0.25);
+  --black-a1: rgba(0, 0, 0, 0.05);
+  --black-a2: rgba(0, 0, 0, 0.10);
+  --black-a3: rgba(0, 0, 0, 0.15);
+  --black-a4: rgba(0, 0, 0, 0.20);
+  --black-a5: rgba(0, 0, 0, 0.30);
+  --black-a6: rgba(0, 0, 0, 0.40);
+  --black-a7: rgba(0, 0, 0, 0.50);
+  --black-a8: rgba(0, 0, 0, 0.60);
+  --black-a9: rgba(0, 0, 0, 0.70);
+  --black-a10: rgba(0, 0, 0, 0.80);
+  --black-a11: rgba(0, 0, 0, 0.90);
+  --black-a12: rgba(0, 0, 0, 0.95);
 
-  /* Typography / Inks */
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-tertiary: #64748b;
-  --text-emerald: #10b981;
-  --text-cyan: #38bdf8;
-  --text-gold: #fbbf24;
+  --pitch-bg: var(--slate-1);
+  --pitch-surface: var(--slate-2);
+  --pitch-card: var(--slate-3);
+  --pitch-card-hover: var(--slate-4);
+  --pitch-card-subtle: var(--slate-2);
+  --pitch-well: var(--slate-1);
 
-  /* Gate Status */
-  --gate-published: #10b981;
-  --gate-qualified: #f59e0b;
-  --gate-withheld: #f43f5e;
+  --glass-bg: color-mix(in srgb, var(--slate-2) 88%, transparent);
+  --glass-bg-subtle: color-mix(in srgb, var(--slate-2) 70%, transparent);
+  --glass-border: var(--slate-6);
+  --glass-border-bright: var(--slate-7);
+  --glass-blur: blur(10px);
 
-  /* Tactical Pitch Variables */
-  --masthead-bg: #0b0f19;
-  --stage-bg: #091c17;
-  --stage-border: #134e40;
-  --turf-svg-bg: #0a231d;
-  --turf-field-line: #10b981;
-  --turf-entry-line: #059669;
-  --zone-strip-bg: #061612;
-  --input-bg: #111827;
-  --input-border: #1e293b;
-  --input-text: #f8fafc;
+  --pitch-border: var(--slate-6);
+  --pitch-border-bright: var(--slate-7);
+  --pitch-border-active: var(--green-9);
+
+  --shadow-sm: 0 1px 2px var(--black-a6);
+  --shadow-md: 0 4px 12px var(--black-a7);
+  --shadow-lg: 0 12px 32px var(--black-a8);
+  --shadow-glow-emerald: none;
+  --shadow-glow-cyan: none;
+
+  --turf-emerald: var(--green-9);
+  --turf-emerald-glow: color-mix(in srgb, var(--green-9) 25%, transparent);
+  --turf-dark: var(--green-3);
+  --turf-line: var(--green-7);
+
+  --tech-cyan: var(--cyan-9);
+  --tech-cyan-glow: var(--cyan-4);
+  --sofa-blue: var(--cyan-9);
+  --sofa-blue-glow: var(--cyan-4);
+  --ice-blue: var(--cyan-10);
+
+  --electric-gold: var(--amber-9);
+  --amber-gold: var(--amber-9);
+  --crimson-warn: var(--red-9);
+  --crimson-warn-bg: var(--red-3);
+  --agent-violet: var(--violet-9);
+  --agent-violet-glow: var(--violet-4);
+
+  --text-primary: var(--slate-12);
+  --text-secondary: var(--slate-11);
+  --text-tertiary: var(--slate-10);
+  --text-emerald: var(--green-11);
+  --text-cyan: var(--cyan-11);
+  --text-gold: var(--amber-11);
+
+  --gate-published: var(--green-9);
+  --gate-qualified: var(--amber-9);
+  --gate-withheld: var(--red-9);
+
+  --masthead-bg: var(--slate-1);
+  --stage-bg: var(--green-1);
+  --stage-border: var(--green-6);
+  --turf-svg-bg: var(--green-2);
+  --turf-field-line: var(--green-8);
+  --turf-entry-line: var(--green-9);
+  --zone-strip-bg: var(--green-1);
+  --input-bg: var(--slate-2);
+  --input-border: var(--slate-6);
+  --input-text: var(--slate-12);
+
+  --rail-bg: var(--slate-2);
+  --rail-unknown: color-mix(in srgb, var(--amber-9) 18%, transparent);
+
+  --font-body: "Inter", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-display: "Bahnschrift", "DIN Alternate", "Roboto Condensed", "Arial Narrow", "PingFang SC", sans-serif;
+  --font-mono: "IBM Plex Mono", "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+
+  --text-caption: 12px;
+  --text-body: 14px;
+  --text-title: 18px;
+  --text-page: 24px;
+
+  --radius-panel: 10px;
+  --radius-inner: 8px;
+  --radius-control: 6px;
+  --radius-pill: 999px;
+  --border-hairline: 0.5px;
+  --transition-base: 250ms ease-out;
 }
 
 [data-theme="light"] {
-  /* Clean Tactical Light Palette */
-  --pitch-bg: #f1f5f9;
+  --slate-1: #fcfcfd;
+  --slate-2: #f9f9fb;
+  --slate-3: #f0f0f3;
+  --slate-4: #e8e8ec;
+  --slate-5: #e0e1e6;
+  --slate-6: #d9d9e0;
+  --slate-7: #cdced6;
+  --slate-8: #b9bbc6;
+  --slate-9: #8b8d98;
+  --slate-10: #80838d;
+  --slate-11: #60646c;
+  --slate-12: #1c2024;
+
+  --green-1: #fbfefc;
+  --green-2: #f4fbf6;
+  --green-3: #e6f6eb;
+  --green-4: #d6f1df;
+  --green-5: #c4e8d1;
+  --green-6: #adddc0;
+  --green-7: #8eceaa;
+  --green-8: #5bb98b;
+  --green-9: #30a46c;
+  --green-10: #2b9a66;
+  --green-11: #218358;
+  --green-12: #193b2d;
+
+  --cyan-1: #fafdfe;
+  --cyan-2: #f2fafb;
+  --cyan-3: #def7f9;
+  --cyan-4: #caf1f6;
+  --cyan-5: #b5e9f0;
+  --cyan-6: #9ddde7;
+  --cyan-7: #7dcedc;
+  --cyan-8: #3db9cf;
+  --cyan-9: #00a2c7;
+  --cyan-10: #0797b9;
+  --cyan-11: #107d98;
+  --cyan-12: #0d3c48;
+
+  --amber-1: #fefdfb;
+  --amber-2: #fefbe9;
+  --amber-3: #fff7c2;
+  --amber-4: #ffee9c;
+  --amber-5: #fbe577;
+  --amber-6: #f3d673;
+  --amber-7: #e9c162;
+  --amber-8: #e2a336;
+  --amber-9: #ffc53d;
+  --amber-10: #ffba18;
+  --amber-11: #ab6400;
+  --amber-12: #4f3422;
+
+  --red-1: #fffcfc;
+  --red-2: #fff7f7;
+  --red-3: #feebec;
+  --red-4: #ffdbdc;
+  --red-5: #ffcdce;
+  --red-6: #fdbdbe;
+  --red-7: #f4a9aa;
+  --red-8: #eb8e90;
+  --red-9: #e5484d;
+  --red-10: #dc3e42;
+  --red-11: #ce2c31;
+  --red-12: #641723;
+
+  --violet-1: #fdfcfe;
+  --violet-2: #faf8ff;
+  --violet-3: #f4f0fe;
+  --violet-4: #ebe4ff;
+  --violet-5: #e1d9ff;
+  --violet-6: #d4cafe;
+  --violet-7: #c2b5f5;
+  --violet-8: #aa99ec;
+  --violet-9: #6e56cf;
+  --violet-10: #654dc4;
+  --violet-11: #6550b9;
+  --violet-12: #2f265f;
+
+  --pitch-bg: var(--slate-1);
   --pitch-surface: #ffffff;
-  --pitch-card: #f8fafc;
-  --pitch-card-hover: #edf2f7;
-  --pitch-card-subtle: #f1f5f9;
-  --pitch-well: #e2e8f0;
+  --pitch-card: var(--slate-2);
+  --pitch-card-hover: var(--slate-3);
+  --pitch-card-subtle: var(--slate-2);
+  --pitch-well: var(--slate-3);
 
-  /* Glassmorphic Surfaces */
-  --glass-bg: rgba(255, 255, 255, 0.85);
-  --glass-bg-subtle: rgba(255, 255, 255, 0.65);
-  --glass-border: rgba(203, 213, 225, 0.8);
-  --glass-border-bright: rgba(148, 163, 184, 0.5);
-  --glass-blur: blur(12px);
+  --glass-bg: color-mix(in srgb, #ffffff 90%, transparent);
+  --glass-bg-subtle: color-mix(in srgb, #ffffff 70%, transparent);
+  --glass-border: var(--slate-6);
+  --glass-border-bright: var(--slate-7);
+  --glass-blur: blur(10px);
 
-  /* Borders & Dividers */
-  --pitch-border: #e2e8f0;
-  --pitch-border-bright: #cbd5e1;
-  --pitch-border-active: #059669;
+  --pitch-border: var(--slate-6);
+  --pitch-border-bright: var(--slate-7);
+  --pitch-border-active: var(--green-9);
 
-  /* Elevation Shadows */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.07);
-  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1);
-  --shadow-glow-emerald: 0 0 20px rgba(5, 150, 105, 0.15);
-  --shadow-glow-cyan: 0 0 20px rgba(2, 132, 199, 0.15);
+  --shadow-sm: 0 1px 2px var(--black-a4);
+  --shadow-md: 0 4px 12px var(--black-a4);
+  --shadow-lg: 0 12px 32px var(--black-a5);
+  --shadow-glow-emerald: none;
+  --shadow-glow-cyan: none;
 
-  /* Accents & Brand */
-  --turf-emerald: #059669;
-  --turf-emerald-glow: rgba(5, 150, 105, 0.15);
-  --turf-dark: #ecfdf5;
-  --turf-line: rgba(5, 150, 105, 0.3);
+  --turf-emerald: var(--green-9);
+  --turf-emerald-glow: var(--green-4);
+  --turf-dark: var(--green-3);
+  --turf-line: var(--green-7);
 
-  --tech-cyan: #0284c7;
-  --tech-cyan-glow: rgba(2, 132, 199, 0.15);
-  --sofa-blue: #0284c7;
-  --sofa-blue-glow: rgba(2, 132, 199, 0.15);
-  --ice-blue: #0284c7;
+  --tech-cyan: var(--cyan-9);
+  --tech-cyan-glow: var(--cyan-3);
+  --sofa-blue: var(--cyan-9);
+  --sofa-blue-glow: var(--cyan-3);
+  --ice-blue: var(--cyan-10);
 
-  --electric-gold: #d97706;
-  --amber-gold: #d97706;
-  --crimson-warn: #e11d48;
-  --crimson-warn-bg: rgba(225, 29, 72, 0.08);
-  --agent-violet: #9333ea;
-  --agent-violet-glow: rgba(147, 51, 234, 0.15);
+  --electric-gold: var(--amber-9);
+  --amber-gold: var(--amber-9);
+  --crimson-warn: var(--red-9);
+  --crimson-warn-bg: var(--red-3);
+  --agent-violet: var(--violet-9);
+  --agent-violet-glow: var(--violet-3);
 
-  /* Typography / Inks */
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-tertiary: #64748b;
-  --text-emerald: #059669;
-  --text-cyan: #0284c7;
-  --text-gold: #b45309;
+  --text-primary: var(--slate-12);
+  --text-secondary: var(--slate-11);
+  --text-tertiary: var(--slate-10);
+  --text-emerald: var(--green-11);
+  --text-cyan: var(--cyan-11);
+  --text-gold: var(--amber-11);
 
-  /* Gate Status */
-  --gate-published: #059669;
-  --gate-qualified: #d97706;
-  --gate-withheld: #e11d48;
+  --gate-published: var(--green-9);
+  --gate-qualified: var(--amber-9);
+  --gate-withheld: var(--red-9);
 
-  /* Tactical Pitch Variables */
   --masthead-bg: #ffffff;
-  --stage-bg: #0f3d32;
-  --stage-border: #145344;
-  --turf-svg-bg: #124639;
-  --turf-field-line: #10b981;
-  --turf-entry-line: #059669;
-  --zone-strip-bg: #0b2e26;
+  --stage-bg: var(--green-1);
+  --stage-border: var(--green-7);
+  --turf-svg-bg: var(--green-2);
+  --turf-field-line: var(--green-8);
+  --turf-entry-line: var(--green-9);
+  --zone-strip-bg: var(--green-2);
   --input-bg: #ffffff;
-  --input-border: #cbd5e1;
-  --input-text: #0f172a;
+  --input-border: var(--slate-6);
+  --input-text: var(--slate-12);
+
+  --rail-bg: #ffffff;
+  --rail-unknown: color-mix(in srgb, var(--amber-9) 22%, transparent);
 }
+
+:root { --white: #ffffff; }

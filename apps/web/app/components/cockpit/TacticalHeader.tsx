@@ -74,7 +74,7 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
               <span style={{ fontSize: 18, fontWeight: 900, letterSpacing: -0.5, color: "var(--text-primary)" }}>
                 {t.brandTitle}
               </span>
-              <span style={{ fontSize: 12, fontWeight: 900, color: "var(--turf-emerald)" }}>AI</span>
+              <span style={{ fontSize: 12, fontWeight: 900, color: "var(--text-emerald)" }}>AI</span>
             </div>
           </a>
 
@@ -86,7 +86,7 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
 
         {/* Match Switcher Dropdown */}
         <div className="match-selector-wrap" title="Select Match Archetype or Real Scenario">
-          <label htmlFor="cockpit-match-select" style={{ fontSize: 11, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase" }}>
+          <label htmlFor="cockpit-match-select" style={{ fontSize: 12, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase" }}>
             {t.matchLabel}
           </label>
           <select
@@ -182,13 +182,13 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
           {activeMoment && (
             <span
               style={{
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 750,
-                color: "var(--amber-gold)",
-                background: "rgba(245, 158, 11, 0.15)",
+                color: "var(--text-gold)",
+                background: "color-mix(in srgb, var(--amber-9) 15%, transparent)",
                 padding: "2px 6px",
                 borderRadius: 4,
-                border: "1px solid rgba(245, 158, 11, 0.3)",
+                border: "0.5px solid color-mix(in srgb, var(--amber-9) 30%, transparent)",
               }}
             >
               {activeMoment.badge}
@@ -204,7 +204,7 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
             onClick={() => onSelectPerspective("coach")}
             title={t.perspectiveCoachDesc}
           >
-            <span>👔</span>
+            <span className="perspective-key">C</span>
             <span>{isZh ? "教练视角" : "Coach"}</span>
           </button>
 
@@ -214,7 +214,7 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
             onClick={() => onSelectPerspective("media")}
             title={t.perspectiveMediaDesc}
           >
-            <span>🎙️</span>
+            <span className="perspective-key">M</span>
             <span>{isZh ? "转播视角" : "Media"}</span>
           </button>
 
@@ -224,7 +224,7 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
             onClick={() => onSelectPerspective("fan")}
             title={t.perspectiveFanDesc}
           >
-            <span>⚽</span>
+            <span className="perspective-key">F</span>
             <span>{isZh ? "球迷视角" : "Deep Fan"}</span>
           </button>
         </div>
@@ -245,14 +245,14 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
                 alignItems: "center",
                 gap: 5,
                 borderRadius: 6,
-                background: "rgba(245, 158, 11, 0.12)",
-                border: "1px solid rgba(245, 158, 11, 0.3)",
-                color: "var(--amber-gold)",
+                background: "color-mix(in srgb, var(--amber-9) 12%, transparent)",
+                border: "0.5px solid color-mix(in srgb, var(--amber-9) 30%, transparent)",
+                color: "var(--text-gold)",
                 cursor: "pointer",
               }}
               title={isZh ? "打开指标与战术指南释义字典" : "Open Tactical Indicator Documentation"}
             >
-              <span>📖</span>
+              <span className="tool-key">i</span>
               <span>{isZh ? "指标释义" : "Guide"}</span>
             </button>
           )}
@@ -265,18 +265,18 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
               style={{
                 minHeight: 32,
                 padding: "4px 9px",
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 800,
                 borderRadius: 6,
-                background: "rgba(56, 189, 248, 0.12)",
-                border: "1px solid rgba(56, 189, 248, 0.3)",
-                color: "var(--tech-cyan)",
+                background: "color-mix(in srgb, var(--cyan-9) 12%, transparent)",
+                border: "0.5px solid color-mix(in srgb, var(--cyan-9) 30%, transparent)",
+                color: "var(--text-cyan)",
                 cursor: "pointer",
                 letterSpacing: "0.5px",
               }}
               title={isZh ? "Switch to English" : "切换为中文"}
             >
-              {isZh ? "🇬🇧 EN" : "🇨🇳 中文"}
+              {isZh ? "EN" : "中文"}
             </button>
           )}
 
@@ -289,14 +289,14 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
               padding: "4px 8px",
               fontSize: 12,
               background: "transparent",
-              border: "1px solid var(--pitch-border)",
+              border: "0.5px solid var(--pitch-border)",
               borderRadius: 6,
               color: "var(--text-secondary)",
               cursor: "pointer",
             }}
             title={theme === "dark" ? t.themeLight : t.themeDark}
           >
-            {theme === "dark" ? "☀️" : "🌙"}
+            {theme === "dark" ? "LIGHT" : "DARK"}
           </button>
 
           {/* Inspector Drawer Toggle */}
@@ -312,16 +312,16 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
               alignItems: "center",
               gap: 6,
               borderRadius: 7,
-              background: isDrawerOpen ? "rgba(56, 189, 248, 0.2)" : "rgba(15, 23, 42, 0.8)",
-              border: `1px solid ${isDrawerOpen ? "var(--tech-cyan)" : "var(--glass-border)"}`,
+              background: isDrawerOpen ? "color-mix(in srgb, var(--cyan-9) 20%, transparent)" : "color-mix(in srgb, var(--slate-1) 80%, transparent)",
+              border: `0.5px solid ${isDrawerOpen ? "var(--tech-cyan)" : "var(--glass-border)"}`,
               color: isDrawerOpen ? "var(--tech-cyan)" : "var(--text-primary)",
               cursor: "pointer",
             }}
             title={t.inspectorDrawer}
           >
-            <span>🔍</span>
+            
             <span>{t.inspectorDrawer}</span>
-            {isDrawerOpen && <span style={{ fontSize: 10 }}>●</span>}
+            {isDrawerOpen && <span style={{ fontSize: 12 }}>●</span>}
           </button>
         </div>
       </div>

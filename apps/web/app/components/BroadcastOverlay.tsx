@@ -20,7 +20,7 @@ export function BroadcastOverlay({
   return (
     <div className="broadcast-overlay-preview" role="complementary" aria-label="Broadcast TV Overlay Graphic">
       <div className="overlay-header">
-        <span className="live-sim-badge">BROADCAST OVERLAY PREVIEW · SYNTHETIC MATCH</span>
+        <span className="live-sim-badge">BROADCAST OVERLAY PREVIEW SYNTHETIC MATCH</span>
         <span className="as-of-badge">AS OF {formatClock(asOf)}</span>
       </div>
 
@@ -49,7 +49,7 @@ export function BroadcastOverlay({
       </div>
 
       <div className="overlay-footnote">
-        <span>Preview only · Same approved claim and original analysis time. No video processing.</span>
+        <span>Preview only Same approved claim and original analysis time. No video processing.</span>
       </div>
     </div>
   );

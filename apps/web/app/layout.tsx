@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MatchLens AI · Football Intelligence You Can Challenge",
+  title: "MatchLens AI — Football Intelligence You Can Challenge",
   description:
-    "Inspect the events behind a football insight. A continuous synthetic match, deterministic statistics and independent Analyst / Verifier agents.",
+    "Inspect the events behind a football insight. A continuous synthetic match, deterministic statistics and two independent review agents.",
 };
 
 export default function RootLayout({

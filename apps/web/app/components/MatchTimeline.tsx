@@ -77,7 +77,7 @@ export function MatchTimeline({
                 title={`Chapter ${ch.id} at ${clock(ch.at)}: ${ch.title}`}
               >
                 <span className="marker-icon">{glyph}</span>
-                <span className="marker-tooltip">{clock(ch.at)} · Ch {ch.id}</span>
+                <span className="marker-tooltip">{clock(ch.at)} Ch {ch.id}</span>
               </button>
             );
           })}
@@ -86,7 +86,7 @@ export function MatchTimeline({
 
       {moments.length > 0 && <div className="detected-moments" aria-label="Automatically detected moments">
         {moments.map(moment => <button type="button" key={moment.id} disabled={busy} onClick={() => onFocusMoment(moment.id)}>
-          <time>{clock(moment.at)}</time> · {moment.badge} <span>Inspect →</span>
+          <time>{clock(moment.at)}</time> {moment.badge} <span>Inspect →</span>
         </button>)}
       </div>}
       <div className="chapters-strip" role="navigation" aria-label="Focus Moments">

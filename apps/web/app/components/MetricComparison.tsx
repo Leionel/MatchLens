@@ -4,7 +4,7 @@ import { Locale } from "../lib/i18n";
 
 type Receipt = {
   id: string;
-  value: number;
+  value: number | null;
   unit: string;
 };
 
@@ -13,6 +13,8 @@ type MetricComparisonProps = {
   at: number;
   snapshotId: string | null;
   focusTeam?: "H" | "N";
+  homeTeamName?: string;
+  awayTeamName?: string;
   locale?: Locale;
   onInspect: (receiptId: string) => void;
 };
@@ -41,6 +43,8 @@ export function MetricComparison({
   at,
   snapshotId,
   focusTeam = "H",
+  homeTeamName = "Harbor FC",
+  awayTeamName = "Northbridge Utd",
   locale = "zh",
   onInspect,
 }: MetricComparisonProps) {
@@ -50,7 +54,7 @@ export function MetricComparison({
   const prevEnd = Math.max(0, at - 180);
   const currStart = prevEnd;
   const currEnd = at;
-  const teamLabel = focusTeam === "N" ? "Northbridge Utd" : "Harbor FC";
+  const teamLabel = focusTeam === "N" ? awayTeamName : homeTeamName;
 
   const metrics = [
     "possession",
@@ -70,7 +74,7 @@ export function MetricComparison({
       <div className="comparison-header">
         <div className="header-title-wrap">
           <span className="comparison-tag">
-            {isZh ? `战术指标变化 · ${teamLabel.toUpperCase()}` : `TACTICAL METRICS DELTA · ${teamLabel.toUpperCase()}`}
+            {isZh ? `战术指标变化 ${teamLabel.toUpperCase()}` : `TACTICAL METRICS DELTA ${teamLabel.toUpperCase()}`}
           </span>
           <h3 className="comparison-title">
             {isZh ? `3分钟滑动窗口对比 (${teamLabel})` : `3-Minute Window Comparison (${teamLabel})`}
@@ -92,8 +96,8 @@ export function MetricComparison({
           padding: "6px 12px",
           margin: "8px 0 12px",
           borderRadius: "6px",
-          background: "rgba(245, 158, 11, 0.1)",
-          border: "1px solid rgba(245, 158, 11, 0.3)",
+          background: "color-mix(in srgb, var(--amber-9) 10%, transparent)",
+          border: "0.5px solid color-mix(in srgb, var(--amber-9) 30%, transparent)",
           color: "var(--text-gold)",
           fontSize: "12px",
           fontWeight: 600,
@@ -109,8 +113,8 @@ export function MetricComparison({
           padding: "6px 12px",
           margin: "8px 0 12px",
           borderRadius: "6px",
-          background: "rgba(59, 130, 246, 0.08)",
-          border: "1px solid rgba(59, 130, 246, 0.25)",
+          background: "color-mix(in srgb, var(--cyan-9) 8%, transparent)",
+          border: "0.5px solid color-mix(in srgb, var(--cyan-9) 25%, transparent)",
           color: "var(--ice-blue)",
           fontSize: "12px",
           fontWeight: 500,
@@ -134,12 +138,14 @@ export function MetricComparison({
           const curr = receipts[`${focusTeam}.${m}.current`];
           if (!prev || !curr) return null;
 
-          const maxVal = m === "possession" ? 100 : Math.max(4, prev.value, curr.value);
-          const prevPct = Math.min(100, (prev.value / maxVal) * 100);
-          const currPct = Math.min(100, (curr.value / maxVal) * 100);
+          const prevValue = typeof prev.value === "number" ? prev.value : null;
+          const currValue = typeof curr.value === "number" ? curr.value : null;
+          const maxVal = m === "possession" ? 100 : Math.max(4, prevValue ?? 0, currValue ?? 0);
+          const prevPct = prevValue === null ? 0 : Math.min(100, (prevValue / maxVal) * 100);
+          const currPct = currValue === null ? 0 : Math.min(100, (currValue / maxVal) * 100);
 
-          const isUp = curr.value > prev.value;
-          const isDown = curr.value < prev.value;
+          const isUp = prevValue !== null && currValue !== null && currValue > prevValue;
+          const isDown = prevValue !== null && currValue !== null && currValue < prevValue;
 
           return (
             <button
@@ -154,7 +160,7 @@ export function MetricComparison({
                 {labels[m]}
                 <span className="inspect-hint">↗</span>
               </span>
-              <span className="metric-val prev">{prev.value}{prev.unit === "%" ? "%" : ""}</span>
+              <span className="metric-val prev">{prevValue === null ? "—" : `${prevValue}${prev.unit === "%" ? "%" : ""}`}</span>
               <span className="metric-bars-track">
                 <span className="bar-sub-track">
                   <span className="bar-prev" style={{ width: `${prevPct}%` }} />
@@ -167,7 +173,7 @@ export function MetricComparison({
                 </span>
               </span>
               <span className={`metric-val curr ${isUp ? "val-up" : isDown ? "val-down" : ""}`}>
-                {curr.value}{curr.unit === "%" ? "%" : ""}
+                {currValue === null ? "—" : `${currValue}${curr.unit === "%" ? "%" : ""}`}
               </span>
             </button>
           );

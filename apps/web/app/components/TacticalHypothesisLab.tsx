@@ -121,7 +121,7 @@ export function TacticalHypothesisLab({ matrix, onInspectReceipt }: Props) {
               {hyp.limitations.length > 0 && (
                 <div className="hyp-limitations-row">
                   <span className="limit-icon">ℹ</span>
-                  <span>{hyp.limitations.join(" · ")}</span>
+                  <span>{hyp.limitations.join(" ")}</span>
                 </div>
               )}
             </div>
