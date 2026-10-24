@@ -107,7 +107,17 @@ class AgentRunStore:
         }
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-        tmp.replace(self.path)
+        # Windows can hold the destination with a stale handle for a moment
+        # after the previous write (indexer/AV); retry briefly instead of
+        # failing a persisted lifecycle record mid-write.
+        for attempt in range(6):
+            try:
+                tmp.replace(self.path)
+                break
+            except PermissionError:
+                if attempt == 5:
+                    raise
+                time.sleep(0.02 * (attempt + 1))
 
     def create(
         self,

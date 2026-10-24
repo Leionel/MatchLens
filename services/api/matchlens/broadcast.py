@@ -165,7 +165,17 @@ class BroadcastStore:
         }
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-        tmp.replace(self.path)
+        # Windows can hold the destination with a stale handle for a moment
+        # after the previous write (indexer/AV), so the atomic replace retries
+        # briefly instead of crashing the caller mid-loop.
+        for attempt in range(6):
+            try:
+                tmp.replace(self.path)
+                return
+            except PermissionError:
+                if attempt == 5:
+                    raise
+                time.sleep(0.02 * (attempt + 1))
 
     def record_manifest(self, manifest: ExportManifest) -> ExportManifest:
         """Persist one export manifest into the bounded history (newest first)."""

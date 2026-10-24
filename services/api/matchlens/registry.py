@@ -458,7 +458,17 @@ class ClaimRegistry:
             )
         tmp = target.with_suffix(".tmp")
         tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-        tmp.replace(target)
+        # Windows can hold the destination with a stale handle for a moment
+        # after the previous write (indexer/AV), so the atomic replace retries
+        # briefly instead of failing a persisted state machine mid-write.
+        for attempt in range(6):
+            try:
+                tmp.replace(target)
+                break
+            except PermissionError:
+                if attempt == 5:
+                    raise
+                time.sleep(0.02 * (attempt + 1))
 
     # ------------------------------------------------------------------- registry
     @staticmethod

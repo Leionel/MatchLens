@@ -2048,7 +2048,12 @@ async def get_exploration_recoveries(request: Request, window_seconds: float = 6
     s, eng = session(request), engine(request)
     state = eng.reduce_state(s)
     ctx = eng.match_context(s.match_id)
-    result = analyze_quick_recoveries(state["events"], window_seconds=window_seconds, target_team=s.focus_team)
+    result = analyze_quick_recoveries(
+        state["events"],
+        window_seconds=window_seconds,
+        target_team=s.focus_team,
+        team_names={"H": ctx.home_team_name, "N": ctx.away_team_name},
+    )
     result.update(match_id=s.match_id, epoch=s.epoch, at=s.at, dataset_revision=ctx.dataset_revision)
     result["registry_comparison"] = registry_recoveries_comparison(
         eng.snapshot_at(s, s.at),
@@ -2113,7 +2118,11 @@ async def get_match_exploration(request: Request, match_id: str, smoothing_mode:
 
     ctx = MatchCatalog.get_match_context(match_id)
     oaai_res = compute_oaai(events, smoothing_mode=smoothing_mode)
-    recoveries_res = analyze_quick_recoveries(events, window_seconds=window_seconds)
+    recoveries_res = analyze_quick_recoveries(
+        events,
+        window_seconds=window_seconds,
+        team_names={"H": ctx.home_team_name, "N": ctx.away_team_name},
+    )
     diff_res = analyze_action_density_differential(events)
     channels_h = analyze_attacking_channels(
         events, team="H", team_name=ctx.home_team_name, coordinate_frame=ctx.coordinate_frame

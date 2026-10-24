@@ -84,6 +84,7 @@ def analyze_quick_recoveries(
     events: Sequence[Any],
     window_seconds: float = 6.0,
     target_team: Optional[str] = None,
+    team_names: Optional[dict[str, str]] = None,
 ) -> dict:
     """Analyzes quick ball recoveries occurring within a parameterized window (default 6s) after possession loss.
 
@@ -96,6 +97,7 @@ def analyze_quick_recoveries(
     norm_events.sort(key=lambda e: (e["t"], e["id"]))
 
     teams = [target_team] if target_team in ("H", "N") else ["H", "N"]
+    display_names = team_names or TEAMS
     results_by_team: dict[str, dict] = {}
 
     for team in teams:
@@ -181,7 +183,7 @@ def analyze_quick_recoveries(
 
         results_by_team[team] = {
             "team": team,
-            "team_name": TEAMS.get(team, team),
+            "team_name": display_names.get(team, team),
             "window_seconds": window_seconds,
             "total_possession_losses": total_losses,
             "quick_recoveries_count": rec_count,
