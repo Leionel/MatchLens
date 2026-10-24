@@ -28,6 +28,10 @@ The remaining warning is the FastAPI duplicate-operation-ID warning that was
 subsequently removed by splitting the catch-all route into four explicit
 operations; the contract test was re-run green afterwards (3 passed); the final full run was 199 passed in 10.58s.
 
+Remote CI (GitHub Actions run `40059313378`, commit `5b44171`) completed
+successfully: `Backend Test Suite (Pytest)` and `Frontend Build & Typecheck`
+both green.
+
 ### 1.2 Frontend typecheck and production build
 
 ```powershell
@@ -202,7 +206,7 @@ source fingerprint (mtime+size) for historical files and
 | True third agent | **Not Implemented** | Requires design, tool permissions, cost and controlled experiment |
 | Calibrated xG/xT and league generalization | **Not Established** | 12-event sample is insufficient |
 | External human research/audience review | **Not Run** | No participants |
-| Remote GitHub Actions CI | **Not executed locally** | Workflow file exists; remote run occurs on push |
+| Remote GitHub Actions CI | **Success** | Run `40059313378`: backend pytest and frontend typecheck/build both passed |
 | Screenshot visual QA | **Not available** | In-app browser viewport 0×0 |
 | Mobile device verification | **Not Run** | Only CSS breakpoints implemented |
 
