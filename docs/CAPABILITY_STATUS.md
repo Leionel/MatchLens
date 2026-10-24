@@ -71,7 +71,8 @@ roadmap; it is not a phase claim.
 | CAP-33 | Dataset Completeness Verification | A | Implemented & Verified | `completeness.py` (5 states) | ingest receipt, hub, rail, investigation | fifth-pass completeness tests | provider-side declarations trusted only when supplied |
 | CAP-34 | Public/Producer broadcast projections | E | Implemented & Verified | `public_claim_projection` / `producer_claim_projection` | Producer workspace | projection test | producer UI is token-based, not account-based |
 | CAP-35 | Read-time rundown validity | A | Implemented & Verified | GET rundown revalidation + export 409 | Producer workspace notice | stale-rundown test + live withdrawal acceptance | — |
-| CAP-36 | Immutable revision payload | A | Implemented & Verified | `registry._append_revision` | history API | immutability test + live `rev-001` narrowed | pre-v2 registry records need migration review |
+| CAP-36 | Immutable revision payload | A | Implemented & Verified | `registry._append_revision` | history API | immutability test + live `rev-001` narrowed | none |
+| CAP-42 | Legacy registry migration (v1 → v2) | A | Implemented & Verified | `registry._load_legacy` + byte-identical backup | claim list / history API | `test_registry_migration.py` (12 cases) | derived revision 1 is a reconstruction, not a historical review |
 | CAP-37 | Question-aware investigation intent | C | Implemented & Verified | `classify_intent` + `UNKNOWN → FAILED` | Investigation panel | intent/invalid-focus tests | metric focus routes at 0.6 confidence, no dedicated EXPLAIN_METRIC intent |
 | CAP-38 | Chart→Investigation handoff | C | Implemented & Verified | `InvestigationSeed` + `oaai_point` focus | OAAI timeline drawer | live CP-01 acceptance at `at=54` | none |
 | CAP-39 | OAAI contribution ledger | B | Implemented & Verified | `compute_oaai_contribution_ledger` | investigation + `/api/oaai/ledger` | reconciliation test | top-N list plus explicit unlisted remainder |
@@ -109,7 +110,7 @@ closed each item.
 
 | Track | Current state | Blocking gap | Next gate |
 | --- | --- | --- | --- |
-| A — Trust, Identity & Runtime | Metrics, completeness, revisions, validity, projections and idempotency ownership closed | pre-v2 registry migration review | B-04 residual and CI browser job |
+| A — Trust, Identity & Runtime | Metrics, completeness, revisions, validity, projections, idempotency ownership and legacy registry migration closed | none open in this track | B-04 residual and CI browser job |
 | B — Football Data & Analytics | Ledger, receipts and verified coverage; import labels sparse fixtures honestly | complete licensed match; story phase counts | B-01, B-04 |
 | C — Agentic Investigation | Typed intent, tool registry, state machine, ledger, promotion, challenge | agent-planned routing; live model receipts | C-06, F-01 |
 | D — Football Product Experience | Hub, producer workspace, deep links, chart handoff, responsive collapse | real device + screen-reader pass; screenshot baselines | D-07 |
@@ -133,3 +134,33 @@ closed each item.
 - Outstanding before a public claim: a complete licensed match, a CI browser job
   with screenshot baselines, real-device and screen-reader QA, and live model run
   receipts under an authorized budget.
+
+---
+
+## 5. Claim registry persistence contract (`claim-registry-v2`)
+
+**File layout.** The on-disk payload is
+`{version:"claim-registry-v2", saved_at, claims[], challenges[], revisions[], supersessions[]}`.
+A legacy `claim-registry-v1` payload (no `revisions` / `supersessions` keys) is
+migrated on load by `services/api/matchlens/registry.py::ClaimRegistry._load_legacy`.
+
+| Situation | Behaviour |
+| --- | --- |
+| Source file is `claim-registry-v2` | Read as is. No backup, no derived revision, no write. |
+| Source file is legacy (or has no `version`) | The file is copied **byte for byte** to `<name>.v1.bak-<YYYYmmddTHHMMSSZ>.json` next to it, then migrated **in memory**. The original file keeps its bytes until an explicit `_save()`. |
+| The same legacy file is loaded again | The existing backup with identical content is reused: no second backup, no duplicated revisions, identical derived revision ids. |
+| Legacy file carries real revision payloads | That history is kept verbatim; only a missing/unresolvable current pointer is repaired or cleared. A claim with no revision payload stays invalid (`missing_revision_payload`). |
+| Legacy claim has no revision history | One **derived** revision is created (`version=1`, `parent_revision_id=None`, `outcome=maintained` for an approved gate verdict and `rejected` otherwise, `status=current`/`disputed`), the record pointer is set to it and `revision_count` becomes 1. |
+| Backup cannot be written | The legacy file is **never** overwritten: the migrated state is written to `<name>.v2-unbacked.json`, `persistence_errors` records the blocked write, and `load_errors` records `legacy_backup_failed`. The registry is not emptied. |
+| Payload is not valid JSON / not an object | The registry stays **empty**, `load_errors` is non-empty and nothing is approved. The file is left untouched. |
+| A single entry fails validation | That entry is skipped and reported; the rest of the payload is still loaded. A broken revision never becomes the current revision, and a claim whose only revision is broken is not broadcastable. |
+
+**Honest limits of the derivation.** A legacy file recorded no review event for
+its claims, so the derived "revision 1" is a *reconstruction* of the gate
+verdict already stored on the record — not a historical fact. Every derived
+revision is marked as such (`created_by="legacy_migration"`,
+`review_result.derived_revision=true`, and a rationale that states that no
+historical revision payload existed). A legacy `lifecycle_status` other than
+`current` (for example `withdrawn`) is preserved, never overwritten.
+`ClaimRegistry.load_errors` / `persistence_errors` expose every anomaly; a
+non-empty `load_errors` never means "approved".
