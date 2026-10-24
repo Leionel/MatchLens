@@ -235,6 +235,37 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
   }, [changePoints]);
   const labelledChangePoints = new Set(strongestChangePoints);
 
+  // Labels of clustered change points would overlap at chart scale, so each
+  // labelled point takes a vertical lane on its side of the curve: the first
+  // label sits closest to the curve, later ones inside ~34 units step further
+  // away. The pass is deterministic (sorted by time), never animated.
+  const labelledPointLayout = useMemo(() => {
+    const layout = new Map<string, number>();
+    const labelled = changePoints
+      .filter((cp) => labelledChangePoints.has(cp.change_point_id))
+      .sort((a, b) => a.at - b.at);
+    let lastAboveX = -Infinity;
+    let lastBelowX = -Infinity;
+    let aboveSteps = 0;
+    let belowSteps = 0;
+    for (const cp of labelled) {
+      const above = cp.leading_team !== "N";
+      const base = above ? 9 : -16;
+      if (above) {
+        if (cp.at - lastAboveX < 46 && aboveSteps < 3) aboveSteps += 1;
+        else if (cp.at - lastAboveX >= 70) aboveSteps = 0;
+        layout.set(cp.change_point_id, base - aboveSteps * 11);
+        lastAboveX = cp.at;
+      } else {
+        if (cp.at - lastBelowX < 46 && belowSteps < 3) belowSteps += 1;
+        else if (cp.at - lastBelowX >= 70) belowSteps = 0;
+        layout.set(cp.change_point_id, base + belowSteps * 11);
+        lastBelowX = cp.at;
+      }
+    }
+    return layout;
+  }, [changePoints]);
+
   // Hover readout
   const hoverPoint = useMemo(() => {
     if (hoverTime === null) return null;
@@ -573,11 +604,11 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
           padding: "8px",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 12px", fontSize: 12 }}>
-          <span style={{ color: "var(--text-emerald)", fontWeight: 700 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "2px 12px 0", fontSize: 11 }}>
+          <span style={{ color: "var(--text-emerald)", fontWeight: 650, letterSpacing: 0.2 }}>
             {t.homeAdvantage.replace("Harbor FC", homeTeamName).replace("Northbridge United", awayTeamName)}
           </span>
-          <span style={{ color: "var(--text-gold)", fontWeight: 700 }}>
+          <span style={{ color: "var(--text-gold)", fontWeight: 650, letterSpacing: 0.2 }}>
             {t.awayAdvantage.replace("Northbridge United", awayTeamName).replace("Harbor FC", homeTeamName)}
           </span>
         </div>
@@ -677,9 +708,9 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
                 />
                 <text
                   x={xPos}
-                  y={svgHeight - padBottom + 16}
+                  y={svgHeight - padBottom + 14}
                   fill="var(--text-tertiary)"
-                  fontSize="12"
+                  fontSize="8.5"
                   textAnchor="middle"
                   fontFamily="monospace"
                 >
@@ -690,13 +721,13 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
           })}
 
           {/* Y Axis labels */}
-          <text x={padLeft - 8} y={padTop + 10} fill="var(--green-9)" fontSize="12" textAnchor="end" fontWeight="bold">
+          <text x={padLeft - 8} y={padTop + 10} fill="var(--green-9)" fontSize="8.5" textAnchor="end" fontWeight="600">
             +{maxAmp.toFixed(1)}
           </text>
-          <text x={padLeft - 8} y={zeroY + 3} fill="var(--slate-11)" fontSize="12" textAnchor="end">
+          <text x={padLeft - 8} y={zeroY + 3} fill="var(--slate-11)" fontSize="8.5" textAnchor="end">
             0
           </text>
-          <text x={padLeft - 8} y={svgHeight - padBottom - 2} fill="var(--amber-9)" fontSize="12" textAnchor="end" fontWeight="bold">
+          <text x={padLeft - 8} y={svgHeight - padBottom - 2} fill="var(--amber-9)" fontSize="8.5" textAnchor="end" fontWeight="600">
             -{maxAmp.toFixed(1)}
           </text>
 
@@ -708,9 +739,10 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
             d={linePath}
             fill="none"
             stroke="var(--green-9)"
-            strokeWidth="2.2"
+            strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
           />
 
           {/* Change point rug: every metric change point of the match */}
@@ -729,8 +761,9 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
                     x2={rugX}
                     y2={svgHeight - padBottom}
                     stroke={isHome ? "var(--green-9)" : "var(--amber-9)"}
-                    strokeWidth={isSelected ? 2.4 : 1.2}
+                    strokeWidth={isSelected ? 2.2 : 1.1}
                     opacity={isSelected ? 1 : 0.65}
+                    vectorEffect="non-scaling-stroke"
                     style={{ cursor: "pointer" }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -784,31 +817,31 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
                 fill="var(--white)"
                 opacity="0.9"
               />
-              <g transform={`translate(${Math.min(svgWidth - 168, Math.max(padLeft + 4, scaleX(hoverPoint.t) + 8))}, ${padTop + 4})`}>
+              <g transform={`translate(${Math.min(svgWidth - 122, Math.max(padLeft + 4, scaleX(hoverPoint.t) + 8))}, ${padTop + 4})`}>
                 <rect
                   x="0"
                   y="0"
-                  width="156"
-                  height="42"
-                  rx="5"
-                  fill="color-mix(in srgb, var(--slate-2) 92%, transparent)"
-                  stroke="color-mix(in srgb, var(--slate-12) 18%, transparent)"
+                  width="114"
+                  height="34"
+                  rx="7"
+                  fill="color-mix(in srgb, var(--slate-2) 94%, transparent)"
+                  stroke="color-mix(in srgb, var(--slate-12) 16%, transparent)"
                 />
-                <text x="8" y="15" fill="var(--text-secondary)" fontSize="11" fontFamily="monospace">
+                <text x="8" y="13" fill="var(--text-tertiary)" fontSize="8" fontFamily="monospace">
                   {Math.floor(hoverPoint.t / 60)}'{String(Math.floor(hoverPoint.t % 60)).padStart(2, "0")}"
                 </text>
                 <text
                   x="8"
-                  y="31"
+                  y="26"
                   fill={hoverValue >= 0 ? "var(--text-emerald)" : "var(--text-gold)"}
-                  fontSize="11"
+                  fontSize="9.5"
                   fontWeight="700"
                   fontFamily="monospace"
                 >
                   {hoverValue >= 0 ? "+" : ""}
                   {hoverValue.toFixed(3)}
                 </text>
-                <text x="70" y="31" fill="var(--text-tertiary)" fontSize="10">
+                <text x="48" y="26" fill="var(--text-secondary)" fontSize="7.5">
                   {hoverValue > 0.05 ? homeTeamName : hoverValue < -0.05 ? awayTeamName : isZh ? "平衡" : "balanced"}
                 </text>
               </g>
@@ -836,31 +869,42 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
                 <circle
                   cx={cpX}
                   cy={cpY}
-                  r={isSelected ? "7" : "5"}
+                  r={isSelected ? "6" : "4"}
                   fill={isHome ? "var(--green-9)" : "var(--amber-9)"}
-                  stroke="var(--white)"
-                  strokeWidth={isSelected ? "2.5" : "1.5"}
+                  stroke="var(--slate-1)"
+                  strokeWidth={isSelected ? "2" : "1.2"}
+                  vectorEffect="non-scaling-stroke"
                 />
-                <circle
-                  cx={cpX}
-                  cy={cpY}
-                  r="10"
-                  fill="none"
-                  stroke={isHome ? "var(--green-9)" : "var(--amber-9)"}
-                  strokeWidth="1"
-                  strokeDasharray="2 2"
-                  opacity="0.6"
-                />
+                {!isSelected && (
+                  <circle
+                    cx={cpX}
+                    cy={cpY}
+                    r="8"
+                    fill="none"
+                    stroke={isHome ? "var(--green-9)" : "var(--amber-9)"}
+                    strokeWidth="0.8"
+                    strokeDasharray="2 2"
+                    opacity="0.55"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
                 <text
                   x={cpX}
-                  y={cpY - (isHome ? 9 : -16)}
-                  fill="var(--slate-12)"
-                  fontSize="11"
-                  fontWeight="bold"
+                  y={cpY - (labelledPointLayout.get(cp.change_point_id) ?? (isHome ? 9 : -16))}
+                  fill={isHome ? "var(--green-9)" : "var(--amber-9)"}
+                  fontSize="7.5"
+                  fontWeight="700"
                   textAnchor="middle"
+                  fontFamily="var(--font-mono, monospace)"
+                  paintOrder="stroke"
+                  stroke="var(--slate-1)"
+                  strokeWidth="2.5"
                 >
-                  {cp.change_point_id}
+                  {cp.change_point_id} · {Math.floor(cp.at / 60)}'
                 </text>
+                <title>
+                  {cp.change_point_id} · {Math.floor(cp.at / 60)}' · {(cp.oaai_amplitude > 0 ? "+" : "") + cp.oaai_amplitude.toFixed(2)}
+                </title>
               </g>
             );
           })}
@@ -913,35 +957,12 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <button
                 type="button"
+                className="mz-btn mz-btn-primary"
                 onClick={() => onInvestigateChangePoint?.(selectedChangePoint)}
-                style={{
-                  minHeight: 30,
-                  padding: "4px 10px",
-                  fontSize: 12,
-                  fontWeight: 700,
-                  background: "var(--turf-emerald)",
-                  border: "none",
-                  borderRadius: 6,
-                  color: "var(--green-3)",
-                  cursor: "pointer",
-                }}
               >
                 {isZh ? "调查这个峰值" : "Investigate this peak"}
               </button>
-              <button
-                type="button"
-                onClick={() => setSelectedChangePoint(null)}
-                style={{
-                  minHeight: "auto",
-                  padding: "3px 8px",
-                  fontSize: 12,
-                  background: "color-mix(in srgb, var(--slate-12) 8%, transparent)",
-                  border: "none",
-                  borderRadius: 4,
-                  color: "var(--text-secondary)",
-                  cursor: "pointer",
-                }}
-              >
+              <button type="button" className="mz-btn" onClick={() => setSelectedChangePoint(null)}>
                 {isZh ? "关闭" : "Close"}
               </button>
             </div>
@@ -952,14 +973,12 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
               <div
                 key={`${contrib.event_id}-${idx}`}
                 onClick={() => onSelectEvent?.(contrib.event_id)}
+                className="mz-card mz-card-hover"
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
                   padding: "8px 12px",
-                  borderRadius: 6,
-                  background: "color-mix(in srgb, var(--slate-1) 70%, transparent)",
-                  border: "0.5px solid color-mix(in srgb, var(--slate-12) 6%, transparent)",
                   cursor: "pointer",
                 }}
               >
