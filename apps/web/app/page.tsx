@@ -18,7 +18,7 @@ import { MatchCenterWorkspace } from "./components/cockpit/MatchCenterWorkspace"
 import { TacticalLabWorkspace } from "./components/cockpit/TacticalLabWorkspace";
 import { StoryAgentWorkbench } from "./components/cockpit/StoryAgentWorkbench";
 import { ValidationLabWorkspace } from "./components/cockpit/ValidationLabWorkspace";
-import { MatchHubWorkspace } from "./components/cockpit/MatchHubWorkspace";
+import { MatchLibraryWorkspace } from "./components/cockpit/MatchLibraryWorkspace";
 import { ProducerWorkspace } from "./components/cockpit/ProducerWorkspace";
 import { InspectorDrawer } from "./components/cockpit/InspectorDrawer";
 import { TacticalGuideModal } from "./components/cockpit/TacticalGuideModal";
@@ -81,6 +81,8 @@ export default function MatchLensCockpit() {
   const [activeSmoothingMode, setActiveSmoothingMode] = useState<"causal" | "bilateral">("causal");
   const [investigationSeed, setInvestigationSeed] = useState<InvestigationSeed | null>(null);
   const urlRestored = useRef(false);
+  const urlRestoring = useRef(false);
+  const [urlRestoreToken, setUrlRestoreToken] = useState(0);
 
   // Collapsible Inspector Sidecar Drawer
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -331,14 +333,20 @@ export default function MatchLensCockpit() {
     const event = params.get("event");
     const sequence = params.get("sequence");
     const restore = async () => {
-      if (match && match !== state.match_id) {
-        await selectMatch(match, workspace || "match_center");
+      urlRestoring.current = true;
+      try {
+        if (match && match !== state.match_id) {
+          await selectMatch(match, workspace || "match_center");
+        }
+        if (at && Number.isFinite(Number(at))) {
+          await control({ action: "seek", at: Number(at) });
+        }
+        if (event) setSelectedEventId(event);
+        if (sequence) setSelectedSeqId(sequence);
+      } finally {
+        urlRestoring.current = false;
+        setUrlRestoreToken((token) => token + 1);
       }
-      if (at && Number.isFinite(Number(at))) {
-        await control({ action: "seek", at: Number(at) });
-      }
-      if (event) setSelectedEventId(event);
-      if (sequence) setSelectedSeqId(sequence);
     };
     void restore();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -346,7 +354,7 @@ export default function MatchLensCockpit() {
 
   // Keep the URL refreshable without overwriting it during deep-link restore.
   useEffect(() => {
-    if (!state || !urlRestored.current) return;
+    if (!state || !urlRestored.current || urlRestoring.current) return;
     const url = new URL(window.location.href);
     const anchor = state.paused || state.ended ? state.at : (state.snapshot_as_of ?? state.at);
     url.searchParams.set("workspace", activeWorkspace);
@@ -357,7 +365,7 @@ export default function MatchLensCockpit() {
     if (selectedSeqId) url.searchParams.set("sequence", selectedSeqId);
     else url.searchParams.delete("sequence");
     window.history.replaceState({}, "", url);
-  }, [activeWorkspace, state?.match_id, state?.at, state?.paused, state?.snapshot_as_of, selectedEventId, selectedSeqId]);
+  }, [activeWorkspace, state?.match_id, state?.at, state?.paused, state?.snapshot_as_of, selectedEventId, selectedSeqId, urlRestoreToken]);
 
   useEffect(() => {
     const onPopState = () => {
@@ -529,7 +537,7 @@ export default function MatchLensCockpit() {
         ) : (
           <>
             {activeWorkspace === "match_hub" && (
-              <MatchHubWorkspace
+              <MatchLibraryWorkspace
                 currentMatchId={state.match_id}
                 locale={locale}
                 onSelectMatch={(matchId) => void selectMatch(matchId)}

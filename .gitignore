@@ -21,3 +21,9 @@ data/raw/
 # Reproducible via scripts/ingest_statsbomb_corpus.py from data/raw/.
 data/datasets/
 
+# Playwright writes failure traces into this folder and CI uploads them as
+# artifacts; the bootstrapped session cookie is a live credential for the local
+# server. Neither belongs in history.
+apps/web/e2e/.artifacts/
+apps/web/e2e/.auth.json
+
