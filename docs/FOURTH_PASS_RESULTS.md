@@ -95,6 +95,11 @@ typecheck exit 0
 next build exit 0
 ```
 
+### Remote CI
+
+GitHub Actions run `40063289541` on commit `c200f5e` completed successfully:
+backend pytest and frontend typecheck/build both green.
+
 ### Browser structural journey
 
 Executed with the in-app browser via CDP. Screenshots remain unavailable
