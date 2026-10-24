@@ -331,7 +331,7 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
 
       {/* 2.5 Model governance (Slice C-3) */}
       <details className="glass-panel" style={{ padding: 18 }} data-testid="model-governance">
-        <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <summary className="mz-summary" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <div>
             <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-cyan)", textTransform: "uppercase" }}>
               {isZh ? "模型治理" : "Model Governance"}
@@ -418,7 +418,7 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
 
       {/* 3. Agent A/B/C Benchmark Harness Quantitative Audit Report (collapsed by default) */}
       <details className="glass-panel" style={{ padding: 18 }} data-testid="benchmark-audit">
-        <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <summary className="mz-summary" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <div>
             <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-cyan)", textTransform: "uppercase" }}>
               {isZh ? "智能体契约审计" : "Agent Contract Audit"}

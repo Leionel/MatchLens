@@ -285,11 +285,10 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
           )}
 
           <section className="ml-footnote">
-            <h3 className="ml-footnote-title">{isZh ? "数据完整性提示" : "Data completeness"}</h3>
             <p>
               {isZh
-                ? "只有通过来源声明、分 Period 覆盖和完整性检查的比赛才标记为完整。稀疏样本不会被当作完整比赛。"
-                : "Only datasets that pass source declaration, period coverage and integrity checks are marked complete. Sparse samples are never treated as full matches."}
+                ? "“完整”= 通过来源声明、分 Period 覆盖与完整性校验；跨场画像与 per-90 只统计完整覆盖的真实 provider 场次。"
+                : "Complete = source declaration, period coverage and integrity checks all pass. Profiles and per-90 rates use complete-coverage provider matches only."}
             </p>
           </section>
         </>

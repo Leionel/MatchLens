@@ -229,7 +229,7 @@ const CompareView = ({ matchId, isZh }: { matchId: string; isZh: boolean }) => {
             ))}
           </select>
         </label>
-        <button type="button" disabled={!other || loading} onClick={runCompare} style={{ minHeight: 32, fontSize: 12 }}>
+        <button type="button" className="mz-btn" disabled={!other || loading} onClick={runCompare}>
           {isZh ? "对比" : "Compare"}
         </button>
       </div>
@@ -243,7 +243,7 @@ const CompareView = ({ matchId, isZh }: { matchId: string; isZh: boolean }) => {
           {result.batch_summary.warnings.length > 0 && (
             <div style={{ fontSize: 12, color: "var(--text-gold)" }}>{result.batch_summary.warnings.join(" · ")}</div>
           )}
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <table className="tactical-table mz-table">
             <thead>
               <tr style={{ color: "var(--text-tertiary)", textAlign: "left" }}>
                 <th style={{ padding: "4px 6px" }}>{isZh ? "比赛" : "Match"}</th>
@@ -317,7 +317,7 @@ const ProfileAggregates = ({ profile, isZh }: { profile: TeamProfile | PlayerPro
   return (
     <div style={{ display: "grid", gap: 10 }}>
       <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }} data-testid="profile-aggregates">
+        <table className="tactical-table mz-table" data-testid="profile-aggregates">
           <thead>
             <tr style={{ color: "var(--text-tertiary)", textAlign: "left" }}>
               <th style={{ padding: "4px 8px" }}>{isZh ? "指标" : "Metric"}</th>
@@ -376,8 +376,8 @@ const ProfileAggregates = ({ profile, isZh }: { profile: TeamProfile | PlayerPro
           </span>
         )}
       </div>
-      <details style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-        <summary style={{ cursor: "pointer", fontWeight: 650 }}>
+      <details className="mz-enter-late" style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+        <summary className="mz-summary" style={{ fontWeight: 650 }}>
           {isZh ? "口径与限制（展开）" : "Basis and limitations (expand)"}
         </summary>
         <ul style={{ margin: "6px 0 0", paddingLeft: 18, lineHeight: 1.6 }}>
@@ -477,13 +477,7 @@ const ProfileView = ({ detail, isZh }: { detail: MatchDetail; isZh: boolean }) =
             type="button"
             data-testid="profile-team-switch"
             onClick={() => setTeam(t.name)}
-            style={{
-              minHeight: 30,
-              fontSize: 12,
-              border: team === t.name ? "1px solid var(--turf-emerald)" : "0.5px solid var(--glass-border)",
-              background: team === t.name ? "color-mix(in srgb, var(--green-9) 10%, transparent)" : "transparent",
-              color: "var(--text-primary)",
-            }}
+            className={`mz-tab ${team === t.name ? "active" : ""}`}
           >
             {t.name}
           </button>
@@ -506,7 +500,7 @@ const ProfileView = ({ detail, isZh }: { detail: MatchDetail; isZh: boolean }) =
                     type="button"
                     data-testid="profile-player-entry"
                     onClick={() => void openPlayer(p.player_id)}
-                    style={{ minHeight: 28, fontSize: 12 }}
+                    className="mz-btn"
                     title={`${p.event_count} events`}
                   >
                     {p.name}
@@ -554,7 +548,7 @@ const ProfileView = ({ detail, isZh }: { detail: MatchDetail; isZh: boolean }) =
             <b style={{ fontSize: 13 }}>
               {isZh ? "球员画像" : "Player profile"}: {playerProfile.player.name || playerProfile.player.requested_id}
             </b>
-            <button type="button" onClick={() => setPlayerProfile(null)} style={{ minHeight: 26, fontSize: 12 }}>
+            <button type="button" className="mz-btn" onClick={() => setPlayerProfile(null)}>
               {isZh ? "返回球队画像" : "Back to team"}
             </button>
           </div>
@@ -654,6 +648,7 @@ export const MatchDetailPanel: React.FC<MatchDetailPanelProps> = ({ matchId, loc
 
   return (
     <div
+      className="mz-enter"
       data-testid="match-detail-panel"
       style={{
         border: "1px solid var(--turf-emerald)",
@@ -674,10 +669,10 @@ export const MatchDetailPanel: React.FC<MatchDetailPanelProps> = ({ matchId, loc
           )}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" onClick={() => onOpenMatch(matchId)} style={{ minHeight: 32, fontSize: 12 }}>
+          <button type="button" className="mz-btn mz-btn-primary" onClick={() => onOpenMatch(matchId)}>
             {isZh ? "进入比赛分析" : "Open in cockpit"}
           </button>
-          <button type="button" onClick={onClose} aria-label={isZh ? "关闭详情" : "Close detail"} style={{ minHeight: 32, fontSize: 12 }}>
+          <button type="button" className="mz-btn" onClick={onClose} aria-label={isZh ? "关闭详情" : "Close detail"}>
             ✕
           </button>
         </div>
@@ -693,15 +688,9 @@ export const MatchDetailPanel: React.FC<MatchDetailPanelProps> = ({ matchId, loc
               <button
                 key={t}
                 type="button"
+                className={`mz-tab ${tab === t ? "active" : ""}`}
                 data-testid={`detail-tab-${t}`}
                 onClick={() => setTab(t)}
-                style={{
-                  minHeight: 30,
-                  fontSize: 12,
-                  border: tab === t ? "1px solid var(--turf-emerald)" : "0.5px solid var(--glass-border)",
-                  background: tab === t ? "color-mix(in srgb, var(--green-9) 10%, transparent)" : "transparent",
-                  color: "var(--text-primary)",
-                }}
               >
                 {tabLabel(t, isZh)}
               </button>
@@ -784,7 +773,7 @@ export const MatchDetailPanel: React.FC<MatchDetailPanelProps> = ({ matchId, loc
             {tab === "shots" && detail && (
               <Section title={`${isZh ? "射门" : "Shots"} (${detail.shots.count})`} note={detail.shots.note}>
                 <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <table className="tactical-table mz-table">
                     <thead>
                       <tr style={{ color: "var(--text-tertiary)", textAlign: "left" }}>
                         <th style={{ padding: "4px 6px" }}>min</th>
@@ -818,7 +807,7 @@ export const MatchDetailPanel: React.FC<MatchDetailPanelProps> = ({ matchId, loc
                   {(["H", "N"] as const).map((side) => (
                     <div key={side} style={{ border: "0.5px solid var(--glass-border)", borderRadius: 8, padding: 10 }}>
                       <b style={{ fontSize: 13 }}>{side === "H" ? detail.lineups.home_team : detail.lineups.away_team}</b>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, marginTop: 6 }}>
+                      <table className="tactical-table mz-table" style={{ marginTop: 6 }}>
                         <thead>
                           <tr style={{ color: "var(--text-tertiary)", textAlign: "left" }}>
                             <th style={{ padding: "3px 6px" }}>{isZh ? "通道" : "Channel"}</th>

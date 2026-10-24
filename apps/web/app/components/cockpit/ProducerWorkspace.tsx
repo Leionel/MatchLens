@@ -361,11 +361,6 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
         </div>
         {error && <div role="alert" style={{ fontSize: 12, color: "var(--red-11)" }}>{error}</div>}
         {notice && <div role="status" style={{ fontSize: 12, color: "var(--text-emerald)" }}>{notice}</div>}
-        {!token && (
-          <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
-            {isZh ? "输入令牌后可读取制作人投影并执行审批。" : "Enter a token to read the producer projection and approve content."}
-          </div>
-        )}
       </section>
 
       <div className="producer-grid" style={{ gap: 16 }}>
@@ -379,10 +374,16 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
             </span>
           </div>
           {queue.length === 0 && (
-            <div style={{ padding: 18, fontSize: 12, color: "var(--text-tertiary)" }}>
-              {token
-                ? isZh ? "当前快照没有注册结论。" : "No registered claims for this snapshot."
-                : isZh ? "等待制作人令牌。" : "Waiting for a producer token."}
+            <div className="mz-enter-late" style={{ padding: "14px 16px", fontSize: 12, color: "var(--text-secondary)", display: "grid", gap: 10 }}>
+              {token ? (
+                <span>{isZh ? "当前快照没有注册结论。先在战报工作台发起调查并晋升结论，队列才会出现条目。" : "No registered claims for this snapshot. Promote an investigation first."}</span>
+              ) : (
+                <div className="mz-steps">
+                  <div className="mz-step">{isZh ? "在上方输入制作人令牌（仅保存在本标签页）。" : "Enter the producer token above (stored in this tab only)."}</div>
+                  <div className="mz-step">{isZh ? "审核 Gate 已通过的结论：批准或拒绝。" : "Review gate-approved claims: approve or reject."}</div>
+                  <div className="mz-step">{isZh ? "把可播结论编排成 Rundown，预览后导出。" : "Order broadcastable claims into a rundown, preview and export."}</div>
+                </div>
+              )}
             </div>
           )}
           <div style={{ display: "grid", gap: 8 }}>
@@ -397,22 +398,11 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
                   data-gate-status={claim.gate_status}
                   data-lifecycle-status={claim.lifecycle_status}
                   data-editorial-status={claim.editorial_status}
+                  className={`mz-card mz-card-hover${checked ? " mz-claim-checked" : ""}${highlightClaimId === claim.claim_id ? " mz-claim-highlight" : ""}`}
                   style={{
                     display: "grid",
                     gap: 8,
                     padding: 12,
-                    borderRadius: 8,
-                    border:
-                      highlightClaimId === claim.claim_id
-                        ? "1px solid var(--text-gold)"
-                        : checked
-                          ? "1px solid var(--turf-emerald)"
-                          : "0.5px solid var(--glass-border)",
-                    background:
-                      highlightClaimId === claim.claim_id
-                        ? "color-mix(in srgb, var(--text-gold) 8%, transparent)"
-                        : "color-mix(in srgb, var(--slate-1) 65%, transparent)",
-                    transition: "border-color 0.3s, background 0.3s",
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
@@ -442,7 +432,7 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
                       type="button"
                       disabled={busy || !token || claim.gate_status !== "approved" || claim.lifecycle_status !== "current"}
                       onClick={() => decide(claim.claim_id, "approved")}
-                      style={{ minHeight: 30, fontSize: 12 }}
+                      className="mz-btn"
                     >
                       {isZh ? "批准" : "Approve"}
                     </button>
@@ -450,7 +440,7 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
                       type="button"
                       disabled={busy || !token}
                       onClick={() => decide(claim.claim_id, "rejected")}
-                      style={{ minHeight: 30, fontSize: 12, color: "var(--red-11)" }}
+                      className="mz-btn mz-btn-danger"
                     >
                       {isZh ? "拒绝" : "Reject"}
                     </button>
@@ -478,9 +468,10 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
                 </div>
                 <button
                   type="button"
+                  className="mz-btn"
                   data-testid="rundown-preview-toggle"
                   onClick={() => setShowPreview((v) => !v)}
-                  style={{ minHeight: 26, fontSize: 12, padding: "0 8px" }}
+                  style={{ minHeight: 26, padding: "0 8px" }}
                 >
                   {showPreview ? (isZh ? "隐藏预览" : "Hide preview") : isZh ? "预览 Rundown" : "Preview rundown"}
                 </button>
@@ -542,8 +533,8 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
                       border: "0.5px solid var(--glass-border)",
                     }}
                   >
-                    <span style={{ display: "flex", gap: 6, alignItems: "baseline", minWidth: 0 }}>
-                      <b style={{ fontFamily: "var(--font-mono)" }}>{index + 1}</b>
+                    <span style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 0 }}>
+                      <span className="mz-cue">{index + 1}</span>
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {(claim?.assertion || claimId).replace(/_/g, " ")}
                       </span>
@@ -554,7 +545,8 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
                         aria-label={isZh ? `上移 ${claimId}` : `Move ${claimId} up`}
                         disabled={busy || index === 0}
                         onClick={() => moveSelected(claimId, -1)}
-                        style={{ minHeight: 26, fontSize: 12, padding: "0 8px" }}
+                        className="mz-btn"
+                        style={{ minHeight: 26, padding: "0 8px" }}
                       >
                         ↑
                       </button>
@@ -563,7 +555,8 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
                         aria-label={isZh ? `下移 ${claimId}` : `Move ${claimId} down`}
                         disabled={busy || index === selected.length - 1}
                         onClick={() => moveSelected(claimId, 1)}
-                        style={{ minHeight: 26, fontSize: 12, padding: "0 8px" }}
+                        className="mz-btn"
+                        style={{ minHeight: 26, padding: "0 8px" }}
                       >
                         ↓
                       </button>
@@ -572,7 +565,8 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
                         aria-label={isZh ? `移出 ${claimId}` : `Remove ${claimId}`}
                         disabled={busy}
                         onClick={() => removeFromSelection(claimId)}
-                        style={{ minHeight: 26, fontSize: 12, padding: "0 8px", color: "var(--red-11)" }}
+                        className="mz-btn mz-btn-danger"
+                        style={{ minHeight: 26, padding: "0 8px" }}
                       >
                         ✕
                       </button>
@@ -582,9 +576,23 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
               })}
             </div>
           )}
-          <button type="button" disabled={busy || !token || selected.length === 0} onClick={buildRundown} style={{ minHeight: 34, fontSize: 12 }}>
-            {isZh ? "建立并校验 Rundown" : "Build and validate rundown"}
-          </button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <button type="button" className="mz-btn mz-btn-primary" disabled={busy || !token || selected.length === 0} onClick={buildRundown}>
+              {isZh ? "建立并校验 Rundown" : "Build and validate rundown"}
+            </button>
+            <span style={{ width: 1, height: 22, background: "var(--glass-border)" }} aria-hidden="true" />
+            {(["json", "markdown", "svg"] as const).map((format) => (
+              <button
+                key={format}
+                type="button"
+                className="mz-btn"
+                disabled={busy || !token || !rundown?.valid}
+                onClick={() => exportStory(format)}
+              >
+                {format.toUpperCase()}
+              </button>
+            ))}
+          </div>
 
           {rundown && (
             <div style={{ display: "grid", gap: 8 }}>
@@ -609,6 +617,7 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
                         type="button"
                         data-testid={`rereview-${item.claim_id}`}
                         onClick={() => reviewStaleClaim(item.claim_id)}
+                        className="mz-btn"
                         style={{ minHeight: 24, fontSize: 11, padding: "0 8px" }}
                       >
                         {isZh ? "回审该结论" : "Re-review claim"}
@@ -619,20 +628,6 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
               ))}
             </div>
           )}
-
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {(["json", "markdown", "svg"] as const).map((format) => (
-              <button
-                key={format}
-                type="button"
-                disabled={busy || !token || !rundown?.valid}
-                onClick={() => exportStory(format)}
-                style={{ minHeight: 32, fontSize: 12 }}
-              >
-                {format.toUpperCase()}
-              </button>
-            ))}
-          </div>
 
           {exported?.manifest && (
             <div style={{ display: "grid", gap: 8, padding: 10, borderRadius: 6, border: "0.5px solid var(--glass-border)" }}>
@@ -693,21 +688,15 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
 
           {manifestHistory.length > 0 && (
             <details style={{ borderTop: "0.5px solid var(--glass-border)", paddingTop: 8 }} data-testid="manifest-history">
-              <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>
+              <summary className="mz-summary" style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>
                 {isZh ? `Manifest 历史（${manifestHistory.length}）` : `Manifest history (${manifestHistory.length})`}
               </summary>
-              <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+              <div className="mz-timeline" style={{ marginTop: 10 }}>
                 {manifestHistory.map((m) => (
                   <div
                     key={`${m.manifest_id}-${m.generated_at}`}
-                    style={{
-                      display: "grid",
-                      gap: 2,
-                      padding: 8,
-                      borderRadius: 6,
-                      border: "0.5px solid var(--glass-border)",
-                      fontSize: 12,
-                    }}
+                    className="mz-timeline-item"
+                    style={{ display: "grid", gap: 2, fontSize: 12 }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                       <span style={{ fontFamily: "var(--font-mono)", overflowWrap: "anywhere" }}>{m.manifest_id}</span>

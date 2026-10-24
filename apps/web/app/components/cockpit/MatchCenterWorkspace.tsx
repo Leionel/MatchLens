@@ -198,16 +198,7 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
                       title: `Possession Sequence ${selectedSeq.sequence_id}`,
                     })
                   }
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 700,
-                    padding: "3px 8px",
-                    borderRadius: 6,
-                    background: "color-mix(in srgb, var(--cyan-9) 15%, transparent)",
-                    border: "0.5px solid color-mix(in srgb, var(--cyan-9) 40%, transparent)",
-                    color: "var(--text-cyan)",
-                    cursor: "pointer",
-                  }}
+                  className="mz-btn mz-btn-cyan"
                 >
                   {isZh ? `在抽屉中拆解序列 ${selectedSeq.sequence_id} →` : `Inspect ${selectedSeq.sequence_id} In Drawer →`}
                 </button>

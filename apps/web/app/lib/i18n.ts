@@ -188,7 +188,7 @@ export const translations = {
     pendingClaimsCount: "待审核草稿",
 
     // Validation Lab Workspace
-    validationLabTitle: "模型验证与确定性契约实验室 (TRACK E)",
+    validationLabTitle: "科研与模型验证实验室",
     validationLabSubtitle: "xT 网格、确定性契约基准与反事实沙盒。",
     viewSufficiencyContract: "查看数据充分性契约 →",
     xtContractionTitle: "期望威胁 (xT) 网格收缩拟合矩阵",
@@ -411,7 +411,7 @@ export const translations = {
     pendingClaimsCount: "Pending Draft Claims",
 
     // Validation Lab Workspace
-    validationLabTitle: "Validation Lab & Deterministic Contract Audit (TRACK E)",
+    validationLabTitle: "Validation Lab & Model Governance",
     validationLabSubtitle: "xT grid, deterministic contract benchmark and counterfactual sandbox.",
     viewSufficiencyContract: "View Sufficiency Contract →",
     xtContractionTitle: "Expected Threat (xT) Grid Contraction Matrix",
