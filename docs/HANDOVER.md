@@ -1,9 +1,9 @@
 # MatchLens AI — 项目研发全案交接文档 (HANDOVER.md)
 
-**文档版本**：v2.0 (Post-R0.2 Flagship Hardening)  
-**当前代码基准**：Git Commit `b768f83`（全量 pytest 161 项通过，Next.js Turbopack 编译 0 错误）  
+**文档版本**：v3.0 (Third-Pass Semantic Integrity Remediation)  
+**当前代码基准**：Third-pass branch HEAD（全量 pytest 199 项通过，Next.js Turbopack 编译 0 错误；以实际运行输出为准）  
 **面向对象**：后续接手研发人员、架构师、算法工程师及协同 AI Agent  
-**更新日期**：2026-10-24  
+**更新日期**：2026-10-23  
 
 ---
 
@@ -45,9 +45,12 @@
 │  ├─ oaai.py            (进攻活跃度指数：死球时间冻结、预射门无泄露xG、定向xT空间加权)  │
 │  ├─ models/xt.py       (xT 16×12 / 12×8 期望威胁空间转移网格与轴向单调性校验)          │
 │  ├─ whatif.py          (反事实推演沙盘：期望效用扰动引擎、敏感度区间度量)              │
-│  ├─ contracts.py       (四层足球推理契约、Publication Gate 2.0 终审发布门禁)           │
-│  ├─ agents.py          (三智能体协同：Analyst + EventAttributionSpecialist + Verifier) │
-│  ├─ catalog.py         (赛事与比赛元数据索引目录：内置 6 大合成剧本 + 真实名局)        │
+│  ├─ contracts.py       (四层足球推理契约、在线 publication_gate、挑战仲裁)             │
+│  ├─ gate.py            (Gate 2.0 规则引擎：措辞/命名空间/版本/反证校验)                │
+│  ├─ registry.py        (持久化 ClaimRegistry：Gate 裁决、编辑批准、幂等挑战)           │
+│  ├─ evidence.py        (Match→Snapshot→Event→Receipt→Claim→Gate→Challenge→Revision)    │
+│  ├─ agents.py          (双智能体 MAF 工作流：Analyst → Verifier + 确定性工具)          │
+│  ├─ catalog.py         (赛事目录：6 个合成剧本 + 12 事件 C1_PARTIAL 世界杯样本)        │
 │  └─ budget.py          (SQLite 原子账本、全局 $1.00 / 32 请求硬限额熔断守卫)           │
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -60,8 +63,8 @@
 | **活跃度指数** | `services/api/matchlens/oaai.py` | `compute_oaai` (OAAI主函数), `compute_pre_shot_xg` (预射门几何xG), `compute_oaai_window` (时段切片) |
 | **xT 空间威胁** | `services/api/matchlens/models/xt.py` | `ExpectedThreatModel` (加载 16×12 / 12×8 网格, $\mathcal{O}(1)$ 查表, `evaluate_progression`) |
 | **反事实推演** | `services/api/matchlens/whatif.py` | `simulate_counterfactual`, `WhatIfRequest`, `WhatIfResponse` (支持 4 种扰动动作与敏感度扩散) |
-| **发布门禁** | `services/api/matchlens/contracts.py` | `publication_gate`, `Claim` (4 级推理契约), `resolve_challenge` (质疑仲裁), `ask_the_match` |
-| **多智能体** | `services/api/matchlens/agents.py` | `AgentRunner`, `EventAttributionSpecialist` (`decompose_window`, `query_causal_chain`, `assess_alternative_hypotheses`) |
+| **发布门禁与注册表** | `services/api/matchlens/contracts.py`, `gate.py`, `registry.py` | `publication_gate`（在线）、`publication_gate_2_0`（确定性规则）、`ClaimRegistry`、`resolve_challenge`、`ask_the_match` |
+| **多智能体** | `services/api/matchlens/agents.py`, `attribution.py` | 双智能体 `Analyst → Verifier` MAF 工作流；`EventAttributionSpecialist` 是确定性工具层，不是第三个智能体 |
 | **前端工作区** | `apps/web/app/components/cockpit/` | `MatchCenterWorkspace.tsx`, `ValidationLabWorkspace.tsx`, `StoryAgentWorkbench.tsx`, `TacticalHeader.tsx` |
 
 ---
@@ -144,7 +147,7 @@ powershell -ExecutionPolicy Bypass -File scripts/run.ps1 -SkipBuild
 
 ### 4.4 自动化验证守门命令 (必须 100% 通过)
 ```powershell
-# 1. 运行全量 161 项后端测试套件
+# 1. 运行全量后端测试套件（当前 199 项）
 services\api\.venv\Scripts\python.exe -m pytest services/api/tests/ -q
 
 # 2. 运行前端 Turbopack 生产编译与 TypeScript 静态类型检查
@@ -157,16 +160,16 @@ npm --prefix apps/web run build
 
 | 编号与功能 | 当前已就绪代码资产 | 接手后后续迭代重点 | 依赖层级 |
 | :--- | :--- | :--- | :--- |
-| **BL-01 StatsBomb 适配器** | `catalog.py` 中已预置真实名局元数据，适配器框架已就绪 | 完善批量 JSON 下载、解析与版本许可自动化更新流水线 | Tier 1 (底盘) |
+| **BL-01 StatsBomb 适配器** | 适配器与 12 事件 `C1_PARTIAL` 世界杯样本已就绪；不包含 4,354 条全量事件，也不包含 `sb_cl2019_final` | 引入全量开放数据文件、来源 URL、校验和与运行收据后，才可恢复全场/跨场研究结论 | Tier 1 (底盘) |
 | **BL-02 OAAI 活跃度曲线** | `oaai.py` 完整实现死球冻结、预射门 xG 与定向 xT，前端波浪图已联动 | 增加多场次平滑参数自适应微调工具 | Tier 1 (底盘) |
 | **BL-03 6 秒反抢夺回** | `football.py` 具备时序切分逻辑 | 接入 StatsBomb Pressure 真实打标时升级为真压迫分析 | Tier 2 (战术) |
 | **BL-04 动作密度差 TADD** | 九宫格与 18 区控球归一化差分矩阵已实现 | 前端 MatchStage SVG 增加色彩自适应对比度开关 | Tier 2 (战术) |
 | **BL-05 数据充分性顾问** | `contracts.py` 门禁与 Evidence Gap 深度融合已上线 | 针对自然语言提问扩充更多无球提问识别关键词 | Tier 1 (底盘) |
-| **BL-06 赛后复盘战报** | `story.py` 与 `StoryAgentWorkbench.tsx` 已接入 API | 支持用户富文本微调并一键导出 Markdown / PDF | Tier 3 (叙事) |
+| **BL-06 赛后复盘战报** | `stories.py` 仅从持久化 `ClaimRegistry` 读取 Gate 裁决；编辑批准独立记录 | 提供受控的编辑审批 UI；当前 Story 默认是 draft，不得当作已批准播出稿 | Tier 3 (叙事) |
 | **BL-07 球员同队列画像** | `football.py` 包含同位置划分与样本充足度校验 | 接入联赛赛季全量多场聚合数据沉淀更深队列基准 | Tier 2 (战术) |
 | **BL-08 进攻通道渗透** | 通道切分与禁区转化归约逻辑已就绪 | 在前端 Match Center 增加通道雷达对比卡片 | Tier 2 (战术) |
 | **BL-09 What-If 沙盘** | `whatif.py` 完整支持 4 类扰动动作与敏感度扩散 | 接入机器学习离线拟合的对抗传球成功率模型 | Tier 3 (推演) |
-| **BL-10 经典赛事看板** | `catalog.py` 统一元数据索引，支持真实/合成对局切换 | 扩充至 50+ 场世界杯、欧冠巅峰战役数据集 | Tier 1 (底盘) |
+| **BL-10 经典赛事看板** | `catalog.py` 统一元数据索引；真实样本为 12 事件部分覆盖，跨场 per-90 指标会被明确 withholding | 扩充至 50+ 场完整数据，并保持 coverage/rate 可比性标记 | Tier 1 (底盘) |
 | **BL-11 转播级图卡导出** | 现有一键快照原型 | 实现 9:16 移动端海报与防伪时间戳水印批量渲染 | Tier 3 (叙事) |
 | **BL-12 战术高光定位** | 多指标极值与突变检测逻辑已就绪 | 支持导出对应高光时刻的动画 GIF 切片 | Tier 3 (叙事) |
 
@@ -197,4 +200,4 @@ npm --prefix apps/web run build
 ---
 
 **交接签署确认**：  
-MatchLens AI 研发工程编排中枢已完成全代码库基准测试、文档对齐与环境就绪验证。后续团队可直接基于 Git Commit `b768f83` 开展生产部署与迭代开发。
+Third-pass 已完成 reducer 语义、历史比分/覆盖、研究报告可信性、Story/Gate、Evidence Graph、跨场覆盖与运行时缓存的整改。**仍未执行**：真实全量 StatsBomb 数据、live model A/B/C 对照、真正的第三智能体实验、外部人工评审。详见 `docs/THIRD_PASS_RESULTS.md` 与 `docs/RESEARCH_PROVENANCE_AUDIT.md`。

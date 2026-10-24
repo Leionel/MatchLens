@@ -1,5 +1,11 @@
 # MatchLens AI: Evaluation and Release Gates
 
+> **Third-pass note (2026-10-23)**: deterministic rule execution is reported as
+> *contract agreement*, never LLM accuracy. Any A/B/C accuracy/cost/latency
+> figures in `AGENT_EVALUATION_V2.md` are retracted; live-model comparison is
+> **NOT RUN**. See `RESEARCH_PROVENANCE_AUDIT.md`.
+
+
 R0.1 revision: 2026-10-19. Historical provider results: [TECH_SPIKE](TECH_SPIKE.md). Current product execution/failures: [R0.1_RESULTS](R0.1_RESULTS.md). The full held-out benchmark and S0/S1/M study remain **NOT RUN**. [SPEC](SPEC.md) owns the implemented short-format quantities.
 
 ## P0 versus P1

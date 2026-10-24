@@ -35,7 +35,7 @@
 - **严禁使用宿主机全局 Python 或 Anaconda Python**（缺少 `agent_framework` 等关键依赖，会导致 ModuleNotFoundError）。
 - **常用后端命令**：
   ```powershell
-  # 运行全量测试套件（必须保持 100% 通过）
+  # 运行全量测试套件（必须保持 100% 通过；当前约 199 项）
   services\api\.venv\Scripts\python.exe -m pytest services/api/tests/ -q
 
   # 启动后端 API（单 Worker，端口 8000）
@@ -105,7 +105,7 @@ class Claim(BaseModel):
 
 ## 4. 多智能体拓扑与职责划分 (Multi-Agent Deliberation Topology)
 
-系统采用 **Tri-Agent Deliberation + Publication Gate 2.0** 架构：
+系统采用 **Dual-Agent Deliberation + Deterministic Tools + Publication Gate** 架构。在线 MAF 工作流只执行两个模型智能体（`Analyst → Verifier`）；`EventAttributionSpecialist` 是两位智能体都可调用的确定性 Python 工具层，不是第三个模型智能体。`publication_gate_2_0` 是离线/注册表规则引擎，在线发布使用 `publication_gate`。
 
 ```
                       ┌─────────────────────────────────┐
@@ -121,10 +121,11 @@ class Claim(BaseModel):
                                        │
                                        ▼
                       ┌─────────────────────────────────┐
-                      │ 2. EventAttributionSpecialist   │
-                      │    • decompose_window 工具       │
-                      │    • query_causal_chain 工具     │
+                      │ 2. Deterministic tool layer     │
+                      │    • decompose_window           │
+                      │    • query_causal_chain         │
                       │    • assess_alternative_hypotheses│
+                      │    （不是智能体，不调用模型）    │
                       └────────────────┬────────────────┘
                                        │
                                        ▼
@@ -147,7 +148,7 @@ class Claim(BaseModel):
 1. **`TacticalAnalyst` (战术分析师)**：
    - 关注宏观态势演进、控球序列切分、进攻通道（左/中/右）分布、S3 九宫格与 TADD 动作密度差异；
    - 绝不直接宣称 Level 4 因果推断，必须用占位符标注关联微观事实。
-2. **`EventAttributionSpecialist` (事件归因专家)**：
+2. **`EventAttributionSpecialist` (确定性事件归因工具层，不是智能体)**：
    - 提供 3 大原生工具函数：
      - `decompose_window(window_seconds)`: 将时段活跃度净值精确拆解至传球、带球推进与射门；
      - `query_causal_chain(target_event_id, lookback_seconds)`: 逆向检索射门前 5~15 秒的关键控球链；
@@ -156,8 +157,9 @@ class Claim(BaseModel):
    - 检查每一个声明引用的事件坐标、球员是否在真实打标记录中存在；
    - 检查推论是否属于 Level 2 指标归因却被过度包装成 Level 4 战术因果；
    - 审核通过后生成验证凭据并签名。
-4. **`Publication Gate 2.0` (发布门禁)**：
-   - 严格代码级校验：未绑槽位直接拦截；出现无球防守臆测立即降级为 `Evidence Gap Advisory`。
+4. **`Publication Gate` (发布门禁)**：
+   - 在线路径使用 `publication_gate`：未绑槽位直接拦截；出现无球防守臆测立即降级为 `Evidence Gap Advisory`。
+   - `publication_gate_2_0` 用于确定性规则校验与 `ClaimRegistry` 注册，不等同于在线双智能体门禁。
 
 ---
 
@@ -198,10 +200,10 @@ class Claim(BaseModel):
 | :--- | :--- | :--- |
 | `services/api/matchlens/main.py` | `Engine`, `view`, `run_whatif`, `get_xt_grid` | API 路由网关。注意必须初始化 `self.xt_model` 并传给 `oaai`；只传 `dead_intervals` |
 | `services/api/matchlens/football.py` | `build_sequences`, `build_tactical_explorer`, `build_player_spotlight` | 核心足球领域模型。负责序列切分、九宫格、传球网络与球员画像 |
-| `services/api/matchlens/oaai.py` | `compute_oaai`, `compute_oaai_window`, `compute_pre_shot_xg` | 活跃度指数核心计算。注意半衰期 $\tau=60\text{s}$ 与预射门 xG |
+| `services/api/matchlens/oaai.py` | `compute_oaai`, `compute_oaai_window`, `compute_pre_shot_xg` | 活跃度指数核心计算。注意半衰期默认 $\tau=30\text{s}$ 与预射门 xG |
 | `services/api/matchlens/models/xt.py` | `ExpectedThreatModel`, `evaluate_action`, `evaluate_progression` | xT 空间网格模型，支持 16×12 与 12×8 分辨率及轴向单调性校验 |
-| `services/api/matchlens/contracts.py` | `publication_gate`, `Claim`, `VerificationRecord`, `evaluate_hypotheses` | 门禁与契约定义。强制校验 4 级推理与槽位绑定 |
-| `services/api/matchlens/agents.py` | `TacticalAnalyst`, `EventAttributionSpecialist`, `EvidenceVerifier` | MAF 智能体编排与 3 个微观归因工具注册 |
+| `services/api/matchlens/contracts.py` | `publication_gate`, `Claim`, `VerificationRecord`, `evaluate_hypotheses` | 在线门禁与契约定义；Gate 2.0 规则在 `gate.py`，可信裁决持久化在 `registry.py` |
+| `services/api/matchlens/agents.py` | `AgentRunner`, `Analyst`, `Verifier` | 双智能体 MAF 编排；确定性归因工具在 `attribution.py` |
 | `services/api/matchlens/whatif.py` | `simulate_counterfactual`, `WhatIfRequest`, `WhatIfResponse` | What-If 反事实扰动引擎与 OAAI 敏感度差分计算 |
 | `services/api/matchlens/catalog.py` | `MatchMetadata`, `get_catalog`, `get_match` | 比赛元数据目录，支持合成剧本与真实 StatsBomb Open Data |
 | `apps/web/app/cockpit/` | `MatchCenterWorkspace`, `ValidationLabWorkspace`, `StoryAgentWorkbench` | 统一比赛探索工作区前端容器，全面对接真实 API |

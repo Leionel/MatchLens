@@ -1,5 +1,19 @@
 # MatchLens AI — 多智能体评测与去公式化基准实验报告 (Agent Evaluation V2)
 
+> ## ⚠ THIRD-PASS RETRACTION (2026-10-23)
+>
+> **The quantitative tables in §3 and §4 of this document are not reproducible and are retracted.**
+>
+> - `sb_wc2022_final` in this repository contains **12 events**, not 4,354; it is a `C1_PARTIAL` sample.
+> - `sb_cl2019_final` does not exist in the repository (External / Unavailable).
+> - The claim/gate/zone statistics have no run receipts or scoring sheets (Not Run / Unverified).
+> - The online workflow executes **two** model agents (Analyst → Verifier); `EventAttributionSpecialist` is a deterministic tool, not a third agent.
+> - `publication_gate_2_0` is not in the online `AgentRunner` path; the online path uses `publication_gate`.
+> - The A/B/C benchmark no longer emits constant accuracy/token/latency values; live-model evaluation is **Not Run**.
+>
+> See [RESEARCH_PROVENANCE_AUDIT.md](RESEARCH_PROVENANCE_AUDIT.md) and [THIRD_PASS_AUDIT.md](THIRD_PASS_AUDIT.md). The text below is retained as historical record and must not be cited as verified evidence.
+
+
 > **评估基准提交**: Commit `a92e32c` 修复后全套系统  
 > **评测环境**: Python 3.13.9, Pytest 9.1.1, StatsBomb Open Data & MatchLens Synthetic Engine  
 > **核心改进**: 彻底剔除所有预设模拟公式（如 `0.78 - 0.05 * turnover_density`），代之以基于真实事件流与实际证据链推导的多智能体 A/B/C 实测评测体系。

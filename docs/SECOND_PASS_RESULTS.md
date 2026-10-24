@@ -1,5 +1,20 @@
 # MatchLens AI — 第二轮系统级深审与重构最终交付报告 (Second Pass Results)
 
+> ## ⚠ THIRD-PASS CORRECTION (2026-10-23)
+>
+> This is a historical second-pass delivery report. Two claims in it are corrected:
+>
+> 1. “4350+ 条事件 / 世界杯决赛 5400s” is **false for this repository**: only a
+>    12-event `C1_PARTIAL` sample exists. `sb_cl2019_final` is absent.
+> 2. “SSE 推流开销显著下降” was not backed by a measured benchmark at the time.
+>    The third-pass benchmark now measures reducer/OAAI/snapshot costs
+>    (`evidence/third_pass/runtime_benchmark.json`), but no before/after p95
+>    claim is made.
+>
+> Test counts (161) refer to commit `a92e32c`, not to the current tree. See
+> [RESEARCH_PROVENANCE_AUDIT.md](RESEARCH_PROVENANCE_AUDIT.md).
+
+
 > **基准代码提交**: `a92e32c`  
 > **修复交付时间**: 2026-10-22  
 > **最终验证结论**: **全项通过 (ALL PASS)**  

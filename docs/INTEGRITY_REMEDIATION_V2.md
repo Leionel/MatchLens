@@ -82,6 +82,7 @@
           return events
   ```
 - **效果**: 切换到 `sb_wc2022_final` 时，比赛对阵正确为阿根廷 vs 法国，时长为 5400s，事件流为真实的 4350+ 条 StatsBomb 真实事件。
+  - **[THIRD-PASS CORRECTION]** 该句不成立：仓库仅包含 12 条事件的 `C1_PARTIAL` 样本，`observed_end=5363s`；不存在 4350+ 条事件文件，也不存在 `sb_cl2019_final`。见 `RESEARCH_PROVENANCE_AUDIT.md`。
 
 ### 2.3 P0.4 Snapshot 身份上下文绑定与向后兼容
 - **文件**: `services/api/matchlens/football.py` & `main.py`

@@ -1,0 +1,195 @@
+{
+  "generated_at_utc": "2026-10-24T03:32:13Z",
+  "python": "3.13.9",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "notes": [
+    "12-event stream is the bundled StatsBomb sample (real data, partial coverage).",
+    "Scaled streams replicate synthetic events at identical timestamps (volume stress, not football realism).",
+    "Medians over three runs; no warm-up exclusions."
+  ],
+  "streams": [
+    {
+      "stream": "sb_wc2022_sample_12",
+      "real_data": true,
+      "event_count": 12,
+      "reduce": {
+        "median_ms": 0.05,
+        "min_ms": 0.05,
+        "max_ms": 0.09,
+        "samples": 3
+      },
+      "sequences": {
+        "median_ms": 0.02,
+        "min_ms": 0.02,
+        "max_ms": 0.04,
+        "samples": 3
+      },
+      "tactical_explorer": {
+        "median_ms": 0.03,
+        "min_ms": 0.02,
+        "max_ms": 0.03,
+        "samples": 3
+      },
+      "player_spotlight": {
+        "median_ms": 0.04,
+        "min_ms": 0.03,
+        "max_ms": 0.05,
+        "samples": 3
+      },
+      "metric_receipts": {
+        "median_ms": 0.03,
+        "min_ms": 0.03,
+        "max_ms": 0.05,
+        "samples": 3
+      },
+      "oaai_720s": {
+        "median_ms": 0.69,
+        "min_ms": 0.64,
+        "max_ms": 0.7,
+        "samples": 3
+      }
+    },
+    {
+      "stream": "synthetic_volume_x1",
+      "real_data": false,
+      "event_count": 148,
+      "reduce": {
+        "median_ms": 0.72,
+        "min_ms": 0.66,
+        "max_ms": 0.72,
+        "samples": 3
+      },
+      "sequences": {
+        "median_ms": 0.22,
+        "min_ms": 0.21,
+        "max_ms": 0.24,
+        "samples": 3
+      },
+      "tactical_explorer": {
+        "median_ms": 0.03,
+        "min_ms": 0.03,
+        "max_ms": 0.04,
+        "samples": 3
+      },
+      "player_spotlight": {
+        "median_ms": 0.3,
+        "min_ms": 0.3,
+        "max_ms": 0.31,
+        "samples": 3
+      },
+      "metric_receipts": {
+        "median_ms": 0.08,
+        "min_ms": 0.08,
+        "max_ms": 0.11,
+        "samples": 3
+      },
+      "oaai_720s": {
+        "median_ms": 2.89,
+        "min_ms": 2.48,
+        "max_ms": 4.56,
+        "samples": 3
+      }
+    },
+    {
+      "stream": "synthetic_volume_x8",
+      "real_data": false,
+      "event_count": 1184,
+      "reduce": {
+        "median_ms": 6.48,
+        "min_ms": 6.47,
+        "max_ms": 6.94,
+        "samples": 3
+      },
+      "sequences": {
+        "median_ms": 5.08,
+        "min_ms": 4.73,
+        "max_ms": 5.57,
+        "samples": 3
+      },
+      "tactical_explorer": {
+        "median_ms": 0.09,
+        "min_ms": 0.09,
+        "max_ms": 0.17,
+        "samples": 3
+      },
+      "player_spotlight": {
+        "median_ms": 5.35,
+        "min_ms": 5.19,
+        "max_ms": 6.77,
+        "samples": 3
+      },
+      "metric_receipts": {
+        "median_ms": 0.95,
+        "min_ms": 0.93,
+        "max_ms": 1.05,
+        "samples": 3
+      },
+      "oaai_720s": {
+        "median_ms": 11.0,
+        "min_ms": 10.89,
+        "max_ms": 11.02,
+        "samples": 3
+      }
+    },
+    {
+      "stream": "synthetic_volume_x28",
+      "real_data": false,
+      "event_count": 4144,
+      "reduce": {
+        "median_ms": 24.33,
+        "min_ms": 22.95,
+        "max_ms": 25.78,
+        "samples": 3
+      },
+      "sequences": {
+        "median_ms": 20.61,
+        "min_ms": 17.34,
+        "max_ms": 20.8,
+        "samples": 3
+      },
+      "tactical_explorer": {
+        "median_ms": 0.32,
+        "min_ms": 0.3,
+        "max_ms": 0.55,
+        "samples": 3
+      },
+      "player_spotlight": {
+        "median_ms": 21.34,
+        "min_ms": 21.05,
+        "max_ms": 36.77,
+        "samples": 3
+      },
+      "metric_receipts": {
+        "median_ms": 3.64,
+        "min_ms": 3.53,
+        "max_ms": 3.96,
+        "samples": 3
+      },
+      "oaai_720s": {
+        "median_ms": 38.59,
+        "min_ms": 38.12,
+        "max_ms": 38.65,
+        "samples": 3
+      }
+    }
+  ],
+  "largest_stream_snapshot": {
+    "event_count": 4144,
+    "snapshot_bytes": 3151138,
+    "freeze": {
+      "median_ms": 608.18,
+      "min_ms": 608.18,
+      "max_ms": 608.18,
+      "samples": 1
+    },
+    "evidence_graph": {
+      "median_ms": 346.7,
+      "min_ms": 346.7,
+      "max_ms": 346.7,
+      "samples": 1
+    },
+    "graph_nodes": 763,
+    "graph_edges": 763,
+    "peak_memory_mb": 16.47
+  }
+}
