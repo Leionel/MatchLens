@@ -46,8 +46,15 @@ from .football import (
     metric_receipts,
     reduce_match,
 )
-from .oaai import compute_oaai, OAAIConfig
+from .oaai import compute_oaai, smooth_oaai_timeline, OAAIConfig
 from .gate import publication_gate_2_0
+from .metrics import (
+    MetricsService,
+    canonical_oaai_timeline,
+    canonical_xt_model,
+    registry_oaai_comparison,
+    registry_recoveries_comparison,
+)
 from .models.xt import ExpectedThreatModel
 from .exploration import (
     analyze_quick_recoveries,
@@ -95,6 +102,7 @@ class Session:
     anchor_time: float = field(default_factory=time.monotonic)
     anchor_at: int = 0
     snapshots: dict[str, Snapshot] = field(default_factory=dict)
+    snapshots_by_as_of: dict[int, Snapshot] = field(default_factory=dict)
     cache: dict[str, dict] = field(default_factory=dict)
     state_key: tuple | None = None
     state_value: dict | None = None
@@ -410,6 +418,20 @@ class Engine:
             match_id=None if legacy_default else s.match_id,
         )
 
+    def snapshot_at(self, s: Session, at: int) -> Snapshot:
+        """Frozen snapshot of the session at a given clock, cached per session.
+
+        The registry observations attached to the chart data must refer to the
+        very same frozen snapshot the rest of the session publishes, otherwise
+        the chart and the registry would compare different clocks.
+        """
+        snap = s.snapshots_by_as_of.get(at)
+        if snap is None:
+            snap = self.snapshot_for(s, at)
+            s.snapshots_by_as_of[at] = snap
+            s.snapshots.setdefault(snap.id, snap)
+        return snap
+
     def cleanup(self):
         for sid, s in list(self.sessions.items()):
             if time.monotonic()-s.touched > 1800:
@@ -544,7 +566,26 @@ class Engine:
         else:
             sequences = build_sequences(state)
             tactical = build_tactical_explorer(state, s.focus_team)
-            oaai_data = compute_oaai(state["events"], dead_intervals=state.get("dead_intervals", []), xt_model=self.xt_model)
+            # The chart timeline and the registry observations must describe the
+            # same frozen clock, so the timeline runs to the snapshot's as_of and
+            # the registry peak is read from that very timeline.
+            chart_snapshot = self.snapshot_at(s, s.at)
+            chart_data = chart_snapshot.data
+            oaai_data = compute_oaai(
+                state["events"],
+                smoothing_mode="causal",
+                t_end=int(chart_data.get("as_of", s.at)),
+                dead_intervals=state.get("dead_intervals", []),
+                xt_model=canonical_xt_model(),
+            )
+            oaai_data["registry_comparison"] = registry_oaai_comparison(
+                chart_snapshot,
+                oaai_data.get("timeline", []),
+                registry_comparable=True,
+                reason=None,
+                chart_smoothing_mode="causal",
+                data=chart_data,
+            )
             quick_rec = analyze_quick_recoveries(state["events"], window_seconds=6.0, target_team=s.focus_team)
             density_diff = analyze_action_density_differential(state["events"])
             channels = analyze_attacking_channels(
@@ -1460,6 +1501,11 @@ async def get_exploration_recoveries(request: Request, window_seconds: float = 6
     ctx = eng.match_context(s.match_id)
     result = analyze_quick_recoveries(state["events"], window_seconds=window_seconds, target_team=s.focus_team)
     result.update(match_id=s.match_id, epoch=s.epoch, at=s.at, dataset_revision=ctx.dataset_revision)
+    result["registry_comparison"] = registry_recoveries_comparison(
+        eng.snapshot_at(s, s.at),
+        window_seconds=window_seconds,
+        focus_team=s.focus_team,
+    )
     return result
 
 
@@ -1470,13 +1516,37 @@ async def get_exploration_oaai(request: Request, smoothing_mode: Literal["causal
     # Only explicit dead-ball intervals may freeze decay; possession intervals
     # are controlled play and must never be passed here.
     ctx = eng.match_context(s.match_id)
+    chart_snapshot = eng.snapshot_at(s, s.at)
+    chart_data = chart_snapshot.data
+    as_of = int(chart_data.get("as_of", s.at))
     result = compute_oaai(
         state["events"],
         smoothing_mode=smoothing_mode,
+        t_end=as_of,
         dead_intervals=state.get("dead_intervals", []),
-        xt_model=eng.xt_model,
+        xt_model=canonical_xt_model(),
+        include_raw=True,
     )
+    # The registry publishes the causal (single-sided) smoothing. A bilateral
+    # chart therefore shows a different curve and is reported as not
+    # comparable instead of pretending to be the same number.
+    if smoothing_mode == "causal":
+        registry_timeline = result.get("timeline", [])
+        registry_comparable = True
+        reason = None
+    else:
+        registry_timeline = smooth_oaai_timeline(result.get("timeline_raw", []), mode="causal")
+        registry_comparable = False
+        reason = "smoothing_mode_bilateral_not_registry_canonical"
     result.update(match_id=s.match_id, epoch=s.epoch, at=s.at, dataset_revision=ctx.dataset_revision)
+    result["registry_comparison"] = registry_oaai_comparison(
+        chart_snapshot,
+        registry_timeline,
+        registry_comparable=registry_comparable,
+        reason=reason,
+        chart_smoothing_mode=smoothing_mode,
+        data=chart_data,
+    )
     return result
 
 
@@ -1765,6 +1835,7 @@ async def get_match_story(
         perspective,
         coverage=state["coverage"],
         dataset_revision=ctx.dataset_revision or ctx.data_version,
+        snapshot=snap,
     ).model_dump()
     story.update(dataset_revision=ctx.dataset_revision or ctx.data_version, as_of=at, mode=mode)
     if len(eng.story_cache) > 128:
@@ -2012,6 +2083,7 @@ async def broadcast_export(body: ExportBody, request: Request):
         coverage=snap.data.get("coverage", {}),
         dataset_revision=dataset_revision,
         claim_ids=[item.claim_id for item in rundown.items],
+        snapshot=snap,
     )
     if story.approval_status != "approved_for_broadcast":
         raise HTTPException(409, "story_not_broadcastable")

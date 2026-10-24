@@ -31,10 +31,46 @@ export type TeamRecoveryData = {
   high_recoveries_count: number;
 };
 
+export type QuickRecoveriesRegistryObservation = {
+  metric_id: string;
+  team: string;
+  window: string;
+  window_start_s: number;
+  window_end_s: number;
+  value: number | null;
+  status: string;
+  unit: string;
+  definition: string;
+  event_count: number;
+  event_ids: string[];
+  metric_version: string;
+  computation_version: string;
+  coverage_status: string;
+  dataset_revision: string | null;
+  snapshot_id: string;
+};
+
+export type QuickRecoveriesRegistryComparison = {
+  metric_id: string;
+  registry_comparable: boolean;
+  reason: string | null;
+  chart_metric: {
+    metric_id: string;
+    window_seconds: number;
+    focus_team: string;
+    interval: string;
+  };
+  snapshot_id: string;
+  snapshot_as_of: number;
+  observations: Record<string, Record<string, QuickRecoveriesRegistryObservation>>;
+  disclaimer: string;
+};
+
 export type QuickRecoveriesData = {
   window_seconds: number;
   teams: Record<string, TeamRecoveryData>;
   disclaimer: string;
+  registry_comparison?: QuickRecoveriesRegistryComparison;
 };
 
 interface QuickRecoveryAnalysisProps {
@@ -81,6 +117,16 @@ export const QuickRecoveryAnalysis: React.FC<QuickRecoveryAnalysisProps> = ({
   const channels = teamData.spatial_distribution_channels || { left: 0, center: 0, right: 0 };
   const totalRec = teamData.quick_recoveries_count || 1;
 
+  // Registry consistency statement (DEF-11 / B-04): the BL-03 quick-recovery
+  // count has no registry counterpart, so the backend states the difference
+  // instead of pretending the two numbers are the same metric.
+  const registry = data?.registry_comparison;
+  const registryTeam = registry?.observations?.[teamData.team] || registry?.observations?.[focusTeam];
+  const registryRecoveries = registryTeam?.["recoveries"];
+  const registryHigh = registryTeam?.["high_recoveries"];
+  const registryValue = (obs?: QuickRecoveriesRegistryObservation) =>
+    !obs ? "-" : obs.value === null ? (isZh ? "未观测" : "not observed") : String(obs.value);
+
   const handleSlider = (val: number) => {
     setWindowSec(val);
     onWindowChange?.(val);
@@ -126,6 +172,34 @@ export const QuickRecoveryAnalysis: React.FC<QuickRecoveryAnalysisProps> = ({
           </p>
         </div>
       </div>
+
+      {/* Registry consistency statement (same snapshot, different definition) */}
+      {registry ? (
+        <div
+          style={{
+            padding: "6px 10px",
+            borderRadius: 6,
+            fontSize: 11,
+            lineHeight: 1.5,
+            color: "var(--text-tertiary)",
+            background: "color-mix(in srgb, var(--amber-9) 10%, transparent)",
+            border: "0.5px solid color-mix(in srgb, var(--amber-9) 30%, transparent)",
+          }}
+        >
+          {registry.registry_comparable ? (
+            isZh ? "本图数值与 Registry 同一快照口径一致。" : "These chart values match the registry metric for this snapshot."
+          ) : (
+            <>
+              {isZh ? "本图与 Registry 口径不同，数值不可直接对比：" : "Different definition from the registry; these chart values are not directly comparable: "}
+              <span style={{ fontFamily: "monospace" }}>{registry.reason ?? "unknown reason"}</span>
+              {isZh ? "。同快照 Registry 参考值：" : ". Registry reference for the same snapshot: "}
+              <span style={{ fontFamily: "monospace" }}>
+                recoveries {registryValue(registryRecoveries)} / high_recoveries {registryValue(registryHigh)}
+              </span>
+            </>
+          )}
+        </div>
+      ) : null}
 
       {/* KPI Cards Row */}
       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 10 }}>

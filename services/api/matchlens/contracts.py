@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .football import Snapshot
+from .football import Snapshot, receipt_number
 
 Assertion = Literal["possession_without_penetration", "attacking_threat_increased", "recoveries_followed_by_shots", "recoveries_caused_shots", "goal_sequence"]
 
@@ -400,7 +400,7 @@ def evaluate_hypotheses(snapshot: Snapshot, team: str = "H") -> HypothesisLabMat
     pos_prev = val("possession", "previous")
     shots_curr = val("shots")
     trans_shots = val("transition_shots")
-    goal_val = r.get(f"{team}.goals.match", {}).get("value", 0)
+    goal_val = receipt_number(r.get(f"{team}.goals.match"))
 
     if goal_val > 0 and at >= 600:
         topic = "Scoring Breakthrough & Build-up"
@@ -517,7 +517,10 @@ def evaluate_hypotheses(snapshot: Snapshot, team: str = "H") -> HypothesisLabMat
 
 def _val(x: Any, default: float = 0.0) -> float:
     if isinstance(x, dict):
-        return float(x.get("value", default))
+        value = x.get("value", default)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return default
+        return float(value)
     try:
         return float(x)
     except (TypeError, ValueError):
@@ -848,13 +851,24 @@ def ask_the_match(snapshot: Snapshot, intent_id: str, team: str = "H") -> dict:
         pos_curr = r.get(f"{team}.possession.current", {}).get("value")
         pos_prev = r.get(f"{team}.possession.previous", {}).get("value")
         pos_status = r.get(f"{team}.possession.current", {}).get("status", "ok")
-        shots = r.get(f"{team}.shots.current", {}).get("value", 0)
-        entries = r.get(f"{team}.entries.current", {}).get("value", 0)
+        shots_rec = r.get(f"{team}.shots.current", {})
+        entries_rec = r.get(f"{team}.entries.current", {})
+        shots_status = shots_rec.get("status", "ok")
+        entries_status = entries_rec.get("status", "ok")
+        shots = receipt_number(shots_rec)
+        entries = receipt_number(entries_rec)
         coverage = snapshot.data.get("coverage", {})
-        if pos_status == "unobserved" or not isinstance(pos_curr, (int, float)) or not isinstance(pos_prev, (int, float)):
+        if (
+            pos_status == "unobserved"
+            or not isinstance(pos_curr, (int, float))
+            or not isinstance(pos_prev, (int, float))
+            or shots_status != "ok"
+            or entries_status != "ok"
+        ):
             answer = (
-                f"Insufficient observed event coverage to attribute controlled possession for {team_name} "
-                f"in this window. Possession share is Unknown, not zero. "
+                f"Insufficient observed event coverage to attribute controlled possession and "
+                f"penetration for {team_name} in this window. Possession share is Unknown, not zero, "
+                f"and shot or entry counts stay Unknown wherever the window itself was never observed. "
                 f"Recorded events through {coverage.get('observed_end')}s of {coverage.get('format_seconds')}s."
             )
             return {
@@ -883,7 +897,7 @@ def ask_the_match(snapshot: Snapshot, intent_id: str, team: str = "H") -> dict:
 
     if intent_id == "scoring_sequence_breakdown":
         goal_rec = r.get(f"{team}.goals.match", {"value": 0, "chains": []})
-        if goal_rec["value"] > 0 and goal_rec["chains"]:
+        if receipt_number(goal_rec) > 0 and goal_rec.get("chains"):
             chain = goal_rec["chains"][-1]
             answer = (
                 f"{team_name} scored {goal_rec['value']} goal(s). The scoring sequence "

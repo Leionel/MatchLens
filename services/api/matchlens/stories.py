@@ -12,13 +12,40 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .football import event_attacking_x
-from .oaai import compute_oaai
+from .football import Snapshot
+from .metrics import MetricValue, MetricsService
 from .registry import ClaimRecord, ClaimRegistry
 from .schema import NormalizedEvent
 
 
 AudiencePerspective = Literal["coach", "media", "fan"]
+
+# Metrics the story reports per phase. Every one of them is observed through
+# the metric registry (`MetricsService.query_range`), never recomputed here.
+PHASE_METRIC_IDS: tuple[str, ...] = (
+    "shots",
+    "goals",
+    "passes",
+    "recoveries",
+    "entries",
+    "progressive_passes",
+)
+
+_METRIC_PHRASES: dict[str, tuple[str, str]] = {
+    "shots": ("shot", "shots"),
+    "goals": ("goal", "goals"),
+    "passes": ("completed pass", "completed passes"),
+    "recoveries": ("recovery", "recoveries"),
+    "entries": ("final-third entry", "final-third entries"),
+    "progressive_passes": ("progressive pass", "progressive passes"),
+}
+
+# Minimum absolute difference between the two teams' observed OAAI intensity
+# before a phase is called a surge instead of a stalemate.
+OAAI_TREND_THRESHOLD = 0.15
+
+# Upper bound on the event slots copied into a chapter metric reference.
+METRIC_REF_EVENT_LIMIT = 100
 
 
 class StoryChapter(BaseModel):
@@ -34,6 +61,9 @@ class StoryChapter(BaseModel):
     verified_claim_refs: list[str]
     supporting_event_ids: list[str]
     tactical_tags: list[str]
+    # Provenance of every number quoted in the narrative. Additive only: the
+    # approval semantics above are unchanged.
+    metric_refs: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class MatchStory(BaseModel):
@@ -106,20 +136,96 @@ def _team(ev: Any) -> str:
     return "H" if str(val) == "H" else "N" if str(val) == "N" else ""
 
 
-def _kind(ev: Any) -> str:
-    val = ev.get("kind") if isinstance(ev, dict) else getattr(ev, "action_type", None)
-    if hasattr(val, "value"):
-        val = val.value
-    value = str(val or "").lower()
-    for key in ("shot", "pass", "carry", "recovery", "restart"):
-        if key in value:
-            return key
-    return "other"
-
-
 def _coords(ev: Any, point: str) -> list[float] | None:
     value = ev.get(point) if isinstance(ev, dict) else None
     return value if isinstance(value, (list, tuple)) and len(value) >= 2 and value[0] is not None else None
+
+
+def _observed_number(value: float | int | None) -> str:
+    """Render an observed metric value.
+
+    An unobserved metric is never printed as zero; it is printed as
+    "not observed" so the narrative cannot imply a measurement that the
+    registry did not make.
+    """
+    if value is None:
+        return "not observed"
+    if isinstance(value, float):
+        return f"{value:.2f}" if not float(value).is_integer() else str(int(value))
+    return str(int(value))
+
+
+def _metric_phrase(metric_id: str, value: float | int | None) -> str:
+    """Noun phrase for an observed metric value (singular / plural)."""
+    singular, plural = _METRIC_PHRASES[metric_id]
+    if value == 1:
+        return singular
+    return plural
+
+
+def _snapshot_for_metrics(
+    events: list[dict[str, Any] | NormalizedEvent],
+    snapshot_id: str,
+    match_id: str,
+    coverage: dict[str, Any] | None,
+) -> Snapshot:
+    """Minimal frozen snapshot for callers that only hold the event log.
+
+    The story engine needs the event log and the frozen clock to query the
+    registry; every number it publishes is computed by the registry from
+    these inputs.
+    """
+    payload = {
+        "schema": "evidence-v2",
+        "match_id": match_id,
+        "as_of": int(max((_event_time(e) for e in events), default=0.0)),
+        "events": [e if isinstance(e, dict) else e.model_dump() for e in events],
+        "intervals": [],
+        "coverage": coverage or {},
+        "score": {"H": 0, "N": 0},
+    }
+    return Snapshot(id=snapshot_id, canonical=json.dumps(payload, default=str))
+
+
+def _metric_ref(
+    observation: MetricValue,
+    *,
+    phase_start: float,
+    phase_end: float,
+    window_start: float,
+    window_end: float,
+    truncated: bool,
+) -> dict[str, Any]:
+    """Provenance record of one registry observation used by a chapter."""
+    event_ids = list(observation.event_ids)
+    ref: dict[str, Any] = {
+        "metric_id": observation.metric_id,
+        "team": observation.team,
+        "window": observation.window,
+        "window_start_s": window_start,
+        "window_end_s": window_end,
+        "phase_start_s": phase_start,
+        "phase_end_s": phase_end,
+        "window_truncated": truncated,
+        "value": observation.value,
+        "status": observation.status,
+        "unit": observation.unit,
+        "definition": observation.definition,
+        "version": observation.version,
+        "metric_version": observation.metric_version,
+        "computation_version": observation.computation_version,
+        "model_version": observation.model_version,
+        "coverage_status": observation.coverage_status,
+        "dataset_revision": observation.dataset_revision,
+        "snapshot_id": observation.snapshot_id,
+        "match_id": observation.match_id,
+        "event_count": len(event_ids),
+        "event_ids": event_ids[:METRIC_REF_EVENT_LIMIT],
+        "event_ids_truncated": len(event_ids) > METRIC_REF_EVENT_LIMIT,
+    }
+    if observation.metric_id == "oaai" and "peak_at" in observation.details:
+        ref["peak_at"] = observation.details["peak_at"]
+    return ref
 
 
 class MatchStoryEngine:
@@ -137,6 +243,7 @@ class MatchStoryEngine:
         coverage: dict[str, Any] | None = None,
         dataset_revision: str | None = None,
         claim_ids: list[str] | None = None,
+        snapshot: Snapshot | None = None,
     ) -> MatchStory:
         if registry is None or not snapshot_id:
             raise ValueError("trusted_claim_registry_required")
@@ -177,8 +284,10 @@ class MatchStoryEngine:
                 (duration * 2.0 / 3.0, duration, "60'–90'+"),
             ]
 
-        oaai_dict = compute_oaai(events, smoothing_mode="causal") if events else {}
-        oaai_points = oaai_dict.get("timeline", []) if isinstance(oaai_dict, dict) else []
+        # Every number quoted below is observed through the metric registry.
+        # The story engine never recomputes a metric of its own.
+        metric_snapshot = snapshot or _snapshot_for_metrics(events, snapshot_id, match_id, coverage)
+        snapshot_as_of = int(metric_snapshot.data.get("as_of", 0))
 
         chapters: list[StoryChapter] = []
         for idx, (start_t, end_t, span) in enumerate(phase_boundaries):
@@ -186,64 +295,132 @@ class MatchStoryEngine:
                 e for e in events
                 if start_t <= _event_time(e) <= end_t
             ]
-            shots = [e for e in phase_events if _kind(e) == "shot"]
-            goals = [e for e in shots if str(e.get("outcome") if isinstance(e, dict) else getattr(e, "outcome", "")).lower() in ("goal", "own_goal", "own_goal_for")]
-            passes = [e for e in phase_events if _kind(e) == "pass"]
-            recoveries = [e for e in phase_events if _kind(e) == "recovery"]
-            entries = 0
-            progressive = 0
-            for e in passes:
-                if not isinstance(e, dict):
-                    continue
-                ax_s = event_attacking_x(e, point="start")
-                ax_e = event_attacking_x(e, point="end")
-                if ax_s is None or ax_e is None:
-                    continue
-                if ax_s <= 70 < ax_e:
-                    entries += 1
-                if ax_e - ax_s >= 12:
-                    progressive += 1
+            # The phase covers the whole match, the snapshot is frozen at
+            # `as_of`. A phase that runs past the frozen clock is observed up
+            # to the frozen clock only, and the truncation is recorded.
+            obs_end = min(float(end_t), float(snapshot_as_of))
+            truncated = obs_end < float(end_t)
+            observable = obs_end > float(start_t)
 
-            phase_points = [
-                p for p in oaai_points
-                if start_t <= float(p.get("timestamp_seconds", p.get("t", 0.0))) <= end_t
-            ]
-            avg_wave = (
-                sum(float(p.get("oaai_value", p.get("smoothed_oaai", 0.0))) for p in phase_points) / len(phase_points)
-                if phase_points else None
-            )
-            if avg_wave is None:
+            observations: dict[str, dict[str, MetricValue]] = {"H": {}, "N": {}}
+            metric_refs: list[dict[str, Any]] = []
+            for team in ("H", "N"):
+                if not observable:
+                    continue
+                values = MetricsService.query_range_many(
+                    metric_snapshot,
+                    list(PHASE_METRIC_IDS),
+                    team=team,
+                    start_s=float(start_t),
+                    end_s=obs_end,
+                    match_id=match_id,
+                )
+                for observation in values:
+                    observations[team][observation.metric_id] = observation
+                    metric_refs.append(
+                        _metric_ref(
+                            observation,
+                            phase_start=float(start_t),
+                            phase_end=float(end_t),
+                            window_start=float(start_t),
+                            window_end=obs_end,
+                            truncated=truncated,
+                        )
+                    )
+
+            # OAAI trend comes from the registry observation of both teams.
+            oaai_values: dict[str, MetricValue] = {}
+            for team in ("H", "N"):
+                if not observable:
+                    continue
+                observation = MetricsService.query_range(
+                    metric_snapshot,
+                    "oaai",
+                    team=team,
+                    start_s=float(start_t),
+                    end_s=obs_end,
+                    match_id=match_id,
+                )
+                oaai_values[team] = observation
+                metric_refs.append(
+                    _metric_ref(
+                        observation,
+                        phase_start=float(start_t),
+                        phase_end=float(end_t),
+                        window_start=float(start_t),
+                        window_end=obs_end,
+                        truncated=truncated,
+                    )
+                )
+
+            home_oaai = oaai_values.get("H")
+            away_oaai = oaai_values.get("N")
+            home_value = home_oaai.value if home_oaai else None
+            away_value = away_oaai.value if away_oaai else None
+            if home_value is None and away_value is None:
                 dominant, trend = "NONE", "unobserved"
-            elif avg_wave > 0.15:
-                dominant, trend = "H", "home_surge"
-            elif avg_wave < -0.15:
+            elif home_value is None:
                 dominant, trend = "N", "away_surge"
+            elif away_value is None:
+                dominant, trend = "H", "home_surge"
             else:
-                dominant, trend = "NONE", "balanced_stalemate"
+                gap = float(home_value) - float(away_value)
+                if gap > OAAI_TREND_THRESHOLD:
+                    dominant, trend = "H", "home_surge"
+                elif gap < -OAAI_TREND_THRESHOLD:
+                    dominant, trend = "N", "away_surge"
+                else:
+                    dominant, trend = "NONE", "balanced_stalemate"
 
-            goal_text = f"{len(goals)} goal(s)" if goals else "no goal"
+            def _team_line(team: str) -> str:
+                label = "Home" if team == "H" else "Away"
+                parts = []
+                for metric_id in PHASE_METRIC_IDS:
+                    observation = observations.get(team, {}).get(metric_id)
+                    if observation is None:
+                        parts.append(f"not observed {_metric_phrase(metric_id, None)}")
+                    else:
+                        parts.append(
+                            f"{_observed_number(observation.value)} {_metric_phrase(metric_id, observation.value)}"
+                        )
+                return f"{label} recorded " + ", ".join(parts)
+
+            def _team_value(team: str, metric_id: str) -> str:
+                observation = observations.get(team, {}).get(metric_id)
+                return _observed_number(observation.value if observation else None)
+
+            home_line = _team_line("H")
+            away_line = _team_line("N")
+            truncated_note = (
+                f" Observed up to {obs_end:.0f}s; the remainder of this phase is not yet in the snapshot."
+                if truncated else ""
+            )
             loc_note = "Locations are recorded for these events." if all(
                 _coords(e, "start") for e in phase_events
             ) else "Some events have no recorded location; they are excluded from spatial counts."
             if perspective == "fan":
                 narrative = (
-                    f"{span}: {len(shots)} shot attempt(s), {goal_text} recorded. "
+                    f"{span}: {home_line}; {away_line}. "
                     "All numbers come from the match event log; off-ball movement is not observed."
+                    + truncated_note
                 )
-                tags = ["recorded_events", f"shots_{len(shots)}", f"goals_{len(goals)}"]
+                tags = [
+                    "recorded_events",
+                    f"shots_H{_team_value('H', 'shots')}_N{_team_value('N', 'shots')}",
+                    f"goals_H{_team_value('H', 'goals')}_N{_team_value('N', 'goals')}",
+                ]
             elif perspective == "coach":
                 narrative = (
-                    f"Phase {span}: {len(phase_events)} recorded on-ball actions, "
-                    f"{len(passes)} passes, {progressive} progressive passes, {entries} final-third entries, "
-                    f"{len(recoveries)} recoveries, {len(shots)} shots. These are event counts, "
-                    "not proof of tactical intent; no off-ball positioning data is available. " + loc_note
+                    f"Phase {span}: {home_line}; {away_line}. These are event counts, "
+                    "not proof of tactical intent; no off-ball positioning data is available. "
+                    + loc_note + truncated_note
                 )
                 tags = ["recorded_events", "progression_counts", "recovery_counts"]
             else:
                 narrative = (
-                    f"During {span}, {len(phase_events)} on-ball events were recorded: "
-                    f"{len(passes)} passes, {len(shots)} shots and {goal_text}. "
+                    f"During {span}, {home_line}; {away_line}. "
                     "No off-ball positioning or tactical causation is measured."
+                    + truncated_note
                 )
                 tags = ["broadcast_factual", "recorded_events"]
 
@@ -263,6 +440,7 @@ class MatchStoryEngine:
                 verified_claim_refs=refs,
                 supporting_event_ids=[_event_id(e) for e in phase_events if _event_id(e)][:20],
                 tactical_tags=tags,
+                metric_refs=metric_refs,
             ))
 
         if rejected_editorially:

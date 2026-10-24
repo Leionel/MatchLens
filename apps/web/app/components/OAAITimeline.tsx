@@ -39,6 +39,40 @@ export type OAAIChangePoint = {
   top_contributors: OAAIContributor[];
 };
 
+export type OAAIRegistryObservation = {
+  metric_id: string;
+  team: string;
+  window: string;
+  window_start_s: number;
+  window_end_s: number;
+  value: number | null;
+  status: string;
+  unit: string;
+  peak_at: number | null;
+  value_basis: string;
+  event_ids: string[];
+  event_count: number;
+  metric_version: string;
+  computation_version: string;
+  model_version: string | null;
+  coverage_status: string;
+  dataset_revision: string | null;
+  snapshot_id: string;
+};
+
+export type OAAIRegistryComparison = {
+  metric_id: string;
+  registry_comparable: boolean;
+  reason: string | null;
+  chart_smoothing_mode: string;
+  registry_smoothing_mode: string;
+  snapshot_id: string;
+  snapshot_as_of: number;
+  value_basis: string;
+  observations: Record<string, Record<string, OAAIRegistryObservation>>;
+  disclaimer: string;
+};
+
 export type OAAIData = {
   model_version: string;
   smoothing_mode: "causal" | "bilateral";
@@ -47,6 +81,7 @@ export type OAAIData = {
   timeline: OAAITimelinePoint[];
   change_points: OAAIChangePoint[];
   disclaimer: string;
+  registry_comparison?: OAAIRegistryComparison;
 };
 
 interface OAAITimelineProps {
@@ -139,6 +174,15 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
   const currentVal = currentPoint?.oaai_value ?? currentPoint?.oaai_raw ?? 0;
   const isCurrentHomeLead = currentVal > 0.05;
   const isCurrentAwayLead = currentVal < -0.05;
+
+  // Registry consistency statement (DEF-11 / B-04). The backend publishes the
+  // registry observation for the same snapshot; when the chart and the
+  // registry use a different口径 the difference is stated, never hidden.
+  const registry = data.registry_comparison;
+  const registryHome = registry?.observations?.["H"]?.["current"];
+  const registryAway = registry?.observations?.["N"]?.["current"];
+  const registryText = (obs?: OAAIRegistryObservation) =>
+    !obs ? "-" : obs.value === null ? (isZh ? "未观测" : "not observed") : obs.value.toFixed(4);
 
   return (
     <div
@@ -267,6 +311,41 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Registry consistency statement (same snapshot, same metric) */}
+      {registry ? (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 8,
+            padding: "6px 10px",
+            borderRadius: 6,
+            fontSize: 11,
+            color: "var(--text-tertiary)",
+            background: registry.registry_comparable
+              ? "color-mix(in srgb, var(--green-9) 8%, transparent)"
+              : "color-mix(in srgb, var(--amber-9) 10%, transparent)",
+            border: `0.5px solid ${
+              registry.registry_comparable
+                ? "color-mix(in srgb, var(--green-9) 25%, transparent)"
+                : "color-mix(in srgb, var(--amber-9) 30%, transparent)"
+            }`,
+          }}
+        >
+          <span>
+            {registry.registry_comparable
+              ? isZh
+                ? `与 Registry 同一快照口径一致（因果平滑，as_of ${registry.snapshot_as_of}s）· current 窗口：${homeTeamName} ${registryText(registryHome)} / ${awayTeamName} ${registryText(registryAway)}`
+                : `Same metric as the registry for this snapshot (causal smoothing, as_of ${registry.snapshot_as_of}s) · current window: ${homeTeamName} ${registryText(registryHome)} / ${awayTeamName} ${registryText(registryAway)}`
+              : isZh
+              ? `与 Registry 口径不同，本图数值不可与 Registry 直接对比：${registry.reason ?? "unknown reason"}`
+              : `Different definition from the registry; these chart values are not directly comparable: ${registry.reason ?? "unknown reason"}`}
+          </span>
+        </div>
+      ) : null}
 
       {/* SVG Momentum Chart Container */}
       <div

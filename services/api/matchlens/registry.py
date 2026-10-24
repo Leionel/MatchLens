@@ -4,12 +4,39 @@ Approval is never accepted from a caller-supplied boolean. A record is
 publishable only when this registry has executed a gate against a frozen
 snapshot and stored the resulting verdict, evidence hash and source run.
 Editorial approval is a separate, explicitly attributed decision.
+
+Persistence format and legacy migration
+---------------------------------------
+The on-disk format is ``claim-registry-v2`` (claims + challenges + revisions +
+supersessions). A legacy ``claim-registry-v1`` payload is migrated on load,
+without ever destroying the source file:
+
+1. The source file is copied **byte for byte** to a timestamped sibling backup
+   (``<name>.v1.bak-<YYYYmmddTHHMMSSZ>.json``). An existing backup with
+   identical content is reused, so repeated loads never multiply backups.
+2. The legacy payload is mapped onto the v2 model in memory. A legacy claim
+   without any revision history receives one *derived* revision that restates
+   the gate verdict already stored on that claim. A derived revision is a
+   reconstruction, not a historical fact: the legacy file never recorded a
+   review event for that claim. It is flagged as such in
+   ``ClaimRevision.review_result`` and ``ClaimRevision.rationale``.
+3. The legacy file itself keeps its original bytes until an explicit
+   ``_save()`` succeeds. If the backup could not be written, the original file
+   is never overwritten: the migrated state is written to a sidecar file and
+   the failure is recorded.
+
+A corrupt payload never becomes an approved claim. Entries that fail
+validation are skipped and reported through ``ClaimRegistry.load_errors``;
+a payload that cannot be parsed at all leaves the registry empty rather than
+inventing approvals.
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal, Optional
 
@@ -26,6 +53,13 @@ CLAIM_LEVELS = {
     "recoveries_followed_by_shots": 3,
     "recoveries_caused_shots": 4,
 }
+
+REGISTRY_VERSION = "claim-registry-v2"
+LEGACY_REGISTRY_VERSIONS = ("claim-registry-v1",)
+#: Label used for the sibling backup files written next to a legacy registry.
+LEGACY_BACKUP_LABEL = "v1"
+#: Suffix of the sidecar file used when the legacy source cannot be backed up.
+UNBACKED_MIGRATION_SUFFIX = ".v2-unbacked.json"
 
 
 class ClaimRecord(BaseModel):
@@ -145,51 +179,286 @@ class ClaimRegistry:
         self.challenges: dict[str, ChallengeRecord] = {}
         self.revisions: dict[str, list[ClaimRevision]] = {}
         self.supersessions: list[SupersessionEvent] = []
+        #: Load/migration anomalies. Non-empty means the persisted state could
+        #: not be taken at face value; it never means "approved".
+        self.load_errors: list[str] = []
+        #: Write-time anomalies (for example a blocked legacy overwrite).
+        self.persistence_errors: list[str] = []
+        #: Version string found in the source file, if any.
+        self.source_version: Optional[str] = None
+        #: True when the source payload was a legacy (non-v2) registry.
+        self.migrated: bool = False
+        #: Version string of the migrated source payload.
+        self.migrated_from_version: Optional[str] = None
+        #: Path of the byte-for-byte backup of the migrated source file.
+        self.migration_backup_path: Optional[Path] = None
+        #: When True the source file must not be overwritten (backup failed).
+        self._persist_blocked: bool = False
         self._load()
 
     # ---------------------------------------------------------------- persistence
     def _load(self) -> None:
+        """Load the registry, migrating a legacy payload without destroying it."""
         if not self.path or not self.path.exists():
             return
         try:
-            data = json.loads(self.path.read_text(encoding="utf-8"))
-            for raw in data.get("claims", []):
-                record = ClaimRecord.model_validate(raw)
-                self.records[record.record_id] = record
-            for raw in data.get("challenges", []):
-                record = ChallengeRecord.model_validate(raw)
-                self.challenges[record.request_hash] = record
-            for raw in data.get("revisions", []):
-                revision = ClaimRevision.model_validate(raw)
-                self.revisions.setdefault(revision.claim_record_id, []).append(revision)
-            for raw in data.get("supersessions", []):
-                self.supersessions.append(SupersessionEvent.model_validate(raw))
-            for record in self.records.values():
-                if record.revision_count and record.current_revision_id is None:
-                    history = self.revisions.get(record.record_id, [])
-                    record.current_revision_id = history[-1].revision_id if history else None
-        except Exception:
+            raw_text = self.path.read_text(encoding="utf-8")
+        except Exception as exc:
+            self.load_errors.append(f"registry_unreadable: {exc}")
+            self._reset_state()
+            return
+        try:
+            data = json.loads(raw_text)
+        except Exception as exc:
             # A corrupt registry is not silently replaced with approvals.
-            self.records = {}
-            self.challenges = {}
-            self.revisions = {}
-            self.supersessions = []
+            self.load_errors.append(f"registry_unparsable_json: {exc}")
+            self._reset_state()
+            return
+        if not isinstance(data, dict):
+            self.load_errors.append("registry_payload_not_object")
+            self._reset_state()
+            return
+
+        version = data.get("version")
+        if version == REGISTRY_VERSION:
+            self.source_version = REGISTRY_VERSION
+            self._load_entries(data)
+            self._reconcile_pointers()
+            return
+
+        self._load_legacy(data, version)
+
+    def _reset_state(self) -> None:
+        self.records = {}
+        self.challenges = {}
+        self.revisions = {}
+        self.supersessions = []
+
+    def _load_entries(self, data: dict[str, Any]) -> None:
+        """Load every collection, skipping (and reporting) invalid entries."""
+        for key, model in (
+            ("claims", ClaimRecord),
+            ("challenges", ChallengeRecord),
+            ("revisions", ClaimRevision),
+            ("supersessions", SupersessionEvent),
+        ):
+            try:
+                entries = self._entries(data, key)
+            except TypeError as exc:
+                self.load_errors.append(f"{key}_container_invalid: {exc}")
+                continue
+            for raw in entries:
+                try:
+                    item = model.model_validate(raw)
+                except Exception as exc:
+                    self.load_errors.append(f"{key[:-1]}_entry_invalid: {exc}")
+                    continue
+                if key == "claims":
+                    self.records[item.record_id] = item
+                elif key == "challenges":
+                    self.challenges[item.request_hash] = item
+                elif key == "revisions":
+                    self.revisions.setdefault(item.claim_record_id, []).append(item)
+                else:
+                    self.supersessions.append(item)
+
+    def _entries(self, data: dict[str, Any], key: str) -> list[Any]:
+        value = data.get(key)
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise TypeError(f"'{key}' must be a list, got {type(value).__name__}")
+        return value
+
+    def _reconcile_pointers(self) -> None:
+        """Make the current-revision pointer agree with the loaded history.
+
+        A pointer that cannot be resolved is cleared so that the affected
+        record can never be treated as broadcastable; the anomaly is reported
+        instead of being silently absorbed. A missing pointer with an intact
+        history is completed from the latest revision, which is what
+        ``claim_validity`` itself treats as the current one.
+        """
+        for record in self.records.values():
+            history = self.revisions.get(record.record_id, [])
+            if record.current_revision_id:
+                known = {r.revision_id for r in history}
+                if record.current_revision_id not in known:
+                    self.load_errors.append(f"current_pointer_unresolved: {record.record_id}")
+                    record.current_revision_id = None
+                    continue
+            elif history:
+                record.current_revision_id = history[-1].revision_id
+                self.load_errors.append(f"current_pointer_derived: {record.record_id}")
+            if not history:
+                self.load_errors.append(f"revision_payload_missing: {record.record_id}")
+                continue
+            if record.revision_count and record.revision_count != len(history):
+                self.load_errors.append(f"revision_count_mismatch: {record.record_id}")
+
+    def _load_legacy(self, data: dict[str, Any], version: Any) -> None:
+        """Migrate a legacy registry payload in memory, never in place."""
+        self.source_version = version if isinstance(version, str) else None
+        self.migrated = True
+        self.migrated_from_version = self.source_version or "(missing)"
+        if version is not None and self.source_version not in LEGACY_REGISTRY_VERSIONS:
+            self.load_errors.append(f"unknown_registry_version: {version!r}")
+
+        # 1. Protect the source file before anything can overwrite it.
+        backup = self._backup_legacy_source()
+        if backup is None:
+            # The legacy source cannot be protected, so it must not be
+            # overwritten. The migrated state stays usable in memory.
+            self._persist_blocked = True
+        else:
+            self.migration_backup_path = backup
+
+        # 2. Load the legacy collections with the same fail-closed tolerance.
+        self._load_entries(data)
+
+        # 3. Revision history: keep what the file actually recorded, otherwise
+        #    derive a first revision from the stored gate verdict.
+        raw_revisions = data.get("revisions")
+        has_revision_history = isinstance(raw_revisions, list) and len(raw_revisions) > 0
+        if has_revision_history:
+            self._reconcile_pointers()
+            return
+        self._derive_initial_revisions()
+        self._reconcile_pointers()
+
+    def _backup_legacy_source(self) -> Optional[Path]:
+        """Copy the legacy source file to a timestamped sibling backup.
+
+        The copy is byte-for-byte. An existing backup whose content already
+        matches the source is reused, so loading the same legacy file twice
+        never produces a second backup.
+        """
+        if not self.path:
+            return None
+        parent = self.path.parent
+        stem = self.path.stem
+        try:
+            source_bytes = self.path.read_bytes()
+        except Exception as exc:
+            self.load_errors.append(f"legacy_source_unreadable: {exc}")
+            return None
+        try:
+            existing = sorted(parent.glob(f"{stem}.{LEGACY_BACKUP_LABEL}.bak-*.json"))
+        except Exception:
+            existing = []
+        for candidate in existing:
+            try:
+                if candidate.read_bytes() == source_bytes:
+                    return candidate
+            except Exception:
+                continue
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        target = parent / f"{stem}.{LEGACY_BACKUP_LABEL}.bak-{stamp}.json"
+        counter = 1
+        while target.exists():
+            target = parent / f"{stem}.{LEGACY_BACKUP_LABEL}.bak-{stamp}-{counter}.json"
+            counter += 1
+        try:
+            shutil.copyfile(self.path, target)
+        except Exception as exc:
+            self.load_errors.append(f"legacy_backup_failed: {exc}")
+            return None
+        return target
+
+    def _derive_initial_revisions(self) -> None:
+        """Derive a first revision for legacy claims that have no history.
+
+        The derived revision restates the gate verdict already stored on the
+        record. It is a reconstruction of the legacy state, **not** a
+        historical review event: the legacy file recorded no revision for it.
+        """
+        for record in self.records.values():
+            if self.revisions.get(record.record_id):
+                continue
+            approved = record.gate_status == "approved"
+            status = "current" if approved else "disputed"
+            outcome = "maintained" if approved else "rejected"
+            revision = ClaimRevision(
+                revision_id=_canonical_hash({
+                    "record_id": record.record_id,
+                    "version": 1,
+                    "evidence_hash": record.evidence_hash,
+                    "statement": record.statement,
+                    "scope": record.evidence_scope,
+                    "status": status,
+                    "outcome": outcome,
+                    "source": "legacy_v1_derivation",
+                })[:20],
+                claim_record_id=record.record_id,
+                claim_id=record.claim_id,
+                match_id=record.match_id,
+                snapshot_id=record.snapshot_id,
+                version=1,
+                parent_revision_id=None,
+                status=status,
+                outcome=outcome,
+                statement=record.statement,
+                evidence_scope=dict(record.evidence_scope),
+                evidence_hash=record.evidence_hash,
+                gate_status=record.gate_status,
+                editorial_status=record.editorial_status,
+                dataset_revision=record.dataset_revision,
+                claim_level=record.claim_level,
+                gate_violations=list(record.gate_violations),
+                review_result={
+                    "derived_revision": True,
+                    "derived_from": self.migrated_from_version,
+                    "note": (
+                        "Derived by the legacy registry migration: this revision restates "
+                        "the gate verdict already stored on the migrated record. It is not an "
+                        "independent historical review event."
+                    ),
+                },
+                rationale=(
+                    "Derived initial revision migrated from a legacy "
+                    f"{self.migrated_from_version} registry; no historical revision payload "
+                    "existed for this claim."
+                ),
+                created_by="legacy_migration",
+                created_at=record.agent_verified_at,
+            )
+            self.revisions.setdefault(record.record_id, []).append(revision)
+            record.current_revision_id = revision.revision_id
+            record.revision_count = 1
+            if record.lifecycle_status == "current":
+                record.lifecycle_status = status  # type: ignore[assignment]
+            else:
+                # A legacy lifecycle decision (withdrawn, qualified, ...) is a
+                # recorded fact and is never overwritten by the derivation.
+                self.load_errors.append(
+                    f"legacy_lifecycle_preserved: {record.record_id} keeps "
+                    f"lifecycle_status={record.lifecycle_status}"
+                )
 
     def _save(self) -> None:
         if not self.path:
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
-            "version": "claim-registry-v2",
+            "version": REGISTRY_VERSION,
             "saved_at": time.time(),
             "claims": [r.model_dump() for r in self.records.values()],
             "challenges": [r.model_dump() for r in self.challenges.values()],
             "revisions": [r.model_dump() for rs in self.revisions.values() for r in rs],
             "supersessions": [e.model_dump() for e in self.supersessions],
         }
-        tmp = self.path.with_suffix(".tmp")
+        target = self.path
+        if self._persist_blocked:
+            # The legacy source could not be backed up, so it must not be
+            # overwritten. Persist beside it and report the blocked write.
+            target = self.path.with_name(self.path.stem + UNBACKED_MIGRATION_SUFFIX)
+            self.persistence_errors.append(
+                f"legacy_source_not_overwritten: {self.path.name}; migrated state written to "
+                f"{target.name}"
+            )
+        tmp = target.with_suffix(".tmp")
         tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-        tmp.replace(self.path)
+        tmp.replace(target)
 
     # ------------------------------------------------------------------- registry
     @staticmethod

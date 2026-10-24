@@ -585,6 +585,39 @@ def detect_change_points(
 
 
 # ==============================================================================
+# Registry window selection (shared by the metric registry and the chart)
+# ==============================================================================
+
+def oaai_window_peak(
+    timeline: list[dict],
+    team: str,
+    start: float,
+    end: float,
+) -> Optional[dict]:
+    """Peak smoothed team intensity of an OAAI timeline inside (start, end].
+
+    This is the single selection rule behind the registry's ``oaai`` metric and
+    behind the chart-side registry comparison, so both surfaces publish the
+    same number for the same window. Returns ``None`` when the window holds no
+    sample; the metric then stays unobserved and never collapses to zero.
+    """
+    key = "home_smoothed" if team == "H" else "away_smoothed"
+    points = [
+        p for p in (timeline or [])
+        if start < float(p.get("t", 0.0)) <= end
+    ]
+    if not points:
+        return None
+    peak = max(points, key=lambda p: abs(float(p.get(key, 0.0))))
+    return {
+        "value": float(peak.get(key, 0.0)),
+        "peak_at": float(peak.get("t", 0.0)),
+        "team": team,
+        "value_basis": "smoothed_team_intensity",
+    }
+
+
+# ==============================================================================
 # Layer A/B ledger: recomputable event contributions at one point
 # ==============================================================================
 
@@ -598,6 +631,7 @@ def compute_oaai_contribution_ledger(
     xt_model: Any = None,
     smoothing_mode: Literal["causal", "bilateral"] = "causal",
     limit: Optional[int] = None,
+    timeline: Optional[list[dict]] = None,
 ) -> dict:
     """Recompute every event contribution to OAAI at a selected time.
 
@@ -667,15 +701,16 @@ def compute_oaai_contribution_ledger(
     top_team = round(sum(row["team_contribution"] for row in top), 6)
     top_net = round(sum(row["net_contribution"] for row in top), 6)
 
-    oaai = compute_oaai(
-        events,
-        config=cfg,
-        smoothing_mode=smoothing_mode,
-        t_end=at,
-        dead_intervals=dead,
-        xt_model=xt_model,
-    )
-    timeline = oaai.get("timeline", [])
+    if timeline is None:
+        oaai = compute_oaai(
+            events,
+            config=cfg,
+            smoothing_mode=smoothing_mode,
+            t_end=at,
+            dead_intervals=dead,
+            xt_model=xt_model,
+        )
+        timeline = oaai.get("timeline", [])
     nearest = min(timeline, key=lambda p: abs(float(p.get("t", 0.0)) - float(at))) if timeline else None
     smoothed_value = None
     if nearest is not None:
@@ -717,8 +752,16 @@ def compute_oaai(
     t_end: Optional[float] = None,
     dead_intervals: Optional[list[dict]] = None,
     xt_model: Any = None,
+    *,
+    include_raw: bool = False,
 ) -> dict:
-    """Full end-to-end OAAI pipeline generating Layer A, Layer B, Layer C and change points."""
+    """Full end-to-end OAAI pipeline generating Layer A, Layer B, Layer C and change points.
+
+    `include_raw` additionally returns the unsmoothed Layer B timeline. The raw
+    timeline is the expensive part of the pipeline; returning it lets a caller
+    derive the registry's canonical (causal) smoothing from the very same
+    computation instead of running the pipeline a second time.
+    """
     cfg = config or OAAIConfig()
     timeline_raw = aggregate_oaai_timeline(
         events=events,
@@ -739,7 +782,7 @@ def compute_oaai(
         xt_model=xt_model,
     )
 
-    return {
+    result = {
         "model_version": cfg.version,
         "smoothing_mode": smoothing_mode,
         "sample_step_seconds": cfg.sample_step_seconds,
@@ -748,3 +791,6 @@ def compute_oaai(
         "change_points": change_points,
         "disclaimer": "Observed Attacking Activity Index (OAAI) 度量已记录事件反映的进攻活动强度，非心理势头或胜率因果预测。",
     }
+    if include_raw:
+        result["timeline_raw"] = timeline_raw
+    return result

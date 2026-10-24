@@ -229,6 +229,10 @@ def _normalized_kind(raw_action: str, outcome: str) -> str:
     outcome = outcome.lower().replace("_", " ")
     if "own goal" in action or "own goal" in outcome:
         return "own_goal"
+    if "ball receipt" in action:
+        return "receipt"
+    if "miscontrol" in action:
+        return "miscontrol"
     if "shot" in action:
         return "shot"
     if "pass" in action:
@@ -237,12 +241,22 @@ def _normalized_kind(raw_action: str, outcome: str) -> str:
         return "carry"
     if any(k in action for k in ("recovery", "interception", "tackle")):
         return "recovery"
+    if "duel" in action or "50/50" in action:
+        # A contested ball is a possession event: won means a gain, lost a loss.
+        return "recovery" if outcome.startswith("won") else "turnover"
+    if "goal keeper" in action:
+        # A conceded goal leaves the ball dead; the restart opens the next phase.
+        return "off_ball" if outcome in ("goal conceded", "penalty conceded") else "recovery"
     if any(k in action for k in ("starting xi", "half start", "kick off", "restart")):
         return "restart"
     if any(k in action for k in ("half end", "period end", "match end")):
         return "period_end"
     if any(k in action for k in ("dispossessed", "clearance")):
         return "turnover"
+    if any(k in action for k in ("off ball", "pressure", "block", "shield", "dribbled past",
+                                 "tactical shift", "injury stoppage", "substitution",
+                                 "player on", "player off", "offside", "referee ball-drop")):
+        return "off_ball"
     if "foul" in action or "bad behaviour" in action or "card" in action:
         return "foul"
     return "other"
@@ -428,6 +442,16 @@ def reduce_match(
                 "provider_possession_id": provider_pid,
                 "is_shootout": is_shootout,
                 "source": _field(e, "source").model_dump(mode="json") if hasattr(_field(e, "source"), "model_dump") else _field(e, "source"),
+                "player_id": _field(e, "player_id"),
+                "jersey_number": _field(e, "jersey_number"),
+                "position": _field(e, "position"),
+                "position_role": _field(e, "position_role"),
+                "set_piece": _field(e, "set_piece"),
+                "play_pattern": _field(e, "play_pattern"),
+                "period_label": _field(e, "period_label"),
+                "provider_minute": _field(e, "provider_minute"),
+                "card": _field(e, "card"),
+                "is_own_goal": _field(e, "is_own_goal"),
             }
 
         period = int(row.get("period") or _field(e, "period") or 1)
@@ -448,13 +472,17 @@ def reduce_match(
         gap = t_val - last_t if last_t >= 0 else 0.0
         data_gap = gap > max_gap_seconds
         period_changed = last_period is not None and period != last_period
-        if data_gap:
+        if period_changed:
+            # The break between periods is already accounted for above; it must
+            # not be counted a second time as a data discontinuity.
+            pass
+        elif data_gap:
             if current:
                 close_possession(last_t, "data_gap")
             mark_unobserved(last_t, t_val, "data_gap")
             owner = holder = None
             pending_after_shot = False
-        elif gap > 0 and current is None and last_t >= 0 and not period_changed:
+        elif gap > 0 and current is None and last_t >= 0:
             # Dead ball or uncovered transition between two states.
             mark_unobserved(last_t, t_val, "dead_ball")
 
@@ -516,7 +544,12 @@ def reduce_match(
                 close_possession(t_val, "provider_possession_change")
                 open_possession(t_mapped, t_val, "provider_possession_change")
             owner, holder = t_mapped, raw_actor
-        else:  # pass / carry / other
+        elif kind == "off_ball":
+            # Off-ball actions (pressure, block, shield, off-ball substitutions,
+            # tactical shifts, a conceded goal) leave the possession state
+            # machine untouched: they are not part of a possession sequence.
+            pass
+        else:  # pass / carry / receipt / miscontrol / other
             boundary = None
             if current is None:
                 boundary = "after_shot" if pending_after_shot else "observed_event"
@@ -534,7 +567,9 @@ def reduce_match(
             current["possession_id"] if current is not None
             else (possessions[-1]["possession_id"] if possessions else None)
         )
-        if current is not None:
+        if kind == "off_ball":
+            event_possession_id = None
+        elif current is not None:
             current["event_ids"].append(row["id"])
             if provider_pid is not None:
                 current["provider_possession_ids"].append(str(provider_pid))
@@ -655,9 +690,16 @@ def _team_players(events: list[dict]) -> dict[str, list[str]]:
     return players
 
 
-def metric_receipts(state: dict) -> dict[str, dict]:
-    at, events = state["at"], state["events"]
-    receipts: dict[str, dict] = {}
+def _window_assets(state: dict) -> dict:
+    """Collect the window-independent metric assets.
+
+    Entries, recovery-to-shot transitions and goal chains are properties of the
+    event stream itself (a possession-level entry is de-duplicated globally, a
+    transition is a temporal relation between two events). They are therefore
+    computed once and filtered by window afterwards, so that every window
+    flavour (previous/current/match or an arbitrary range) shares one formula.
+    """
+    events = state["events"]
     # End of a controlled possession is the next gain, goal or final whistle.
     entries, transition, gains = [], [], {}
     goal_chains_by_team: dict[str, list[list[str]]] = {"H": [], "N": []}
@@ -698,6 +740,26 @@ def metric_receipts(state: dict) -> dict[str, dict]:
                 ordered_chain = list(reversed(chain))
                 goal_chains_by_team[e["team"]].append(ordered_chain)
                 goal_events_by_team[e["team"]].append({"event": e, "chain": ordered_chain})
+    return {
+        "entries": entries,
+        "transition": transition,
+        "goal_chains_by_team": goal_chains_by_team,
+        "goal_events_by_team": goal_events_by_team,
+    }
+
+
+def _window_receipts(state: dict, name: str, start: float, end: float, assets: dict) -> dict[str, dict]:
+    """Metric receipts for one explicit [start, end] second window.
+
+    This is the single formula used by every window flavour: the registry's
+    previous/current windows and any arbitrary range requested by the story
+    engine or the agent tools.
+    """
+    receipts: dict[str, dict] = {}
+    events = state["events"]
+    entries = assets["entries"]
+    transition = assets["transition"]
+    goal_events_by_team = assets["goal_events_by_team"]
 
     def receipt(key: str, value: float | int | None, unit: str, sources: list[str], definition: str, **details) -> None:
         receipts[key] = {
@@ -710,58 +772,96 @@ def metric_receipts(state: dict) -> dict[str, dict]:
             **details,
         }
 
-    for name, start, end in (("previous", max(0, at-360), max(0, at-180)), ("current", max(0, at-180), at)):
-        window = [e for e in events if start < e["t"] <= end]
-        durations = {t: 0 for t in TEAMS}
-        sources = []
-        for interval in state["intervals"]:
-            duration = max(0, min(end, interval["end"])-max(start, interval["start"]))
-            if duration:
-                durations[interval["team"]] += duration
-                sources.append(interval["event_id"])
-        denominator = sum(durations.values())
-        for team in TEAMS:
-            receipt(
-                f"{team}.possession.{name}",
-                round(100*durations[team]/denominator, 2) if denominator else None,
-                "%",
-                sources,
-                "Controlled seconds / controlled seconds of both teams; dead-ball time excluded.",
-                numerator=durations[team],
-                denominator=denominator,
-                status="ok" if denominator else "unobserved",
-                start=start,
-                end=end,
-            )
-            shots = [e for e in window if e["team"] == team and e["kind"] == "shot"]
-            crossing = [e for e in entries if e["team"] == team and start < e["t"] <= end]
-            high = [
-                e for e in window
-                if e["kind"] == "recovery" and e["team"] == team and e.get("located")
-                and (ax := event_attacking_x(e, point="start")) is not None and ax >= 70
-            ]
-            quick = [s for s in transition if s["shot"]["team"] == team and start < s["shot"]["t"] <= end]
-            receipt(f"{team}.shots.{name}", len(shots), "shots", [e["id"] for e in shots], "All shot events, including saved shots and goals.", start=start, end=end)
-            receipt(f"{team}.entries.{name}", len(crossing), "entries", [e["id"] for e in crossing], "First completed pass crossing attacking x=70m per possession; no tracking or xG.", start=start, end=end)
-            receipt(f"{team}.high_recoveries.{name}", len(high), "recoveries", [e["id"] for e in high], "Opponent possession gained at attacking x >= 70m; not proof of pressing.", start=start, end=end)
-            receipt(f"{team}.transition_shots.{name}", len(quick), "shots", [e["id"] for s in quick for e in (s["gain"], s["shot"])],
-                    "Shot <=10s after a recovery with no intervening loss; a temporal association, not causation.",
-                    chains=[{"event_ids": [s["gain"]["id"], s["shot"]["id"]], "seconds": s["seconds"]} for s in quick], start=start, end=end)
-            window_goals = [
-                g for g in goal_events_by_team[team]
-                if start < g["event"]["t"] <= end
-            ]
-            goal_sources = [x for g in window_goals for x in g["chain"]]
-            receipt(f"{team}.goals.{name}", len(window_goals), "goals", goal_sources,
-                    "Credited goals in the requested window; shootout goals excluded.",
-                    chains=[g["chain"] for g in window_goals], start=start, end=end)
+    window = [e for e in events if start < e["t"] <= end]
+    # A window that contains no event at all was not observed: counting zero
+    # shots in it would publish a measurement nobody made. A window that does
+    # contain events but none of the counted kind is a genuine zero.
+    window_observed = bool(window)
+    durations = {t: 0 for t in TEAMS}
+    sources = []
+    for interval in state["intervals"]:
+        duration = max(0, min(end, interval["end"])-max(start, interval["start"]))
+        if duration:
+            durations[interval["team"]] += duration
+            sources.append(interval["event_id"])
+    denominator = sum(durations.values())
     for team in TEAMS:
-        goal_chains = goal_chains_by_team[team]
-        goal_ids = [x for chain in goal_chains for x in chain]
-        receipt(f"{team}.goals.match", state["score"][team], "goals", goal_ids,
-                "Credited goals in the frozen match prefix; shootout goals excluded.",
-                chains=goal_chains, start=0, end=at)
+        receipt(
+            f"{team}.possession.{name}",
+            round(100*durations[team]/denominator, 2) if denominator else None,
+            "%",
+            sources,
+            "Controlled seconds / controlled seconds of both teams; dead-ball time excluded.",
+            numerator=durations[team],
+            denominator=denominator,
+            status="ok" if denominator else "unobserved",
+            start=start,
+            end=end,
+        )
+        shots = [e for e in window if e["team"] == team and e["kind"] == "shot"]
+        crossing = [e for e in entries if e["team"] == team and start < e["t"] <= end]
+        high = [
+            e for e in window
+            if e["kind"] == "recovery" and e["team"] == team and e.get("located")
+            and (ax := event_attacking_x(e, point="start")) is not None and ax >= 70
+        ]
+        quick = [s for s in transition if s["shot"]["team"] == team and start < s["shot"]["t"] <= end]
+        count_status = "ok" if window_observed else "unobserved"
+        receipt(f"{team}.shots.{name}", len(shots) if window_observed else None, "shots", [e["id"] for e in shots], "All shot events, including saved shots and goals.", status=count_status, start=start, end=end)
+        receipt(f"{team}.entries.{name}", len(crossing) if window_observed else None, "entries", [e["id"] for e in crossing], "First completed pass crossing attacking x=70m per possession; no tracking or xG.", status=count_status, start=start, end=end)
+        receipt(f"{team}.high_recoveries.{name}", len(high) if window_observed else None, "recoveries", [e["id"] for e in high], "Opponent possession gained at attacking x >= 70m; not proof of pressing.", status=count_status, start=start, end=end)
+        receipt(f"{team}.transition_shots.{name}", len(quick) if window_observed else None, "shots", [e["id"] for s in quick for e in (s["gain"], s["shot"])],
+                "Shot <=10s after a recovery with no intervening loss; a temporal association, not causation.",
+                chains=[{"event_ids": [s["gain"]["id"], s["shot"]["id"]], "seconds": s["seconds"]} for s in quick],
+                status=count_status, start=start, end=end)
+        window_goals = [
+            g for g in goal_events_by_team[team]
+            if start < g["event"]["t"] <= end
+        ]
+        goal_sources = [x for g in window_goals for x in g["chain"]]
+        receipt(f"{team}.goals.{name}", len(window_goals) if window_observed else None, "goals", goal_sources,
+                "Credited goals in the requested window; shootout goals excluded.",
+                chains=[g["chain"] for g in window_goals], status=count_status, start=start, end=end)
     return receipts
+
+
+def receipt_number(receipt: dict | None, default: float = 0.0) -> float:
+    """Numeric value of a receipt, or `default` when the receipt holds no measurement.
+
+    A receipt whose status is not "ok" carries `value: None` on purpose: the
+    window was never observed, so there is no number to read. Internal
+    branching may fall back to a default, but it must never mistake an
+    unobserved receipt for a measured zero.
+    """
+    if not isinstance(receipt, dict):
+        return default
+    value = receipt.get("value")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return default
+    return value
+
+
+def metric_receipts(state: dict) -> dict[str, dict]:
+    at = state["at"]
+    assets = _window_assets(state)
+    receipts: dict[str, dict] = {}
+    for name, start, end in (("previous", max(0, at-360), max(0, at-180)), ("current", max(0, at-180), at)):
+        receipts.update(_window_receipts(state, name, start, end, assets))
+    # The match window is the same formula over the whole frozen prefix, so a
+    # metric never has a window-specific variant with different semantics.
+    receipts.update(_window_receipts(state, "match", 0, at, assets))
+    return receipts
+
+
+def metric_receipts_for_range(state: dict, start: float, end: float, name: str = "range") -> dict[str, dict]:
+    """Metric receipts for an arbitrary [start, end] second range.
+
+    Same formulas as the previous/current/match windows (see
+    `_window_receipts`); only the interval boundaries differ. The recorded
+    `start`/`end` are the real boundaries of the requested range.
+    """
+    assets = _window_assets(state)
+    return _window_receipts(state, name, start, end, assets)
 
 
 def both_team_receipts(state: dict) -> dict[str, dict]:
@@ -875,7 +975,7 @@ def freeze(
     receipts = metric_receipts(state)
     actual_teams = teams or state.get("team_names") or TEAMS
     candidate = "Compare Harbor's possession, shots and entries in the two windows. Look for contrary evidence."
-    if receipts.get("H.transition_shots.current", {}).get("value", 0) >= 2:
+    if receipt_number(receipts.get("H.transition_shots.current")) >= 2:
         candidate = "Investigate what followed Harbor's recoveries. Inspect the linked timings and sample size."
     if state["score"].get("H", 0) > 0:
         candidate = "Explain the goal's recorded on-ball sequence. Separate observed sequence from tactical cause."
@@ -990,21 +1090,29 @@ def detect_moments(state: dict) -> list[dict]:
     team_names = state.get("team_names") or TEAMS
     # Two complete comparison windows are required; timestamps are detection
     # times, never chapter timestamps or an assumed future final whistle.
-    def numeric(key: str) -> float | int | None:
-        value = receipts.get(key, {}).get("value")
+    def observed(key: str) -> float | int | None:
+        """Receipt value only when the window it was measured over was observed.
+
+        An unobserved window yields no number at all, so a moment must never
+        claim "shots: zero" for a window nobody recorded.
+        """
+        receipt = receipts.get(key)
+        if not isinstance(receipt, dict) or receipt.get("status") != "ok":
+            return None
+        value = receipt.get("value")
         return value if isinstance(value, (int, float)) else None
 
     for team in ("H", "N"):
         t_name = team_names.get(team, TEAMS[team]).split()[0]
         suffix = "" if team == "H" else "-n"
         if at >= 360:
-            pos_curr = numeric(f"{team}.possession.current")
-            pos_prev = numeric(f"{team}.possession.previous")
-            shots_curr = numeric(f"{team}.shots.current") or 0
-            entries_curr = numeric(f"{team}.entries.current") or 0
+            pos_curr = observed(f"{team}.possession.current")
+            pos_prev = observed(f"{team}.possession.previous")
+            shots_curr = observed(f"{team}.shots.current")
+            entries_curr = observed(f"{team}.entries.current")
             if (
                 pos_curr is not None and pos_prev is not None
-                and pos_curr > pos_prev and shots_curr <= 0 and entries_curr <= 0
+                and pos_curr > pos_prev and shots_curr == 0 and entries_curr == 0
             ):
                 moments.append({
                     "id": f"moment-possession{suffix}",
@@ -1024,9 +1132,11 @@ def detect_moments(state: dict) -> list[dict]:
 
         # Association question, not a prescribed answer. Align with gate support.
         if at >= 180:
-            high_rec = numeric(f"{team}.high_recoveries.current") or 0
-            trans_shots = numeric(f"{team}.transition_shots.current") or 0
-            if high_rec >= 2 and trans_shots >= 2 or (team == "N" and trans_shots >= 2):
+            high_rec = observed(f"{team}.high_recoveries.current")
+            trans_shots = observed(f"{team}.transition_shots.current")
+            if high_rec is not None and trans_shots is not None and (
+                high_rec >= 2 and trans_shots >= 2 or (team == "N" and trans_shots >= 2)
+            ):
                 moments.append({
                     "id": f"moment-transition{suffix}",
                     "team": team,
@@ -1043,8 +1153,15 @@ def detect_moments(state: dict) -> list[dict]:
                     "metric_keys": [f"{team}.high_recoveries.current", f"{team}.transition_shots.current"],
                 })
 
-        if at >= 360 and receipts[f"{team}.shots.current"]["value"] >= 2 and all(
-            receipts[f"{team}.{metric}.current"]["value"] > receipts[f"{team}.{metric}.previous"]["value"] for metric in ("shots", "entries")
+        shots_curr = observed(f"{team}.shots.current")
+        shots_prev = observed(f"{team}.shots.previous")
+        entries_curr = observed(f"{team}.entries.current")
+        entries_prev = observed(f"{team}.entries.previous")
+        if (
+            at >= 360
+            and shots_curr is not None and shots_prev is not None
+            and entries_curr is not None and entries_prev is not None
+            and shots_curr >= 2 and shots_curr > shots_prev and entries_curr > entries_prev
         ):
             moments.append({
                 "id": f"moment-activity{suffix}",
