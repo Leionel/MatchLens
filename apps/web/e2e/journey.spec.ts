@@ -232,7 +232,6 @@ test.describe("real match journey", () => {
   test("the real match clock follows its extra-time format, not the synthetic constants", async ({
     page,
   }) => {
-    test.setTimeout(180_000);
     await openCockpit(page);
     // The analysis session is switched through the same control endpoint the
     // library uses; the library's own enter action is disabled once this match
@@ -251,19 +250,19 @@ test.describe("real match journey", () => {
     expect(context.period).toBe(4);
     expect(context.match_clock_basis).toBe("match_elapsed");
 
-    // The provider clock keeps running through the accumulated stoppage time,
-    // so the recorded stream reaches past the nominal match clock. The clock
-    // the cockpit exposes is the nominal one and never exceeds it.
+    // The provider clock keeps running through the accumulated stoppage time, so
+    // the recorded stream reaches past the nominal match clock. The clock the
+    // cockpit exposes is the nominal one: a read that asks for a clock past it is
+    // refused instead of silently answering about a different match. Asserted on
+    // a read endpoint rather than through the clock, because freezing a full
+    // provider match is a real computation and the control plane only clamps.
     expect(context.observed_end).toBeGreaterThan(context.duration);
 
-    // Seeking past the nominal end clamps to it instead of failing. Freezing a
-    // full provider match is a real computation, so this is given room.
-    const clamped = await page.request.post(
-      "/api/control",
-      { data: { action: "seek", at: Math.ceil(context.observed_end) }, timeout: 150_000 },
+    const past = await page.request.get(
+      `/api/matches/${REAL_MATCH}/evidence-graph?at=${Math.ceil(context.observed_end)}`,
     );
-    expect(clamped.ok()).toBeTruthy();
-    expect((await clamped.json()).at).toBe(context.duration);
+    expect(past.status()).toBe(422);
+    expect(await past.text()).toContain("at_outside_match_context");
   });
 
   test("a deep link restores the match, the workspace and the clock after a reload", async ({ page }) => {
