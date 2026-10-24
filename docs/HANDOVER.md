@@ -1,9 +1,9 @@
 # MatchLens AI — 项目研发全案交接文档 (HANDOVER.md)
 
-**文档版本**：v3.0 (Third-Pass Semantic Integrity Remediation)  
-**当前代码基准**：Third-pass branch HEAD（全量 pytest 199 项通过，Next.js Turbopack 编译 0 错误；以实际运行输出为准）  
+**文档版本**：v4.0 (Fourth-Pass Trust, Revision and Investigation)  
+**当前代码基准**：Fourth-pass branch HEAD（全量 pytest 209 项通过，Next.js Turbopack 编译 0 错误；以实际运行输出为准）  
 **面向对象**：后续接手研发人员、架构师、算法工程师及协同 AI Agent  
-**更新日期**：2026-10-23  
+**更新日期**：2026-10-24  
 
 ---
 
@@ -147,7 +147,7 @@ powershell -ExecutionPolicy Bypass -File scripts/run.ps1 -SkipBuild
 
 ### 4.4 自动化验证守门命令 (必须 100% 通过)
 ```powershell
-# 1. 运行全量后端测试套件（当前 199 项）
+# 1. 运行全量后端测试套件（当前 209 项）
 services\api\.venv\Scripts\python.exe -m pytest services/api/tests/ -q
 
 # 2. 运行前端 Turbopack 生产编译与 TypeScript 静态类型检查
@@ -200,4 +200,4 @@ npm --prefix apps/web run build
 ---
 
 **交接签署确认**：  
-Third-pass 已完成 reducer 语义、历史比分/覆盖、研究报告可信性、Story/Gate、Evidence Graph、跨场覆盖与运行时缓存的整改。**仍未执行**：真实全量 StatsBomb 数据、live model A/B/C 对照、真正的第三智能体实验、外部人工评审。详见 `docs/THIRD_PASS_RESULTS.md` 与 `docs/RESEARCH_PROVENANCE_AUDIT.md`。
+Fourth-pass 已增加 Run 身份隔离、服务端编辑审批角色、ClaimRevision 生命周期、内容哈希 DatasetRevision、Story as-of、Metrics Registry、确定性 Investigation Planner、Broadcast 审批/导出与完整赛事导入器。**仍未执行**：真实全量 StatsBomb 数据、live model 调查与 A/B/C 对照、真正的第三智能体、真实账号体系、外部人工评审、移动端真机验收。详见 `docs/FOURTH_PASS_AUDIT.md`、`docs/FOURTH_PASS_RESULTS.md`、`docs/CAPABILITY_STATUS.md` 与 `docs/PRODUCT_UPGRADE_ROADMAP.md`。

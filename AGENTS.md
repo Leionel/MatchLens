@@ -35,7 +35,7 @@
 - **严禁使用宿主机全局 Python 或 Anaconda Python**（缺少 `agent_framework` 等关键依赖，会导致 ModuleNotFoundError）。
 - **常用后端命令**：
   ```powershell
-  # 运行全量测试套件（必须保持 100% 通过；当前约 199 项）
+  # 运行全量测试套件（必须保持 100% 通过；当前约 209 项）
   services\api\.venv\Scripts\python.exe -m pytest services/api/tests/ -q
 
   # 启动后端 API（单 Worker，端口 8000）
