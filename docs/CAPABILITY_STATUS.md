@@ -19,11 +19,13 @@ plan, a passing schema test alone, or an API returning 200 is not completion.
 | **External Dependency** | Blocked on licensed data, account provider, budget or deployment decision. |
 | **Not Run** | Harness/code exists but no execution receipt exists. |
 
-Last executed verification at this baseline: **backend test suite passed**
-(`services/api/.venv/Scripts/python.exe -m pytest services/api/tests/ -q`);
-**web typecheck and production build 0 errors**; **Playwright browser suite 14
-passed** (desktop 8, Pixel 7 3, iPad Mini 3) against the served static export,
-with axe-core WCAG AA clean in light and dark themes. In-app browser acceptance
+Last executed verification at this baseline: **backend suite 311 passed**
+(`services/api/.venv/Scripts/python.exe -m pytest services/api/tests/ -q`; two
+failures were Windows `os.replace` permission flakes on temp files that both pass
+in isolation); **web typecheck and production build 0 errors**; **Playwright browser
+suite 19 passed in 1.4 minutes** (desktop 13, Pixel 7 3, iPad Mini 3, serial by
+design) against the served static export, with axe-core WCAG AA clean in light and
+dark themes. In-app browser acceptance
 ran the full journey (chart peak → ledger → investigation → gate → claim →
 challenge → revision) and the producer path (queue → approve → order → validate →
 export → manifest) against the served build, and refused export with
@@ -64,7 +66,7 @@ roadmap; it is not a phase claim.
 | CAP-24 | What-if sandbox | B | Implemented but Partial | `whatif.py` | Validation Lab | existing tests | research identification not implemented |
 | CAP-25 | Stale-run isolation | A | Implemented & Verified | `Run` identity + epoch | — | fourth-pass test | — |
 | CAP-26 | Async UI response guards | D | Implemented & Verified | exploration responses | page handlers | Playwright suite in CI (`browser-e2e` job) | — |
-| CAP-27 | Match Hub / discover / search | D | Implemented & Verified | `/api/matches` | `MatchHubWorkspace` | Playwright: tournament filter + "showing N of M" count | no date-range or head-to-head filter yet |
+| CAP-27 | Match library / discover / search | D | Implemented & Verified | `/api/matches` | `MatchLibraryWorkspace` (competition + season filters, foldable rounds, provenance badge, detail panel) | Playwright: provenance separation, competition and season narrowing with "N of M" count, detail coverage/source tabs | no date-range or head-to-head filter yet |
 | CAP-28 | URL deep links / refresh restore | D | Implemented & Verified | — | `page.tsx` URL state | in-app restore + back/forward | investigation id not yet in the URL |
 | CAP-29 | Multi-user drafts/isolation | E | External Dependency | token roles only | — | product gap | account provider decision |
 | CAP-30 | Live multi-agent ablation | F | Not Run | deterministic harness only | — | provenance audit | paid budget + frozen samples required |
@@ -80,8 +82,9 @@ roadmap; it is not a phase claim.
 | CAP-39 | OAAI contribution ledger | B | Implemented & Verified | `compute_oaai_contribution_ledger` | investigation + `/api/oaai/ledger` | reconciliation test | top-N list plus explicit unlisted remainder |
 | CAP-40 | Investigation state machine | C | Implemented & Verified | bounded transitions + persisted store + cancel | state chip/history | fifth-pass state tests | no retry backoff on tool failure |
 | CAP-41 | Agent run lifecycle persistence | C | Implemented but Partial | `agents.py` Run identity/audit | — | stale-run tests | no persisted state machine; roadmap `C-09` |
-| CAP-43 | Provider corpus curation | B | Implemented & Verified | `data/corpus_statsbomb.json` + `scripts/refresh_statsbomb_corpus.py` | hub tournament filter | 71 matches / 11 competition-seasons / 3 confederations / 6 decades, all `COMPLETE_VERIFIED` | selection is judgement, not a statistical sample; no weighting rule yet |
+| CAP-43 | Provider corpus curation | B | Implemented & Verified | `data/corpus_statsbomb.json` + `scripts/select_statsbomb_corpus.py` (rule) + `scripts/refresh_statsbomb_corpus.py` (index reader) | library competition and season filters | 80 matches / 15 competition-seasons / 3 confederations / 2010-2024, all `COMPLETE_VERIFIED` | selection is judgement, not a statistical sample; no weighting rule yet |
 | CAP-44 | Score and identity cross-verification | B | Implemented but Partial | provider season index ↔ corpus ↔ event goal tally | hub score | `test_curated_metadata_matches_the_provider_season_index` + `test_imported_match_reproduces_the_declared_score` | second source is the provider's own index; no independent results oracle |
+| CAP-45 | Full-match momentum chart | D | Implemented & Verified | `chart_oaai_payload` peak-preserving sampling + `_DeadTimeIndex` dead-time freeze | `OAAITimeline` period bands, change points, rug marks | Playwright journey on `sb_3795221` (4 periods); measured chart payload 225.8s → 6.8s on a 4 691-event match | nominal clock clamps the seek at `expected_duration`, so the stoppage tail past 120:00 is recorded but not reachable |
 
 ---
 
@@ -106,7 +109,7 @@ closed each item.
 | 12 | DEF-12 | Story/Export dataset revision and claim state | **Fixed** | `claim_validity` compares dataset revision, pointer, payload and hash at read time |
 | 13 | DEF-13 | Investigation UI requires manual IDs | **Fixed** | peak click seeds the investigation; no typed ID needed for the journey |
 | 14 | DEF-14 | Third Agent is concept only | **Open by design** | two-agent workflow plus deterministic tools remains the contract |
-| 15 | DEF-15 | Real match data is still partial | **Fixed** | 71 provider matches ingested (`COMPLETE_VERIFIED`); the 12-event fixture stays labelled `SPARSE_SAMPLE_FIXTURE` |
+| 15 | DEF-15 | Real match data is still partial | **Fixed** | 80 provider matches ingested (`COMPLETE_VERIFIED`); the 12-event fixture stays labelled `SPARSE_SAMPLE_FIXTURE` |
 
 ---
 
@@ -115,9 +118,9 @@ closed each item.
 | Track | Current state | Blocking gap | Next gate |
 | --- | --- | --- | --- |
 | A — Trust, Identity & Runtime | Metrics, completeness, revisions, validity, projections, idempotency ownership and legacy registry migration closed | none open in this track | agent run persistence (`C-09`) |
-| B — Football Data & Analytics | Ledger, receipts and verified coverage; 71 provider matches across 11 competition-seasons imported and verified | story phase counts; independent score oracle; calibrated xG/xT | B-04, B-06, B-07 |
+| B — Football Data & Analytics | Ledger, receipts and verified coverage; 80 provider matches across 15 competition-seasons (2010-2024) imported and verified | story phase counts; independent score oracle; calibrated xG/xT | B-04, B-06, B-07 |
 | C — Agentic Investigation | Typed intent, tool registry, state machine, ledger, promotion, challenge | agent-planned routing; live model receipts | C-06, F-01 |
-| D — Football Product Experience | Hub with tournament filter, producer workspace, deep links, chart handoff, responsive collapse | real device + screen-reader pass; screenshot baselines | D-07 |
+| D — Football Product Experience | Match library (competition/season pages, provenance, detail panel), producer workspace, deep links, chart handoff, responsive collapse | real device + screen-reader pass; screenshot baselines | D-07 |
 | E — Broadcast & Content Production | Producer loop with manifest provenance and read-time validity | accounts/SSO; re-review lifecycle | E-05, E-06 |
 | F — Scientific Evaluation & Operations | Backend suite + Playwright browser suite + axe-core a11y in CI | live ablation, real-match performance, user outcomes | F-01, F-04, F-07 |
 

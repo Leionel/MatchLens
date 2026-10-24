@@ -218,7 +218,7 @@ bounds, team mapping and conversion drops. The retired
 a payload holding only the opening and final events is labelled
 `SPARSE_SAMPLE_FIXTURE`.
 
-### 6.2 Dataset Completeness Verification `[TARGET]`
+### 6.2 Dataset Completeness Verification `[CURRENT]`
 
 ```text
 source declaration
@@ -239,12 +239,27 @@ Acceptance requires period coverage, event-density sanity and provider
 declarations, not merely a time span. A dataset cannot enter per-90 or
 cross-match comparison until it is `COMPLETE_VERIFIED`.
 
+`expected_duration` is the nominal format length derived from the observed
+periods (two 45-minute halves plus, for a match that went to extra time, two
+15-minute halves). The provider clock keeps running through accumulated
+stoppage time, so `observed_end` can exceed it - the Euro 2020 semi-final in the
+corpus records through 7 871.78s of a nominal 7 200s match. The replay clock the
+runtime exposes is the nominal one: a seek past it is clamped to
+`expected_duration` instead of failing, which keeps the match clock a football
+clock and leaves the recorded-but-unreachable tail explicit.
+
 ### 6.3 Provenance
 
 `[CURRENT]` `ingest.import_match` writes source/target SHA-256, license,
 provider IDs, event count, observed end and coverage receipt; no hidden network
-download. `[TARGET]` receipt also stores per-period coverage, drop reasons and a
-verifier signature.
+download. The corpus receipt (`statsbomb-corpus-import-v2`) additionally stores
+the full completeness report - per-period coverage, drop reasons and integrity
+checks - plus the lineups hash and the score reconciliation between the provider
+index and the goals counted from the event stream. Provider payloads stay in
+git-ignored directories and are re-fetched by `scripts/fetch_statsbomb_open_data.py`,
+because the provider agreement forbids redistribution; only metadata, receipts
+and the source manifest are committed.
+`[TARGET]` receipt also stores a verifier signature.
 
 ---
 
