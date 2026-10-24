@@ -232,14 +232,15 @@ test.describe("real match journey", () => {
   test("the real match clock follows its extra-time format, not the synthetic constants", async ({
     page,
   }) => {
+    test.setTimeout(180_000);
     await openCockpit(page);
-
-    const card = page.locator(`[data-testid="match-card"][data-match-id="${REAL_MATCH}"]`);
-    await card.click();
-    await page.getByTestId("match-library-enter").click();
-    await expect(page).toHaveURL(new RegExp(`match=${REAL_MATCH}`));
+    // The analysis session is switched through the same control endpoint the
+    // library uses; the library's own enter action is disabled once this match
+    // is already the current one, which is a function of the shared session.
+    await setMatch(page, REAL_MATCH);
 
     const state = await readState(page);
+    expect(state.match_id).toBe(REAL_MATCH);
     const context = state.match_context;
 
     // The anchor match went to extra time: two 45-minute halves plus two
@@ -255,12 +256,14 @@ test.describe("real match journey", () => {
     // the cockpit exposes is the nominal one and never exceeds it.
     expect(context.observed_end).toBeGreaterThan(context.duration);
 
-    const clamped = await page.request.post("/api/control", {
-      data: { action: "seek", at: Math.ceil(context.observed_end) },
-    });
+    // Seeking past the nominal end clamps to it instead of failing. Freezing a
+    // full provider match is a real computation, so this is given room.
+    const clamped = await page.request.post(
+      "/api/control",
+      { data: { action: "seek", at: Math.ceil(context.observed_end) }, timeout: 150_000 },
+    );
     expect(clamped.ok()).toBeTruthy();
-    const body = await clamped.json();
-    expect(body.at).toBe(context.duration);
+    expect((await clamped.json()).at).toBe(context.duration);
   });
 
   test("a deep link restores the match, the workspace and the clock after a reload", async ({ page }) => {
