@@ -59,3 +59,67 @@ jobs:
 
       - name: Build Next.js application
         run: npm run build
+
+  browser-e2e:
+    name: Browser E2E & Accessibility (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "services/api/uv.lock"
+
+      - name: Set up Python 3.13
+        run: uv python install 3.13
+
+      - name: Install backend dependencies from lockfile
+        working-directory: services/api
+        run: uv sync --frozen
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      # The API server mounts the exported static bundle, so the suite drives a
+      # real browser against the same artefact that would be deployed.
+      - name: Build Next.js application
+        working-directory: apps/web
+        run: npm run build
+
+      - name: Install Playwright browsers
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+
+      # Provider payloads are never committed, so the suite materialises the one
+      # real match it asserts on. The import also proves the ingestion path
+      # still works from a clean checkout. This id must stay in sync with
+      # REAL_MATCH in apps/web/e2e/journey.spec.ts.
+      - name: Fetch and import the provider match used by the suite
+        run: |
+          services/api/.venv/bin/python scripts/fetch_statsbomb_open_data.py \
+            --competition 55 --season 43 --match-ids 3795221
+          services/api/.venv/bin/python scripts/ingest_statsbomb_corpus.py --match sb_3795221
+
+      - name: Run the browser suite
+        working-directory: apps/web
+        run: npx playwright test
+
+      - name: Upload failure screenshots and traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: apps/web/e2e/.artifacts
+          retention-days: 7
+          if-no-files-found: ignore
