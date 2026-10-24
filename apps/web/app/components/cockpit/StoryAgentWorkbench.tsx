@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { CockpitState, PerspectiveId, InspectorPayload, Card } from "./types";
 import { Locale, getTranslation } from "../../lib/i18n";
 import { InsightSpotlight } from "../InsightSpotlight";
+import { InvestigationPanel } from "./InvestigationPanel";
 
 interface StoryAgentWorkbenchProps {
   state: CockpitState;
@@ -40,7 +41,7 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
   const t = getTranslation(locale);
   const isZh = locale === "zh";
   const [workbenchTab, setWorkbenchTab] = useState<
-    "deliberation" | "attribution" | "match_story" | "gate_audit"
+    "deliberation" | "attribution" | "match_story" | "gate_audit" | "investigation"
   >("deliberation");
   const [mode, setMode] = useState<"fan" | "analyst">("analyst");
   const [showTrace, setShowTrace] = useState(false);
@@ -49,26 +50,36 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
   const [copiedNotification, setCopiedNotification] = useState("");
   const [backendStory, setBackendStory] = useState<any>(null);
   const [backendAttribution, setBackendAttribution] = useState<any>(null);
+  const [producerToken, setProducerToken] = useState("");
+  const [storyRefresh, setStoryRefresh] = useState(0);
+  const [editorialError, setEditorialError] = useState("");
 
   const homeTeam = state.teams?.H || "Harbor FC";
   const awayTeam = state.teams?.N || "Northbridge United";
   const matchId = state.match_id || "syn_default";
 
-  // Fetch real MatchStoryEngine output
+  // Fetch a story for the current match and snapshot, never for the future.
   React.useEffect(() => {
-    let active = true;
-    fetch(`/api/matches/${matchId}/story?perspective=${perspective}`)
+    // Fetch only while paused/finished; a live 30x replay must not issue one
+    // story request per clock tick.
+    if (!state.paused && !state.ended) return;
+    const controller = new AbortController();
+    const asOf = state.snapshot_as_of ?? state.at ?? 0;
+    const mode = state.ended ? "recap" : "live";
+    fetch(`/api/matches/${matchId}/story?perspective=${perspective}&as_of=${asOf}&mode=${mode}`, {
+      signal: controller.signal,
+    })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (active && data) {
+        if (data && data.match_id === matchId && data.as_of === asOf) {
           setBackendStory(data);
         }
       })
-      .catch((e) => console.warn("Failed to fetch story", e));
-    return () => {
-      active = false;
-    };
-  }, [matchId, perspective]);
+      .catch((e) => {
+        if (e?.name !== "AbortError") console.warn("Failed to fetch story", e);
+      });
+    return () => controller.abort();
+  }, [matchId, perspective, state.paused, state.ended, state.snapshot_as_of, storyRefresh]);
 
   // Fetch real EventAttributionSpecialist output
   React.useEffect(() => {
@@ -99,7 +110,10 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
   const allClaims: Card[] = [
     ...(result?.accepted || []),
     ...(state.history || []),
-  ].filter((c, idx, arr) => arr.findIndex((x) => x.claim_id === c.claim_id) === idx);
+  ].filter(
+    (c, idx, arr) =>
+      arr.findIndex((x) => x.claim_id === c.claim_id && x.snapshot_id === c.snapshot_id) === idx
+  );
 
   // Registry-backed story claims are the only source of approval truth.
   const storyClaims: Card[] = (backendStory?.claims || []).map((c: any) => ({
@@ -131,6 +145,7 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
     recoveries_followed_by_shots: isZh ? "夺回球权后射门" : "Recovery to shot",
     recoveries_caused_shots: isZh ? "夺回球权导致射门" : "Recovery caused shot",
   };
+  const canExportStory = backendStory?.approval_status === "approved_for_broadcast";
   const storyGateVerified = storyClaims.filter((c) => c.gate_status === "approved").length;
   const storyEditorial = storyClaims.filter((c) => c.published).length;
 
@@ -339,6 +354,33 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
       return lines.join("\n");
     }
     return "# Match summary\n\nNo gate-approved claims are registered for this snapshot. Only recorded event counts are shown.";
+  };
+
+  const submitEditorial = async (claimId: string, decision: "approved" | "rejected") => {
+    if (!backendStory?.snapshot_id || !producerToken) return;
+    setEditorialError("");
+    try {
+      const res = await fetch("/api/story/editorial-approval", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-MatchLens-Token": producerToken,
+        },
+        body: JSON.stringify({
+          match_id: matchId,
+          snapshot_id: backendStory.snapshot_id,
+          claim_id: claimId,
+          decision,
+        }),
+      });
+      if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(detail || `Editorial decision failed (${res.status})`);
+      }
+      setStoryRefresh((n) => n + 1);
+    } catch (e) {
+      setEditorialError((e as Error).message);
+    }
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -553,6 +595,15 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
           style={{ fontSize: 14, padding: "8px 16px" }}
         >
           {isZh ? "门禁审计" : "Gate audit"}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setWorkbenchTab("investigation")}
+          className={`feed-filter-btn ${workbenchTab === "investigation" ? "active" : ""}`}
+          style={{ fontSize: 14, padding: "8px 16px" }}
+        >
+          {isZh ? "调查" : "Investigation"}
         </button>
       </div>
 
@@ -823,6 +874,8 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
               <div style={{ display: "flex", gap: 6 }}>
                 <button
                   type="button"
+                  disabled={!canExportStory}
+                  title={!canExportStory ? (isZh ? "需完成制作人审批后才能导出" : "Producer approval is required before export") : undefined}
                   onClick={() => copyToClipboard(generateStoryMarkdown(), isZh ? "战报研报" : "Match Story Report")}
                   style={{
                     fontSize: 12,
@@ -832,13 +885,15 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
                     background: "color-mix(in srgb, var(--green-9) 20%, transparent)",
                     border: "0.5px solid var(--turf-emerald)",
                     color: "var(--text-emerald)",
-                    cursor: "pointer",
+                    cursor: canExportStory ? "pointer" : "not-allowed",
+                    opacity: canExportStory ? 1 : 0.5,
                   }}
                 >
-                  📋 {t.copyMarkdownBtn}
+                  {t.copyMarkdownBtn}
                 </button>
                 <button
                   type="button"
+                  disabled={!canExportStory}
                   onClick={() =>
                     copyToClipboard(
                       JSON.stringify({ claims: allClaims, snapshot: state.snapshot_id, score: state.score }, null, 2),
@@ -853,10 +908,11 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
                     background: "color-mix(in srgb, var(--cyan-9) 20%, transparent)",
                     border: "0.5px solid var(--tech-cyan)",
                     color: "var(--text-cyan)",
-                    cursor: "pointer",
+                    cursor: canExportStory ? "pointer" : "not-allowed",
+                    opacity: canExportStory ? 1 : 0.5,
                   }}
                 >
-                  💾 {t.exportJsonBtn}
+                  {t.exportJsonBtn}
                 </button>
               </div>
             </div>
@@ -914,6 +970,31 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
               </span>
             </div>
 
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+              <input
+                type="password"
+                value={producerToken}
+                onChange={(e) => setProducerToken(e.target.value)}
+                placeholder={isZh ? "制作人令牌（仅本标签页）" : "Producer token (this tab only)"}
+                autoComplete="off"
+                style={{
+                  minHeight: 32,
+                  flex: "1 1 220px",
+                  maxWidth: 320,
+                  background: "var(--input-bg)",
+                  color: "var(--input-text)",
+                  border: "0.5px solid var(--pitch-border)",
+                  borderRadius: 6,
+                  padding: "4px 8px",
+                  fontSize: 12,
+                }}
+              />
+              <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                {isZh ? "审批身份由服务端令牌确认" : "Identity is verified by the server token"}
+              </span>
+              {editorialError && <span style={{ fontSize: 12, color: "var(--red-11)" }}>{editorialError}</span>}
+            </div>
+
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {(storyClaims.length ? storyClaims : allClaims).length === 0 ? (
                 <div style={{ padding: 20, textAlign: "center", color: "var(--text-tertiary)", fontSize: 12 }}>
@@ -961,6 +1042,24 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
                           </div>
                         </div>
 
+                        {gateApproved && producerToken && (
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <button
+                              type="button"
+                              onClick={() => submitEditorial(cl.claim_id, "approved")}
+                              style={{ fontSize: 12, fontWeight: 700, padding: "2px 6px", borderRadius: 4, border: "0.5px solid var(--green-7)", background: "var(--green-3)", color: "var(--green-11)", cursor: "pointer" }}
+                            >
+                              {isZh ? "批准" : "Approve"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => submitEditorial(cl.claim_id, "rejected")}
+                              style={{ fontSize: 12, fontWeight: 700, padding: "2px 6px", borderRadius: 4, border: "0.5px solid var(--red-7)", background: "var(--red-3)", color: "var(--red-11)", cursor: "pointer" }}
+                            >
+                              {isZh ? "拒绝" : "Reject"}
+                            </button>
+                          </div>
+                        )}
                         <button
                           type="button"
                           onClick={() =>
@@ -996,6 +1095,10 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {workbenchTab === "investigation" && (
+        <InvestigationPanel state={state} locale={locale} />
       )}
 
       {/* TAB D: Publication Publication Gate & Data Sufficiency Audit */}

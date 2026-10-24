@@ -278,7 +278,11 @@ export default function MatchLensCockpit() {
     try {
       const updated = await api<any>(`exploration/oaai?smoothing_mode=${smoothingMode}`);
       if (updated) {
-        setState((prev) => (prev ? { ...prev, oaai: updated } : prev));
+        setState((prev) =>
+          prev && updated.match_id === prev.match_id && updated.epoch === prev.epoch
+            ? { ...prev, oaai: updated }
+            : prev
+        );
       }
     } catch {}
   };
@@ -287,7 +291,11 @@ export default function MatchLensCockpit() {
     try {
       const updated = await api<any>(`exploration/recoveries?window_seconds=${newWindow}`);
       if (updated) {
-        setState((prev) => (prev ? { ...prev, quick_recoveries: updated } : prev));
+        setState((prev) =>
+          prev && updated.match_id === prev.match_id && updated.epoch === prev.epoch
+            ? { ...prev, quick_recoveries: updated }
+            : prev
+        );
       }
     } catch {}
   };

@@ -76,7 +76,9 @@ export const EvidenceRail: React.FC<EvidenceRailProps> = ({ state, locale = "zh"
           <span>{isZh ? "数据版本" : "Data version"}</span>
           <span className="rail-chip neutral">{ctx.data_coverage || "—"}</span>
         </div>
-        <div className="rail-strong">{ctx.data_version || "—"}</div>
+        <div className="rail-strong" title={ctx.dataset_revision || ctx.data_version || undefined}>
+          {ctx.dataset_revision ? `${String(ctx.dataset_revision).slice(0, 12)}…` : ctx.data_version || "—"}
+        </div>
         <div className="rail-meta">
           <span>
             {coverage?.event_count ?? state.events?.length ?? 0} {isZh ? "条事件" : ((coverage?.event_count ?? state.events?.length ?? 0) === 1 ? "event" : "events")} {" "}
