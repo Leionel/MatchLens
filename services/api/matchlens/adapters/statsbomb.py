@@ -13,11 +13,62 @@ import math
 from pathlib import Path
 from typing import Any, Optional
 
+from ..provider_terms import (
+    STATSBOMB_ATTRIBUTION_TEXT,
+    STATSBOMB_LICENSE_REF,
+    STATSBOMB_LOGO_REQUIREMENT,
+)
 from ..schema import ActionType, DataCoverageLevel, NormalizedEvent, RawSourceRecord
 
-STATSBOMB_LICENSE_REF = "StatsBomb Open Data (https://github.com/statsbomb/open-data) - CC BY-NC-SA 4.0"
-STATSBOMB_ATTRIBUTION_TEXT = "Match event data provided by StatsBomb Open Data (https://statsbomb.com/)"
-STATSBOMB_LOGO_REQUIREMENT = "Visualizations derived from this data must display the StatsBomb logo per the Open Data User Agreement."
+# StatsBomb timestamps are period-relative (they reset to 00:00:00.000 at every
+# period start) while the provider's ``minute``/``second`` fields carry the
+# conventional match minute. The nominal anchors below are the football
+# boundaries; the observed overrun of each period (added stoppage time) is
+# carried forward so the match clock stays monotonic across half-time breaks.
+NOMINAL_PERIOD_START_MINUTES: dict[int, int] = {1: 0, 2: 45, 3: 90, 4: 105, 5: 120}
+NOMINAL_PERIOD_START_SECONDS: dict[int, float] = {
+    period: minute * 60.0 for period, minute in NOMINAL_PERIOD_START_MINUTES.items()
+}
+SHOOTOUT_FIRST_PERIOD = 5
+
+PERIOD_LABELS: dict[int, str] = {
+    1: "first_half",
+    2: "second_half",
+    3: "extra_time_1",
+    4: "extra_time_2",
+    5: "shootout",
+}
+
+SET_PIECE_BY_PLAY_PATTERN: dict[str, str] = {
+    "From Corner": "corner",
+    "From Free Kick": "free_kick",
+    "Free Kick (Penalty)": "penalty",
+    "From Throw In": "throw_in",
+    "From Goal Kick": "goal_kick",
+    "From Kick Off": "kick_off",
+    "Kick Off": "kick_off",
+    "From Penalty": "penalty",
+}
+
+# StatsBomb position names are free-form; the role is derived from the name so
+# that squad-wide positions remain usable for cross-match comparisons.
+POSITION_ROLE_BY_NAME: tuple[tuple[str, str], ...] = (
+    ("goalkeeper", "goalkeeper"),
+    ("back", "defender"),
+    ("wing", "forward"),
+    ("forward", "forward"),
+)
+
+
+def position_role(position_name: str | None) -> str | None:
+    if not position_name:
+        return None
+    lowered = str(position_name).lower()
+    for needle, role in POSITION_ROLE_BY_NAME:
+        if needle in lowered:
+            return role
+    return "midfielder"
+
 
 
 class StatsBombAdapter:
@@ -41,6 +92,7 @@ class StatsBombAdapter:
         self.expulsions: list[dict[str, Any]] = []
         self.own_goals: list[dict[str, Any]] = []
         self.shootout_kicks: list[dict[str, Any]] = []
+        self.reordered_events: list[dict[str, Any]] = []
 
     @classmethod
     def transform_coordinates(
@@ -114,17 +166,92 @@ class StatsBombAdapter:
             return round(period_secs, 2)
 
     @classmethod
+    def period_elapsed_seconds(cls, raw: dict[str, Any]) -> float:
+        """Seconds elapsed inside the event's own period.
+
+        The provider's ``timestamp`` resets at every period start and is the
+        most precise source. ``minute``/``second`` are the conventional match
+        minute, so they are only used when no timestamp is present.
+        """
+        period = int(raw.get("period", 1) or 1)
+        timestamp = raw.get("timestamp")
+        if timestamp:
+            try:
+                parts = str(timestamp).split(":")
+                if len(parts) >= 3:
+                    hours, minutes, seconds = int(parts[0]), int(parts[1]), float(parts[2])
+                    return round(hours * 3600 + minutes * 60 + seconds, 3)
+            except (TypeError, ValueError):
+                pass
+        minute = int(raw.get("minute", 0) or 0)
+        second = int(raw.get("second", 0) or 0)
+        if period >= SHOOTOUT_FIRST_PERIOD:
+            # Every shootout period shares the 120-minute anchor so the
+            # shootout timeline stays continuous across sudden death.
+            base = NOMINAL_PERIOD_START_SECONDS[SHOOTOUT_FIRST_PERIOD]
+        else:
+            base = NOMINAL_PERIOD_START_MINUTES.get(period, 0) * 60
+        return round(max(0.0, minute * 60 + second - base), 3)
+
+    @classmethod
+    def compute_period_offsets(cls, raw_events: list[dict[str, Any]]) -> dict[int, float]:
+        """Cumulative match-clock anchors that keep the clock monotonic.
+
+        Each period starts at the later of its nominal football boundary and
+        the end of the previous period, so the added stoppage time of a half
+        is carried into the next one instead of being silently dropped.
+        """
+        period_last: dict[int, float] = {}
+        for raw in raw_events:
+            period = int(raw.get("period", 1) or 1)
+            elapsed = cls.period_elapsed_seconds(raw)
+            if elapsed > period_last.get(period, 0.0):
+                period_last[period] = elapsed
+
+        offsets: dict[int, float] = {}
+        previous_end = 0.0
+        match_end = 0.0
+        for period in sorted(period_last):
+            if period >= SHOOTOUT_FIRST_PERIOD:
+                # A shootout is a separate phase: it restarts from the
+                # nominal 120-minute anchor, after the match proper.
+                anchor = max(NOMINAL_PERIOD_START_SECONDS[SHOOTOUT_FIRST_PERIOD], match_end)
+            else:
+                anchor = max(NOMINAL_PERIOD_START_SECONDS.get(period, previous_end), previous_end)
+            offsets[period] = anchor
+            end = anchor + period_last[period]
+            previous_end = end
+            if period < SHOOTOUT_FIRST_PERIOD:
+                match_end = end
+        return offsets
+
+    @classmethod
+    def match_clock_seconds(
+        cls, period: int, elapsed_seconds: float, offsets: dict[int, float] | None = None
+    ) -> float:
+        """Monotonic match-elapsed clock for an event inside a period."""
+        anchor = (offsets or {}).get(period)
+        if anchor is None:
+            anchor = NOMINAL_PERIOD_START_SECONDS.get(period, 0.0)
+        return round(anchor + float(elapsed_seconds), 3)
+
+    @classmethod
     def map_action_type(cls, sb_type_name: str) -> ActionType:
         """Map StatsBomb event type string to standard ActionType enum."""
         mapping = {
             "Pass": ActionType.PASS,
             "Shot": ActionType.SHOT,
             "Carry": ActionType.CARRY,
+            "Dribble": ActionType.CARRY,
+            "Ball Receipt": ActionType.RECEIPT,
+            "Ball Receipt*": ActionType.RECEIPT,
+            "Miscontrol": ActionType.MISCONTROL,
             "Ball Recovery": ActionType.RECOVERY,
             "Interception": ActionType.INTERCEPTION,
             "Clearance": ActionType.CLEARANCE,
             "Dispossessed": ActionType.DISPOSSESSED,
             "Duel": ActionType.DUEL,
+            "50/50": ActionType.DUEL,
             "Foul Committed": ActionType.FOUL,
             "Foul Won": ActionType.FOUL,
             "Goal Keeper": ActionType.GOALKEEPER,
@@ -135,13 +262,20 @@ class StatsBombAdapter:
             "Own Goal Against": ActionType.OWN_GOAL,
             "Own Goal For": ActionType.OWN_GOAL,
             "Bad Behaviour": ActionType.BAD_BEHAVIOUR,
-            "Substitution": ActionType.OTHER,
-            "Player Off": ActionType.OTHER,
-            "Player On": ActionType.OTHER,
-            "Tactical Shift": ActionType.OTHER,
-            "Injury Stoppage": ActionType.OTHER,
-            "Referee Ball-Drop": ActionType.OTHER,
             "Card": ActionType.FOUL,
+            # Off-ball events: the actor is not in possession of the ball and
+            # must never move the possession state machine.
+            "Pressure": ActionType.OFF_BALL,
+            "Block": ActionType.OFF_BALL,
+            "Shield": ActionType.OFF_BALL,
+            "Dribbled Past": ActionType.OFF_BALL,
+            "Tactical Shift": ActionType.OFF_BALL,
+            "Injury Stoppage": ActionType.OFF_BALL,
+            "Substitution": ActionType.OFF_BALL,
+            "Player Off": ActionType.OFF_BALL,
+            "Player On": ActionType.OFF_BALL,
+            "Offside": ActionType.OFF_BALL,
+            "Referee Ball-Drop": ActionType.OFF_BALL,
         }
         return mapping.get(sb_type_name, ActionType.OTHER)
 
@@ -216,12 +350,38 @@ class StatsBombAdapter:
             return "shot"
         elif action_type == ActionType.DUEL:
             duel_info = raw.get("duel", {})
+            if not isinstance(duel_info, dict):
+                duel_info = raw.get("50/50", {})
             outcome = duel_info.get("outcome") if isinstance(duel_info, dict) else None
-            return outcome.get("name").lower() if isinstance(outcome, dict) else "success"
+            name = str(outcome.get("name")).lower() if isinstance(outcome, dict) else ""
+            if name.startswith("won") or name.startswith("success"):
+                return "won"
+            if name.startswith("lost"):
+                return "lost"
+            return name or "success"
         elif action_type == ActionType.INTERCEPTION:
             int_info = raw.get("interception", {})
             outcome = int_info.get("outcome") if isinstance(int_info, dict) else None
             return outcome.get("name").lower() if isinstance(outcome, dict) else "won"
+        elif action_type == ActionType.GOALKEEPER:
+            keeper_info = raw.get("goalkeeper", {})
+            keeper_type = keeper_info.get("type", {}) if isinstance(keeper_info, dict) else {}
+            name = keeper_type.get("name") if isinstance(keeper_type, dict) else None
+            if name:
+                return str(name).lower().replace(" ", "_")
+            return "keeper_action"
+        elif action_type == ActionType.MISCONTROL:
+            return "miscontrol"
+        elif action_type == ActionType.RECEIPT:
+            return "control"
+        elif action_type == ActionType.OFF_BALL:
+            type_name_lower = type_name.lower()
+            if type_name_lower == "foul won":
+                foul_won = raw.get("foul_won", {})
+                if isinstance(foul_won, dict) and foul_won.get("defensive"):
+                    return "foul_won_defensive"
+                return "foul_won"
+            return type_name_lower.replace(" ", "_")
         elif action_type == ActionType.BAD_BEHAVIOUR:
             card_info = raw.get("bad_behaviour", {}).get("card")
             if isinstance(card_info, dict):
@@ -233,6 +393,9 @@ class StatsBombAdapter:
         self,
         raw: dict[str, Any],
         prev_team_id: Optional[str] = None,
+        *,
+        offsets: Optional[dict[int, float]] = None,
+        player_index: Optional[dict[str, dict[str, Any]]] = None,
     ) -> NormalizedEvent:
         """Converts a single raw StatsBomb JSON event into NormalizedEvent."""
         raw_id = str(raw.get("id", "unknown"))
@@ -242,7 +405,8 @@ class StatsBombAdapter:
         second = int(raw.get("second", 0))
         timestamp = raw.get("timestamp")
 
-        clock_sec = self.parse_clock_seconds(period, minute, second, timestamp)
+        elapsed = self.period_elapsed_seconds(raw)
+        clock_sec = self.match_clock_seconds(period, elapsed, offsets)
 
         team = raw.get("team", {})
         provider_team_id = str(team.get("id")) if team.get("id") is not None else None
@@ -273,8 +437,62 @@ class StatsBombAdapter:
             end_loc = raw.get("shot", {}).get("end_location")
         elif action_type == ActionType.CARRY and isinstance(raw.get("carry"), dict):
             end_loc = raw.get("carry", {}).get("end_location")
+        if end_loc is None and isinstance(raw.get("dribble"), dict):
+            end_loc = raw.get("dribble", {}).get("end_location")
 
         end_x_m, end_y_m = self.extract_location(end_loc)
+
+        # --- squad / set-piece / substitution context --------------------------------
+        index_entry = (player_index or {}).get(player_id or "", {})
+        position_name = index_entry.get("position")
+        if position_name is None:
+            raw_position = raw.get("position")
+            if isinstance(raw_position, dict) and raw_position.get("name"):
+                position_name = str(raw_position["name"])
+        jersey_number = index_entry.get("jersey_number")
+        if jersey_number is None:
+            raw_position = raw.get("position")
+            jersey_number = raw_position.get("jersey_number") if isinstance(raw_position, dict) else None
+
+        play_pattern = raw.get("play_pattern")
+        play_pattern_name = str(play_pattern.get("name")) if isinstance(play_pattern, dict) else None
+        set_piece = SET_PIECE_BY_PLAY_PATTERN.get(play_pattern_name or "") or None
+        if set_piece is None and action_type == ActionType.PASS:
+            pass_info = raw.get("pass")
+            pass_type = pass_info.get("type", {}) if isinstance(pass_info, dict) else {}
+            pass_type_name = str(pass_type.get("name")) if isinstance(pass_type, dict) else ""
+            if "corner" in pass_type_name.lower():
+                set_piece = "corner"
+            elif "free kick" in pass_type_name.lower():
+                set_piece = "free_kick"
+            elif "throw" in pass_type_name.lower():
+                set_piece = "throw_in"
+            elif "goal kick" in pass_type_name.lower():
+                set_piece = "goal_kick"
+
+        substitution = raw.get("substitution")
+        substitution_on_id = substitution_on_name = None
+        substitution_off_id = substitution_off_name = None
+        if isinstance(substitution, dict):
+            replacement = substitution.get("replacement")
+            if isinstance(replacement, dict):
+                substitution_on_id = str(replacement.get("id")) if replacement.get("id") is not None else None
+                substitution_on_name = (
+                    str(replacement.get("name")) if replacement.get("name") is not None else None
+                )
+            # In the provider payload the actor of a Substitution event is the
+            # player leaving the pitch; the replacement is the one entering.
+            if player_id:
+                substitution_off_id = player_id
+                substitution_off_name = player_name
+        if type_name == "Player On" and player_id and substitution_on_id is None:
+            substitution_on_id, substitution_on_name = player_id, player_name
+        if type_name == "Player Off" and player_id and substitution_off_id is None:
+            substitution_off_id, substitution_off_name = player_id, player_name
+
+        lineup_role = index_entry.get("lineup_role")
+        if lineup_role is None and type_name == "Starting XI":
+            lineup_role = "starter"
 
         # Card & discipline tracking
         card = self.parse_card(raw)
@@ -344,6 +562,8 @@ class StatsBombAdapter:
             period=period,
             clock_seconds=clock_sec,
             clock_basis="match_elapsed",
+            provider_minute=minute,
+            provider_second=second,
             team_id=team_id,
             provider_team_id=provider_team_id,
             provider_team_name=provider_team_name,
@@ -353,6 +573,7 @@ class StatsBombAdapter:
             is_shootout=bool(period >= 5),
             player_id=player_id,
             player_name=player_name,
+            jersey_number=int(jersey_number) if isinstance(jersey_number, int) else None,
             action_type=action_type,
             outcome=outcome,
             card=card,
@@ -361,15 +582,115 @@ class StatsBombAdapter:
             y=y_m,
             end_x=end_x_m,
             end_y=end_y_m,
+            period_label=PERIOD_LABELS.get(period, f"period_{period}"),
+            play_pattern=play_pattern_name,
+            set_piece=set_piece,
+            position=position_name,
+            position_role=position_role(position_name),
+            lineup_role=lineup_role,
+            substitution_off_player_id=substitution_off_id,
+            substitution_off_player_name=substitution_off_name,
+            substitution_on_player_id=substitution_on_id,
+            substitution_on_player_name=substitution_on_name,
         )
+
+    @staticmethod
+    def build_player_index(raw_events: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+        """Map provider player id -> jersey number, position and lineup role.
+
+        Jersey numbers only exist in the provider's lineup payloads, so they
+        are harvested from the Starting XI event and the substitutions that
+        follow it.
+        """
+        index: dict[str, dict[str, Any]] = {}
+        for raw in raw_events:
+            tactics = raw.get("tactics")
+            if not isinstance(tactics, dict):
+                continue
+            lineup = tactics.get("lineup")
+            if not isinstance(lineup, list):
+                continue
+            for entry in lineup:
+                if not isinstance(entry, dict):
+                    continue
+                player = entry.get("player")
+                if not isinstance(player, dict) or player.get("id") is None:
+                    continue
+                pid = str(player["id"])
+                position = entry.get("position")
+                index[pid] = {
+                    "jersey_number": entry.get("jersey_number"),
+                    "position": str(position.get("name")) if isinstance(position, dict) else None,
+                    "lineup_role": "starter",
+                }
+        for raw in raw_events:
+            substitution = raw.get("substitution")
+            if not isinstance(substitution, dict):
+                continue
+            replacement = substitution.get("replacement")
+            if not isinstance(replacement, dict) or replacement.get("id") is None:
+                continue
+            pid = str(replacement["id"])
+            entry = index.setdefault(pid, {"jersey_number": None, "position": None, "lineup_role": "substitute"})
+            entry["lineup_role"] = "substitute"
+        return index
+
+    @classmethod
+    def sort_events_by_period_clock(
+        cls, raw_events: list[dict[str, Any]]
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Order each period by its own timestamps, keeping the provider index.
+
+        StatsBomb occasionally appends an event to the end of a period whose
+        timestamp belongs to the start of that period. The timestamp and the
+        provider minute agree with each other, only the index position is
+        wrong, so the period is re-ordered by time and the moved events are
+        reported to the caller instead of being silently dropped.
+        """
+        by_period: dict[int, list[tuple[int, dict[str, Any]]]] = {}
+        for position, raw in enumerate(raw_events):
+            by_period.setdefault(int(raw.get("period", 1) or 1), []).append((position, raw))
+
+        ordered: list[dict[str, Any]] = []
+        moved: list[dict[str, Any]] = []
+        for period in sorted(by_period):
+            bucket = by_period[period]
+            elapsed_by_event = [
+                (cls.period_elapsed_seconds(raw), int(raw.get("index", 0) or 0), raw)
+                for _global, raw in bucket
+            ]
+            for position, (elapsed, index, raw) in enumerate(elapsed_by_event):
+                if position and elapsed < elapsed_by_event[position - 1][0]:
+                    moved.append(
+                        {
+                            "provider_event_id": str(raw.get("id", "")),
+                            "index": index,
+                            "period": period,
+                            "clock_seconds": elapsed,
+                            "reason": "out_of_order_period_timestamp",
+                        }
+                    )
+            ordered.extend(raw for _elapsed, _index, raw in sorted(
+                elapsed_by_event, key=lambda item: (item[0], item[1])
+            ))
+        return ordered, moved
 
     def load_events(self, raw_events: list[dict[str, Any]]) -> list[NormalizedEvent]:
         """Convert a full list of raw StatsBomb events into NormalizedEvent stream."""
         normalized: list[NormalizedEvent] = []
         prev_team_id: Optional[str] = None
+        ordered, moved = self.sort_events_by_period_clock(raw_events)
+        self.reordered_events = moved
+        offsets = self.compute_period_offsets(ordered)
+        player_index = self.build_player_index(ordered)
 
-        for raw in raw_events:
-            ev = self.normalize_event(raw, prev_team_id=prev_team_id)
+        for raw in ordered:
+            ev = self.normalize_event(
+                raw,
+                prev_team_id=prev_team_id,
+                offsets=offsets,
+                player_index=player_index,
+            )
             normalized.append(ev)
             prev_team_id = ev.team_id
 

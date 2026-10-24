@@ -12,3 +12,12 @@ out/
 *.tsbuildinfo
 .agents/
 
+# Raw upstream provider payloads. Reproducible via scripts/fetch_statsbomb_open_data.py;
+# the imported datasets and the source manifest are committed instead.
+data/raw/
+
+# Imported provider payloads are derived data and stay out of git under the
+# StatsBomb Public Data User Agreement (no redistribution of provider payloads).
+# Reproducible via scripts/ingest_statsbomb_corpus.py from data/raw/.
+data/datasets/
+

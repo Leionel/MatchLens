@@ -1,7 +1,7 @@
 {
   "metadata": {
     "match_id": "sb_wc2022_final",
-    "label": "2022 World Cup Final: Argentina 3–3 France (4–2 pens)",
+    "label": "2022 World Cup Final: Argentina 3-3 France (4-2 pens)",
     "competition": "FIFA World Cup",
     "season": "2022",
     "match_date": "2022-12-18",
@@ -11,9 +11,11 @@
     "away_score": 3,
     "coverage_level": "C1_PARTIAL",
     "data_provider": "statsbomb_open_data",
-    "description": "2022 World Cup Final sample sequence (12 normalized events: Starting XI, Kick-off, early progression chains) for protocol validation and schema compatibility testing.",
-    "license_ref": "StatsBomb Open Data Terms (CC BY-NC-SA 4.0)",
-    "attribution_text": "Data provided by StatsBomb Open Data (https://github.com/statsbomb/open-data)",
+    "provenance_kind": "provider_schema_excerpt",
+    "provider_match_id": "3869685",
+    "description": "Hand-authored 12-event excerpt of the 2022 World Cup final, written in the StatsBomb Open Data event schema (starting XI, half start, early progression chains, the four goal events with the provider's own xG values). It is a schema and protocol fixture for the adapter and the completeness verifier, NOT a provider payload and NOT a complete match: it covers roughly 2 minutes of the first half and the 79th-90th minute only. The full provider payload for this match is ingested separately from the curated corpus as sb_3869685.",
+    "license_ref": "StatsBomb Public Data User Agreement (Standard Terms, last updated 8 September 2023) - https://github.com/statsbomb/open-data/blob/master/LICENSE.pdf",
+    "attribution_text": "Data provided by StatsBomb. Publications of analysis derived from this data must state the data source as StatsBomb and display the StatsBomb logo from their Media Pack (https://statsbomb.com/media-pack/).",
     "events_count": 12,
     "capabilities": [
       "schema_compatibility",

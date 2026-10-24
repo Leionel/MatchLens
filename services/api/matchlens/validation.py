@@ -200,7 +200,7 @@ class ScientificEvaluationBenchmark:
             total_events=len(events),
             first_timestamp_s=round(first_t, 2),
             last_timestamp_s=round(last_t, 2),
-            provenance_license="StatsBomb Open Data (CC BY-NC 4.0) / MatchLens Synthetic Ground Truth",
+            provenance_license="StatsBomb Public Data User Agreement (2023-09-08) / MatchLens Synthetic Ground Truth",
             seed_used=seed,
         )
 

@@ -11,16 +11,24 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .adapters.statsbomb import StatsBombAdapter, STATSBOMB_LICENSE_REF, STATSBOMB_ATTRIBUTION_TEXT
+from .adapters.statsbomb import StatsBombAdapter
+from .provider_terms import STATSBOMB_ATTRIBUTION_TEXT, STATSBOMB_LICENSE_REF
 from .completeness import DatasetCompleteness, verify_dataset_completeness
 from .football import SCENARIOS, TEAMS, generate_match
 from .schema import ActionType, DataCoverageLevel, MatchContext, NormalizedEvent, RawSourceRecord
 
 MATCHES_DIR = Path(__file__).resolve().parent / "data" / "matches"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SOURCE_MANIFEST_PATH = REPO_ROOT / "data" / "source_manifest.json"
+
+#: How a match's event stream was obtained. The distinction matters because a
+#: hand-authored excerpt that uses the provider's event schema is not a
+#: provider payload and must never be presented as one.
+ProvenanceKind = Literal["synthetic", "provider_payload", "provider_schema_excerpt"]
 
 
 class MatchMetadata(BaseModel):
@@ -50,6 +58,15 @@ class MatchMetadata(BaseModel):
     completeness: Optional[dict[str, Any]] = None
     source_declared_complete: Optional[bool] = None
     official_score_note: Optional[str] = None
+    #: Provider index score compared against the goals recorded in the event
+    #: stream. A disagreement is reported, never merged into a single number.
+    score_reconciliation: Optional[dict[str, Any]] = None
+    #: How the event stream was obtained. Defaults to the provider kind for
+    #: provider matches and to ``synthetic`` for generated scenarios.
+    provenance_kind: ProvenanceKind = "provider_payload"
+    #: The upstream provider match this entry is derived from, when the entry
+    #: is an excerpt rather than the full payload.
+    provider_match_id: Optional[str] = None
 
 
 class MatchCatalog:
@@ -80,6 +97,7 @@ class MatchCatalog:
                     events_count=180,
                     format_seconds=cls.SYNTHETIC_DURATION_SECONDS,
                     source_declared_complete=True,
+                    provenance_kind="synthetic",
                     capabilities=[
                         "full_match_simulation",
                         "oaai_dynamics",
@@ -91,7 +109,12 @@ class MatchCatalog:
                 )
             )
 
-        # 2. Bundled StatsBomb Open Data Real Matches
+        # 2. Provider matches declared by the committed source manifest. The
+        # manifest carries metadata only; the payloads live outside version
+        # control because the provider agreement forbids redistribution.
+        matches.extend(cls._manifest_matches())
+
+        # 3. MatchLens-authored dataset fixtures bundled with the package.
         if MATCHES_DIR.exists():
             for p in sorted(MATCHES_DIR.glob("*.json")):
                 try:
@@ -99,6 +122,16 @@ class MatchCatalog:
                         data = json.load(f)
                     meta = data.get("metadata")
                     if meta:
+                        meta = dict(meta)
+                        # A bundled fixture that uses the provider's event schema
+                        # is an excerpt, not the provider payload. It must never
+                        # default to being read as a full provider match.
+                        meta.setdefault(
+                            "provenance_kind",
+                            "synthetic"
+                            if meta.get("data_provider") == "synthetic"
+                            else "provider_schema_excerpt",
+                        )
                         matches.append(MatchMetadata(**meta))
                 except Exception:
                     pass
@@ -116,6 +149,91 @@ class MatchCatalog:
 
     # Alias for convenience
     get_match_meta = get_match
+
+    # --- source manifest -------------------------------------------------------
+    _manifest_cache: dict[str, Any] = {}
+
+    @classmethod
+    def source_manifest(cls) -> dict[str, Any]:
+        """Committed provenance index. Metadata only: no provider payload."""
+        try:
+            stat = SOURCE_MANIFEST_PATH.stat()
+        except OSError:
+            return {}
+        key = f"{SOURCE_MANIFEST_PATH}:{stat.st_mtime_ns}:{stat.st_size}"
+        cached = cls._manifest_cache.get("__key__")
+        if cached == key:
+            return cls._manifest_cache["__data__"]
+        try:
+            data = json.loads(SOURCE_MANIFEST_PATH.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        cls._manifest_cache["__key__"] = key
+        cls._manifest_cache["__data__"] = data
+        return data
+
+    @classmethod
+    def manifest_entries(cls) -> dict[str, dict[str, Any]]:
+        entries = cls.source_manifest().get("matches") or []
+        return {
+            str(e["match_id"]): e
+            for e in entries
+            if isinstance(e, dict) and e.get("match_id")
+        }
+
+    @classmethod
+    def _manifest_matches(cls) -> list[MatchMetadata]:
+        out: list[MatchMetadata] = []
+        cls._manifest_rejections = []
+        for match_id, entry in sorted(cls.manifest_entries().items()):
+            meta = dict(entry.get("metadata") or {})
+            meta.setdefault("match_id", match_id)
+            if not meta.get("match_id"):
+                continue
+            try:
+                out.append(MatchMetadata(**meta))
+            except Exception as exc:
+                # A manifest entry that cannot be read would otherwise make the
+                # match disappear without a trace, so the rejection is kept.
+                cls._manifest_rejections.append({
+                    "match_id": match_id,
+                    "error": f"{type(exc).__name__}: {exc}",
+                })
+        return out
+
+    @classmethod
+    def manifest_rejections(cls) -> list[dict[str, Any]]:
+        """Manifest entries the catalog could not read."""
+        return list(getattr(cls, "_manifest_rejections", []))
+
+    @classmethod
+    def dataset_path(cls, match_id: str) -> Optional[Path]:
+        """Resolve a match to its dataset file, manifest first then fixtures."""
+        entry = cls.manifest_entries().get(match_id)
+        if entry:
+            rel = entry.get("dataset_path")
+            if rel:
+                candidate = REPO_ROOT / rel
+                if candidate.exists():
+                    return candidate
+                return None
+        candidate = MATCHES_DIR / f"{match_id}.json"
+        return candidate if candidate.exists() else None
+
+    @classmethod
+    def dataset_missing_reason(cls, match_id: str) -> Optional[str]:
+        """Why a declared match cannot be served, or None when it is available."""
+        entry = cls.manifest_entries().get(match_id)
+        if not entry:
+            return None
+        if cls.dataset_path(match_id) is not None:
+            return None
+        return (
+            "dataset_not_imported: provider payloads are excluded from version control; "
+            "run scripts/ingest_statsbomb_corpus.py to materialise them"
+        )
 
     @staticmethod
     def content_revision_from_events(
@@ -209,10 +327,19 @@ class MatchCatalog:
 
     SYNTHETIC_DURATION_SECONDS = 720
     _completeness_cache: dict[tuple[Any, ...], DatasetCompleteness] = {}
+    _event_cache: dict[tuple[Any, ...], list[NormalizedEvent]] = {}
 
     @classmethod
     def _disk_metadata(cls, match_id: str) -> Optional[MatchMetadata]:
-        """Read one bundled metadata row without going through list_matches()."""
+        """Read one dataset's metadata row without going through list_matches()."""
+        entry = cls.manifest_entries().get(match_id)
+        if entry:
+            meta = dict(entry.get("metadata") or {})
+            meta.setdefault("match_id", match_id)
+            try:
+                return MatchMetadata(**meta)
+            except Exception:
+                return None
         path = MATCHES_DIR / f"{match_id}.json"
         if not path.exists():
             return None
@@ -228,7 +355,9 @@ class MatchCatalog:
         """Cache identity: synthetic fixtures are deterministic, files are content-stamped."""
         if match_id.startswith("syn_"):
             return (match_id, "synthetic")
-        path = MATCHES_DIR / f"{match_id}.json"
+        path = cls.dataset_path(match_id)
+        if path is None:
+            return (match_id, "missing")
         try:
             stat = path.stat()
             return (match_id, str(path), int(stat.st_mtime_ns), int(stat.st_size))
@@ -242,14 +371,24 @@ class MatchCatalog:
         """Single source of truth for dataset completeness.
 
         Shared by the hub listing and the match context so the two can never
-        disagree, and re-verified whenever the underlying file changes.
+        disagree, and re-verified whenever the underlying content changes.
         """
-        cache_key = cls._completeness_cache_key(match_id)
+        digest: Optional[str] = None
+        if match_id.startswith("syn_"):
+            cache_key: tuple[Any, ...] = (match_id, "synthetic")
+        else:
+            path = cls.dataset_path(match_id)
+            if path is None:
+                cache_key = (match_id, "missing")
+            else:
+                digest = cls._dataset_digest(path)
+                cache_key = (match_id, digest)
         cached = cls._completeness_cache.get(cache_key)
         if cached is not None and events is None:
             return cached
 
-        events = cls.load_normalized_events(match_id) if events is None else events
+        if events is None:
+            events = cls.load_normalized_events(match_id)
         synthetic = match_id.startswith("syn_")
         meta = None if synthetic else cls._disk_metadata(match_id)
         duration = float(cls.SYNTHETIC_DURATION_SECONDS if synthetic else (meta.format_seconds if meta else None) or 5400)
@@ -269,6 +408,28 @@ class MatchCatalog:
 
     @classmethod
     def _with_completeness(cls, meta: MatchMetadata) -> MatchMetadata:
+        entry = cls.manifest_entries().get(meta.match_id)
+        if entry is not None:
+            # The manifest stores the report computed from the events at import
+            # time, bound to the dataset checksum. Re-deriving it here would
+            # force every provider match to be parsed on every catalog read.
+            stored = entry.get("completeness")
+            if isinstance(stored, dict) and stored.get("status"):
+                status = str(stored.get("status"))
+                return meta.model_copy(
+                    update={
+                        "completeness_status": status,
+                        "completeness": stored,
+                        "continuous_coverage": bool(stored.get("full_match_allowed"))
+                        or status == "COMPLETE_VERIFIED",
+                    }
+                )
+            return meta.model_copy(
+                update={
+                    "completeness_status": "DATASET_NOT_IMPORTED",
+                    "continuous_coverage": False,
+                }
+            )
         try:
             report = cls.completeness_report(meta.match_id)
         except Exception:
@@ -374,21 +535,39 @@ class MatchCatalog:
         )
 
     @classmethod
-    def load_normalized_events(cls, match_id: str) -> list[NormalizedEvent]:
-        """Loads and converts events for the specified match_id into NormalizedEvent list."""
-        if match_id.startswith("syn_"):
-            scenario_key = match_id.replace("syn_", "", 1)
-            raw_events = generate_match(scenario=scenario_key)
-            return cls._convert_synthetic_events(raw_events, match_id)
+    def _dataset_digest(cls, path: Path) -> str:
+        """Content hash of the dataset file. Identity is content, never mtime."""
+        return hashlib.sha256(path.read_bytes()).hexdigest()
 
-        # Real StatsBomb Open Data match
-        file_path = MATCHES_DIR / f"{match_id}.json"
-        if not file_path.exists():
-            raise FileNotFoundError(f"Match data file not found: {file_path}")
+    @classmethod
+    def _load_dataset(cls, match_id: str) -> tuple[str, list[NormalizedEvent]]:
+        """Return (content digest, normalized events) for one provider match.
 
-        with open(file_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        The digest is the dataset's identity, so the normalized-event cache is
+        keyed by content: editing a payload changes its digest even when the
+        file's mtime and size are preserved.
+        """
+        file_path = cls.dataset_path(match_id)
+        if file_path is None:
+            reason = cls.dataset_missing_reason(match_id) or f"Match data file not found: {match_id}"
+            raise FileNotFoundError(reason)
 
+        raw_bytes = file_path.read_bytes()
+        digest = hashlib.sha256(raw_bytes).hexdigest()
+
+        entry = cls.manifest_entries().get(match_id) or {}
+        expected_sha = entry.get("dataset_sha256")
+        if expected_sha and digest != expected_sha:
+            raise ValueError(
+                f"dataset_checksum_mismatch: {match_id} "
+                f"expected={expected_sha[:16]} actual={digest[:16]}"
+            )
+
+        cached = cls._event_cache.get(digest)
+        if cached is not None:
+            return digest, cached
+
+        data = json.loads(raw_bytes.decode("utf-8"))
         meta_raw = data.get("metadata") or {}
         home_pid = meta_raw.get("home_provider_team_id")
         away_pid = meta_raw.get("away_provider_team_id")
@@ -405,7 +584,17 @@ class MatchCatalog:
             if e.team_id not in mapping:
                 raise ValueError(f"unmapped_provider_team: {match_id}:{e.team_id}")
             canonical.append(e.model_copy(update={"team_id": mapping[e.team_id]}))
-        return canonical
+        cls._event_cache[digest] = canonical
+        return digest, canonical
+
+    @classmethod
+    def load_normalized_events(cls, match_id: str) -> list[NormalizedEvent]:
+        """Loads and converts events for the specified match_id into NormalizedEvent list."""
+        if match_id.startswith("syn_"):
+            scenario_key = match_id.replace("syn_", "", 1)
+            raw_events = generate_match(scenario=scenario_key)
+            return cls._convert_synthetic_events(raw_events, match_id)
+        return cls._load_dataset(match_id)[1]
 
     @classmethod
     def load_multiple_matches(
@@ -431,8 +620,8 @@ class MatchCatalog:
             if meta is None:
                 # A file may exist but be unreadable. Distinguish that from a
                 # genuinely absent source instead of reporting both as missing.
-                candidate = MATCHES_DIR / f"{m_id}.json"
-                if candidate.exists():
+                candidate = cls.dataset_path(m_id)
+                if candidate is not None:
                     try:
                         payload = json.loads(candidate.read_text(encoding="utf-8"))
                         meta_raw = payload.get("metadata")

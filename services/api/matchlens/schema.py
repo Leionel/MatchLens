@@ -28,6 +28,8 @@ class ActionType(str, Enum):
     PASS = "Pass"
     SHOT = "Shot"
     CARRY = "Carry"
+    RECEIPT = "Ball Receipt"
+    MISCONTROL = "Miscontrol"
     TACKLE = "Tackle"
     INTERCEPTION = "Interception"
     RECOVERY = "Ball Recovery"
@@ -36,6 +38,7 @@ class ActionType(str, Enum):
     FOUL = "Foul"
     DUEL = "Duel"
     GOALKEEPER = "Goal Keeper"
+    OFF_BALL = "Off Ball"
     RESTART = "Restart"
     PERIOD_END = "Period End"
     BAD_BEHAVIOUR = "Bad Behaviour"
@@ -68,6 +71,8 @@ class NormalizedEvent(BaseModel):
     period: int
     clock_seconds: float
     clock_basis: Literal["period_elapsed", "match_elapsed"] = "match_elapsed"
+    provider_minute: Optional[int] = None  # provider's own match-minute label
+    provider_second: Optional[int] = None
     team_id: str
     provider_team_id: Optional[str] = None
     provider_team_name: Optional[str] = None
@@ -87,6 +92,17 @@ class NormalizedEvent(BaseModel):
     y: Optional[float] = Field(default=None, ge=0.0, le=68.0)
     end_x: Optional[float] = Field(default=None, ge=0.0, le=105.0)
     end_y: Optional[float] = Field(default=None, ge=0.0, le=68.0)
+    # --- match-context semantics (provider-observed, never inferred) --------------
+    period_label: Optional[str] = None  # first_half | second_half | extra_time_1 | extra_time_2 | shootout
+    play_pattern: Optional[str] = None  # provider play pattern, e.g. "From Corner"
+    set_piece: Optional[str] = None  # corner | free_kick | throw_in | goal_kick | kick_off | penalty
+    position: Optional[str] = None  # provider position name, e.g. "Left Center Back"
+    position_role: Optional[str] = None  # goalkeeper | defender | midfielder | forward
+    lineup_role: Optional[str] = None  # starter | substitute (from Starting XI / Substitutes events)
+    substitution_off_player_id: Optional[str] = None
+    substitution_off_player_name: Optional[str] = None
+    substitution_on_player_id: Optional[str] = None
+    substitution_on_player_name: Optional[str] = None
 
 
 class DerivedMetric(BaseModel):

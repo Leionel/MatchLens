@@ -495,7 +495,7 @@ class ExpectedThreatFitter:
                 "min_value": min(min(r) for r in values_2d),
             },
             "license_and_attribution": {
-                "data_license": "StatsBomb Open Data Terms (CC BY-NC-SA 4.0)",
+                "data_license": "StatsBomb Public Data User Agreement (Standard Terms, 2023-09-08)",
                 "required_attribution": "Data provided by StatsBomb (https://github.com/statsbomb/open-data)",
                 "logo_requirement": "Must display StatsBomb logo on public visualizations derived from StatsBomb Open Data",
             },

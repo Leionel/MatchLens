@@ -1,0 +1,156 @@
+{
+  "version": "statsbomb-corpus-import-v2",
+  "imported_at": "2026-10-24T09:56:17Z",
+  "match_id": "sb_8655",
+  "provider": "statsbomb_open_data",
+  "provider_match_id": 8655,
+  "competition": "FIFA World Cup",
+  "season": "2018",
+  "stage": "semi_final",
+  "match_date": "2018-07-10",
+  "home_team": "France",
+  "away_team": "Belgium",
+  "home_score": 1,
+  "away_score": 0,
+  "home_provider_team_id": "771",
+  "away_provider_team_id": "782",
+  "source_file": "data\\raw\\statsbomb\\events_8655.json",
+  "source_sha256": "531f7db538d1026ddef77178b939ee28c38ae7a15a91d07826e97d352d26464a",
+  "lineups_file": "data\\raw\\statsbomb\\lineups_8655.json",
+  "lineups_sha256": "9d91846484af686af51e5294a5ac79b4af088b5c31ea0bd70c9387f84f4000b4",
+  "target_file": "data\\datasets\\sb_8655.json",
+  "target_sha256": "a6a7b78b7ac6ef7d776c5f2adc45f11fec69b7fb36f62af933f7727c0640df0b",
+  "raw_event_count": 3354,
+  "normalized_event_count": 3354,
+  "observed_end_seconds": 5858.492,
+  "expected_duration_seconds": 5400.0,
+  "reordered_events": [],
+  "completeness_status": "COMPLETE_VERIFIED",
+  "completeness": {
+    "status": "COMPLETE_VERIFIED",
+    "synthetic": false,
+    "source_declaration": "statsbomb_open_data",
+    "raw_event_count": 3354,
+    "normalized_event_count": 3354,
+    "conversion_drop_count": 0,
+    "drop_reasons": [],
+    "observed_periods": [
+      1,
+      2
+    ],
+    "expected_periods": [
+      1,
+      2
+    ],
+    "coverage_by_period": [
+      {
+        "period": 1,
+        "expected_start": 0,
+        "expected_end": 2700.0,
+        "observed_start": 0.0,
+        "observed_end": 2783.28,
+        "event_count": 1729,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 2,
+        "expected_start": 2700.0,
+        "expected_end": 5400.0,
+        "observed_start": 2783.28,
+        "observed_end": 5858.49,
+        "event_count": 1625,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      }
+    ],
+    "expected_duration": 5400.0,
+    "observed_start": 0.0,
+    "observed_end": 5858.49,
+    "known_missing_segments": [],
+    "provider_consistency": true,
+    "integrity_checks": [
+      {
+        "check": "events_present",
+        "passed": true,
+        "detail": "3354 normalized events"
+      },
+      {
+        "check": "event_ids_present",
+        "passed": true,
+        "detail": "every event has an ID"
+      },
+      {
+        "check": "event_ids_unique",
+        "passed": true,
+        "detail": "duplicates=[]"
+      },
+      {
+        "check": "clock_in_bounds",
+        "passed": true,
+        "detail": "invalid=[]"
+      },
+      {
+        "check": "team_mapping_declared",
+        "passed": true,
+        "detail": "unmapped=[]"
+      },
+      {
+        "check": "periods_present",
+        "passed": true,
+        "detail": "observed=[1, 2] expected=[1, 2]"
+      },
+      {
+        "check": "conversion_accounted",
+        "passed": true,
+        "detail": "raw=3354 normalized=3354 drops=0"
+      },
+      {
+        "check": "period_event_density",
+        "passed": true,
+        "detail": "minimum per period=max(8, nominal_period/120)"
+      },
+      {
+        "check": "period_span_coverage",
+        "passed": true,
+        "detail": "minimum per-period span coverage=70%"
+      },
+      {
+        "check": "shootout_kicks_recorded",
+        "passed": true,
+        "detail": "minimum kicks per team=3"
+      },
+      {
+        "check": "clock_monotonic_by_period",
+        "passed": true,
+        "detail": "event order is chronological by period"
+      }
+    ],
+    "confidence": 1.0,
+    "verified": true,
+    "notes": []
+  },
+  "coverage_level": "C1",
+  "score_reconciliation": {
+    "provider_score": "1-0",
+    "recorded_goals": "1-0",
+    "provider_home_score": 1,
+    "provider_away_score": 0,
+    "recorded_home_goals": 1,
+    "recorded_away_goals": 0,
+    "shootout_goals": {
+      "home": 0,
+      "away": 0
+    },
+    "consistent": true,
+    "note": "Provider index score and event-recorded goals agree."
+  },
+  "license_ref": "StatsBomb Public Data User Agreement (Standard Terms, last updated 8 September 2023) - https://github.com/statsbomb/open-data/blob/master/LICENSE.pdf",
+  "attribution_text": "Data provided by StatsBomb. Publications of analysis derived from this data must state the data source as StatsBomb and display the StatsBomb logo from their Media Pack (https://statsbomb.com/media-pack/)."
+}

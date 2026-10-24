@@ -1,0 +1,219 @@
+{
+  "version": "statsbomb-corpus-import-v2",
+  "imported_at": "2026-10-24T09:56:21Z",
+  "match_id": "sb_3869685",
+  "provider": "statsbomb_open_data",
+  "provider_match_id": 3869685,
+  "competition": "FIFA World Cup",
+  "season": "2022",
+  "stage": "final",
+  "match_date": "2022-12-18",
+  "home_team": "Argentina",
+  "away_team": "France",
+  "home_score": 3,
+  "away_score": 3,
+  "home_provider_team_id": "779",
+  "away_provider_team_id": "771",
+  "source_file": "data\\raw\\statsbomb\\events_3869685.json",
+  "source_sha256": "a0b0036d50c10a4c8879d1ee9f24a7502ec2cfb264a61951c8d500dfc897ec35",
+  "lineups_file": "data\\raw\\statsbomb\\lineups_3869685.json",
+  "lineups_sha256": "2b00c4cbf027b36ae2ce99f183a0943c649bb5bdcb8324683a8603785beffed5",
+  "target_file": "data\\datasets\\sb_3869685.json",
+  "target_sha256": "543b04322f63f359d13a37be2d73c572f8c2f1f69e5eb455cafb0c293b739add",
+  "raw_event_count": 4407,
+  "normalized_event_count": 4407,
+  "observed_end_seconds": 8843.476,
+  "expected_duration_seconds": 7800.0,
+  "reordered_events": [
+    {
+      "provider_event_id": "5ca1251c-07f6-4c55-b257-5f7fb9c163b2",
+      "index": 3438,
+      "period": 2,
+      "clock_seconds": 0.275,
+      "reason": "out_of_order_period_timestamp"
+    },
+    {
+      "provider_event_id": "05b2d26b-0e2d-4af1-bbdf-5d22b425af5b",
+      "index": 3975,
+      "period": 3,
+      "clock_seconds": 0.62,
+      "reason": "out_of_order_period_timestamp"
+    }
+  ],
+  "completeness_status": "COMPLETE_VERIFIED",
+  "completeness": {
+    "status": "COMPLETE_VERIFIED",
+    "synthetic": false,
+    "source_declaration": "statsbomb_open_data",
+    "raw_event_count": 4407,
+    "normalized_event_count": 4407,
+    "conversion_drop_count": 0,
+    "drop_reasons": [],
+    "observed_periods": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "expected_periods": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "coverage_by_period": [
+      {
+        "period": 1,
+        "expected_start": 0,
+        "expected_end": 2700.0,
+        "observed_start": 0.0,
+        "observed_end": 3154.57,
+        "event_count": 1751,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 2,
+        "expected_start": 2700.0,
+        "expected_end": 5400.0,
+        "observed_start": 3154.57,
+        "observed_end": 6372.49,
+        "event_count": 1689,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 3,
+        "expected_start": 5400.0,
+        "expected_end": 6300.0,
+        "observed_start": 6372.49,
+        "observed_end": 7337.14,
+        "event_count": 537,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 4,
+        "expected_start": 6300.0,
+        "expected_end": 7200.0,
+        "observed_start": 7337.14,
+        "observed_end": 8484.61,
+        "event_count": 409,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 5,
+        "expected_start": 7200.0,
+        "expected_end": 7800.0,
+        "observed_start": 8484.61,
+        "observed_end": 8843.48,
+        "event_count": 21,
+        "coverage": 0.598,
+        "event_density_ok": true,
+        "completeness_rule": "recorded_kicks",
+        "shootout_kicks_by_team": {
+          "771": 4,
+          "779": 4
+        },
+        "shootout_kicks_ok": true
+      }
+    ],
+    "expected_duration": 7800.0,
+    "observed_start": 0.0,
+    "observed_end": 8843.48,
+    "known_missing_segments": [],
+    "provider_consistency": true,
+    "integrity_checks": [
+      {
+        "check": "events_present",
+        "passed": true,
+        "detail": "4407 normalized events"
+      },
+      {
+        "check": "event_ids_present",
+        "passed": true,
+        "detail": "every event has an ID"
+      },
+      {
+        "check": "event_ids_unique",
+        "passed": true,
+        "detail": "duplicates=[]"
+      },
+      {
+        "check": "clock_in_bounds",
+        "passed": true,
+        "detail": "invalid=[]"
+      },
+      {
+        "check": "team_mapping_declared",
+        "passed": true,
+        "detail": "unmapped=[]"
+      },
+      {
+        "check": "periods_present",
+        "passed": true,
+        "detail": "observed=[1, 2, 3, 4, 5] expected=[1, 2, 3, 4, 5]"
+      },
+      {
+        "check": "conversion_accounted",
+        "passed": true,
+        "detail": "raw=4407 normalized=4407 drops=0"
+      },
+      {
+        "check": "period_event_density",
+        "passed": true,
+        "detail": "minimum per period=max(8, nominal_period/120)"
+      },
+      {
+        "check": "period_span_coverage",
+        "passed": true,
+        "detail": "minimum per-period span coverage=70%"
+      },
+      {
+        "check": "shootout_kicks_recorded",
+        "passed": true,
+        "detail": "minimum kicks per team=3"
+      },
+      {
+        "check": "clock_monotonic_by_period",
+        "passed": true,
+        "detail": "event order is chronological by period"
+      }
+    ],
+    "confidence": 1.0,
+    "verified": true,
+    "notes": []
+  },
+  "coverage_level": "C1",
+  "score_reconciliation": {
+    "provider_score": "3-3",
+    "recorded_goals": "3-3",
+    "provider_home_score": 3,
+    "provider_away_score": 3,
+    "recorded_home_goals": 3,
+    "recorded_away_goals": 3,
+    "shootout_goals": {
+      "home": 4,
+      "away": 2
+    },
+    "consistent": true,
+    "note": "Provider index score and event-recorded goals agree."
+  },
+  "license_ref": "StatsBomb Public Data User Agreement (Standard Terms, last updated 8 September 2023) - https://github.com/statsbomb/open-data/blob/master/LICENSE.pdf",
+  "attribution_text": "Data provided by StatsBomb. Publications of analysis derived from this data must state the data source as StatsBomb and display the StatsBomb logo from their Media Pack (https://statsbomb.com/media-pack/)."
+}

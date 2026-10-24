@@ -318,6 +318,7 @@ def reduce_match(
     score = {"H": 0, "N": 0}
     shootout_score = {"H": 0, "N": 0}
     goals: list[dict] = []
+    own_goal_records: dict[tuple[int, float], dict] = {}
     last_t: float = -1.0
     last_period: int | None = None
     pending_restart: str | None = "H" if is_synthetic else None
@@ -578,12 +579,33 @@ def reduce_match(
         if kind == "own_goal":
             own_goal_for = "own goal for" in raw_outcome.lower().replace("_", " ")
             credited = t_mapped if own_goal_for else other(t_mapped)
-            if not is_shootout:
-                score[credited] += 1
-                goals.append({"event_id": row["id"], "team": credited, "t": t_val, "own_goal": True})
-            close_possession(t_val, "own_goal")
-            owner = holder = None
-            pending_restart = credited
+            # A provider records one own goal twice: once for the beneficiary
+            # ("Own Goal For") and once for the conceding side ("Own Goal
+            # Against"). Both carry the same clock and the same scorer, so the
+            # goal is counted once and the event that names the scorer becomes
+            # its evidence.
+            own_goal_key = (period, round(t_val, 3))
+            if own_goal_key in own_goal_records:
+                record = own_goal_records[own_goal_key]
+                if record.get("actor") in (None, "", "Unknown") and raw_actor not in (None, "", "Unknown"):
+                    record["event_id"] = row["id"]
+                    record["actor"] = raw_actor
+                    record["actor_name"] = raw_actor
+            else:
+                own_goal_records[own_goal_key] = {
+                    "event_id": row["id"],
+                    "team": credited,
+                    "t": t_val,
+                    "own_goal": True,
+                    "actor": raw_actor,
+                    "actor_name": raw_actor,
+                }
+                if not is_shootout:
+                    score[credited] += 1
+                    goals.append(own_goal_records[own_goal_key])
+                close_possession(t_val, "own_goal")
+                owner = holder = None
+                pending_restart = credited
         elif kind == "shot":
             goal = "goal" in raw_outcome.lower()
             if goal and is_shootout:

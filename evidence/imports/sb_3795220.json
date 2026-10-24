@@ -1,0 +1,204 @@
+{
+  "version": "statsbomb-corpus-import-v2",
+  "imported_at": "2026-10-24T09:56:18Z",
+  "match_id": "sb_3795220",
+  "provider": "statsbomb_open_data",
+  "provider_match_id": 3795220,
+  "competition": "UEFA Euro",
+  "season": "2020",
+  "stage": "semi_final",
+  "match_date": "2021-07-06",
+  "home_team": "Italy",
+  "away_team": "Spain",
+  "home_score": 1,
+  "away_score": 1,
+  "home_provider_team_id": "914",
+  "away_provider_team_id": "772",
+  "source_file": "data\\raw\\statsbomb\\events_3795220.json",
+  "source_sha256": "0f675fb093f0fe410bad61d131d85db305513a75c9b16375d38568bd0265a070",
+  "lineups_file": "data\\raw\\statsbomb\\lineups_3795220.json",
+  "lineups_sha256": "01c71d3e822bb16a5f096bcb33984141d81d9eab4888e8f68fec1a4df0ff38f8",
+  "target_file": "data\\datasets\\sb_3795220.json",
+  "target_sha256": "2a4049a0e2f3293d0723e56779980efd1a4c3cf2717ec62971c9b151c42a974b",
+  "raw_event_count": 4824,
+  "normalized_event_count": 4824,
+  "observed_end_seconds": 7761.952,
+  "expected_duration_seconds": 7800.0,
+  "reordered_events": [],
+  "completeness_status": "COMPLETE_VERIFIED",
+  "completeness": {
+    "status": "COMPLETE_VERIFIED",
+    "synthetic": false,
+    "source_declaration": "statsbomb_open_data",
+    "raw_event_count": 4824,
+    "normalized_event_count": 4824,
+    "conversion_drop_count": 0,
+    "drop_reasons": [],
+    "observed_periods": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "expected_periods": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "coverage_by_period": [
+      {
+        "period": 1,
+        "expected_start": 0,
+        "expected_end": 2700.0,
+        "observed_start": 0.0,
+        "observed_end": 2693.34,
+        "event_count": 1938,
+        "coverage": 0.998,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 2,
+        "expected_start": 2700.0,
+        "expected_end": 5400.0,
+        "observed_start": 2700.0,
+        "observed_end": 5585.13,
+        "event_count": 1870,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 3,
+        "expected_start": 5400.0,
+        "expected_end": 6300.0,
+        "observed_start": 5585.13,
+        "observed_end": 6493.47,
+        "event_count": 519,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 4,
+        "expected_start": 6300.0,
+        "expected_end": 7200.0,
+        "observed_start": 6493.47,
+        "observed_end": 7398.35,
+        "event_count": 475,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 5,
+        "expected_start": 7200.0,
+        "expected_end": 7800.0,
+        "observed_start": 7398.35,
+        "observed_end": 7761.95,
+        "event_count": 22,
+        "coverage": 0.606,
+        "event_density_ok": true,
+        "completeness_rule": "recorded_kicks",
+        "shootout_kicks_by_team": {
+          "914": 5,
+          "772": 4
+        },
+        "shootout_kicks_ok": true
+      }
+    ],
+    "expected_duration": 7800.0,
+    "observed_start": 0.0,
+    "observed_end": 7761.95,
+    "known_missing_segments": [],
+    "provider_consistency": true,
+    "integrity_checks": [
+      {
+        "check": "events_present",
+        "passed": true,
+        "detail": "4824 normalized events"
+      },
+      {
+        "check": "event_ids_present",
+        "passed": true,
+        "detail": "every event has an ID"
+      },
+      {
+        "check": "event_ids_unique",
+        "passed": true,
+        "detail": "duplicates=[]"
+      },
+      {
+        "check": "clock_in_bounds",
+        "passed": true,
+        "detail": "invalid=[]"
+      },
+      {
+        "check": "team_mapping_declared",
+        "passed": true,
+        "detail": "unmapped=[]"
+      },
+      {
+        "check": "periods_present",
+        "passed": true,
+        "detail": "observed=[1, 2, 3, 4, 5] expected=[1, 2, 3, 4, 5]"
+      },
+      {
+        "check": "conversion_accounted",
+        "passed": true,
+        "detail": "raw=4824 normalized=4824 drops=0"
+      },
+      {
+        "check": "period_event_density",
+        "passed": true,
+        "detail": "minimum per period=max(8, nominal_period/120)"
+      },
+      {
+        "check": "period_span_coverage",
+        "passed": true,
+        "detail": "minimum per-period span coverage=70%"
+      },
+      {
+        "check": "shootout_kicks_recorded",
+        "passed": true,
+        "detail": "minimum kicks per team=3"
+      },
+      {
+        "check": "clock_monotonic_by_period",
+        "passed": true,
+        "detail": "event order is chronological by period"
+      }
+    ],
+    "confidence": 1.0,
+    "verified": true,
+    "notes": []
+  },
+  "coverage_level": "C1",
+  "score_reconciliation": {
+    "provider_score": "1-1",
+    "recorded_goals": "1-1",
+    "provider_home_score": 1,
+    "provider_away_score": 1,
+    "recorded_home_goals": 1,
+    "recorded_away_goals": 1,
+    "shootout_goals": {
+      "home": 4,
+      "away": 2
+    },
+    "consistent": true,
+    "note": "Provider index score and event-recorded goals agree."
+  },
+  "license_ref": "StatsBomb Public Data User Agreement (Standard Terms, last updated 8 September 2023) - https://github.com/statsbomb/open-data/blob/master/LICENSE.pdf",
+  "attribution_text": "Data provided by StatsBomb. Publications of analysis derived from this data must state the data source as StatsBomb and display the StatsBomb logo from their Media Pack (https://statsbomb.com/media-pack/)."
+}
