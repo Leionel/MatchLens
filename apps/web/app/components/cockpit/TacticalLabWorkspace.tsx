@@ -461,7 +461,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
                                 <span className="seq-id-badge">{sq.sequence_id}</span>
                                 <div>
                                   <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>
-                                    {clock(sq.start_t)}–{clock(sq.end_t)} ({sq.duration}s) {sq.pass_count} {isZh ? "次传球" : "passes"}
+                                    {clock(sq.start_t)}–{clock(sq.end_t)} ({Number(sq.duration.toFixed(4))}s) {sq.pass_count} {isZh ? "次传球" : "passes"}
                                   </div>
                                   <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
                                     {isZh ? "净向前: " : "Net: "}{sq.territory_gained !== undefined ? `${sq.territory_gained > 0 ? `+${sq.territory_gained}` : sq.territory_gained}m` : `+${sq.progressive_distance}m`}

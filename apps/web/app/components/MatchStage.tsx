@@ -211,7 +211,7 @@ export function MatchStage({
 
   const currentAction = activeStep || selectedEvent || events.at(-1);
   const actionTime = currentAction
-    ? `${Math.floor(currentAction.t / 60).toString().padStart(2, "0")}:${(currentAction.t % 60).toString().padStart(2, "0")}`
+    ? `${Math.floor(currentAction.t / 60).toString().padStart(2, "0")}:${(currentAction.t % 60).toFixed(2).padStart(5, "0")}`
     : clockText;
 
   const ballCandidate = activeStep ? activeStep.end : selectedEvent ? selectedEvent.end : ball;

@@ -112,7 +112,9 @@ export const QuickRecoveryAnalysis: React.FC<QuickRecoveryAnalysisProps> = ({
     );
   }
 
-  const recoveryPct = Math.round(teamData.quick_recovery_rate * 100);
+  // The backend publishes quick_recovery_rate already in percent (39.9), so
+  // this is a one-decimal round, never another multiplication.
+  const recoveryPct = Math.round(teamData.quick_recovery_rate * 10) / 10;
   const thirds = teamData.spatial_distribution_thirds || { attacking: 0, middle: 0, defensive: 0 };
   const channels = teamData.spatial_distribution_channels || { left: 0, center: 0, right: 0 };
   const totalRec = teamData.quick_recoveries_count || 1;
@@ -150,26 +152,10 @@ export const QuickRecoveryAnalysis: React.FC<QuickRecoveryAnalysisProps> = ({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span
-              style={{
-                fontSize: 12,
-                fontWeight: 800,
-                padding: "2px 6px",
-                borderRadius: 4,
-                background: "color-mix(in srgb, var(--green-9) 15%, transparent)",
-                color: "var(--text-emerald)",
-                border: "0.5px solid color-mix(in srgb, var(--green-9) 30%, transparent)",
-              }}
-            >
-              BL-03 6s RECOVERY
-            </span>
             <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>
               {t.recoveryAnalysisTitle} ({teamData.team_name})
             </h3>
           </div>
-          <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 4 }}>
-            {t.recoveryAnalysisSubtitle}
-          </p>
         </div>
       </div>
 
