@@ -1,12 +1,12 @@
 {
   "version": "statsbomb-corpus-import-v2",
-  "imported_at": "2026-10-24T09:56:17Z",
+  "imported_at": "2026-10-24T12:53:49Z",
   "match_id": "sb_7580",
   "provider": "statsbomb_open_data",
   "provider_match_id": 7580,
   "competition": "FIFA World Cup",
   "season": "2018",
-  "stage": "quarter_final",
+  "stage": "round_of_16",
   "match_date": "2018-06-30",
   "home_team": "France",
   "away_team": "Argentina",
@@ -19,7 +19,7 @@
   "lineups_file": "data\\raw\\statsbomb\\lineups_7580.json",
   "lineups_sha256": "f463011a88a709f4bbe1c1132f68610c51ca4bc0e97c467a906e3201bd861874",
   "target_file": "data\\datasets\\sb_7580.json",
-  "target_sha256": "dc7b16549ff51a0ec266fd2cf983e66f1c8a78aa77fa08a27e6a3f718d7bb217",
+  "target_sha256": "553e3fd83e4c80815c4ddd5f76f5c180146fbbe77178da70b2e856c60ef05064",
   "raw_event_count": 3549,
   "normalized_event_count": 3549,
   "observed_end_seconds": 5823.92,
@@ -114,7 +114,7 @@
       {
         "check": "period_event_density",
         "passed": true,
-        "detail": "minimum per period=max(8, nominal_period/120)"
+        "detail": "minimum per playing period=max(8, nominal_period/120); a shoot-out needs recorded kicks"
       },
       {
         "check": "period_span_coverage",

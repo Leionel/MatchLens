@@ -1,0 +1,156 @@
+{
+  "version": "statsbomb-corpus-import-v2",
+  "imported_at": "2026-10-24T12:53:54Z",
+  "match_id": "sb_3869486",
+  "provider": "statsbomb_open_data",
+  "provider_match_id": 3869486,
+  "competition": "FIFA World Cup",
+  "season": "2022",
+  "stage": "quarter_final",
+  "match_date": "2022-12-10",
+  "home_team": "Morocco",
+  "away_team": "Portugal",
+  "home_score": 1,
+  "away_score": 0,
+  "home_provider_team_id": "788",
+  "away_provider_team_id": "780",
+  "source_file": "data\\raw\\statsbomb\\events_3869486.json",
+  "source_sha256": "455127b456021593874476ee8b5dad01b0166b8da814c095300b6ed608a08993",
+  "lineups_file": "data\\raw\\statsbomb\\lineups_3869486.json",
+  "lineups_sha256": "78659c3285c14d81ea21598b96958345c51107680de79f28b9359f4f7b8c2490",
+  "target_file": "data\\datasets\\sb_3869486.json",
+  "target_sha256": "392389e7c3723420dfd9601a6a24fb04e231b6dd4fa62fb9e3ccf4ef06859e49",
+  "raw_event_count": 3381,
+  "normalized_event_count": 3381,
+  "observed_end_seconds": 6040.876,
+  "expected_duration_seconds": 5400.0,
+  "reordered_events": [],
+  "completeness_status": "COMPLETE_VERIFIED",
+  "completeness": {
+    "status": "COMPLETE_VERIFIED",
+    "synthetic": false,
+    "source_declaration": "statsbomb_open_data",
+    "raw_event_count": 3381,
+    "normalized_event_count": 3381,
+    "conversion_drop_count": 0,
+    "drop_reasons": [],
+    "observed_periods": [
+      1,
+      2
+    ],
+    "expected_periods": [
+      1,
+      2
+    ],
+    "coverage_by_period": [
+      {
+        "period": 1,
+        "expected_start": 0,
+        "expected_end": 2700.0,
+        "observed_start": 0.0,
+        "observed_end": 2858.33,
+        "event_count": 1697,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 2,
+        "expected_start": 2700.0,
+        "expected_end": 5400.0,
+        "observed_start": 2858.33,
+        "observed_end": 6040.88,
+        "event_count": 1684,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      }
+    ],
+    "expected_duration": 5400.0,
+    "observed_start": 0.0,
+    "observed_end": 6040.88,
+    "known_missing_segments": [],
+    "provider_consistency": true,
+    "integrity_checks": [
+      {
+        "check": "events_present",
+        "passed": true,
+        "detail": "3381 normalized events"
+      },
+      {
+        "check": "event_ids_present",
+        "passed": true,
+        "detail": "every event has an ID"
+      },
+      {
+        "check": "event_ids_unique",
+        "passed": true,
+        "detail": "duplicates=[]"
+      },
+      {
+        "check": "clock_in_bounds",
+        "passed": true,
+        "detail": "invalid=[]"
+      },
+      {
+        "check": "team_mapping_declared",
+        "passed": true,
+        "detail": "unmapped=[]"
+      },
+      {
+        "check": "periods_present",
+        "passed": true,
+        "detail": "observed=[1, 2] expected=[1, 2]"
+      },
+      {
+        "check": "conversion_accounted",
+        "passed": true,
+        "detail": "raw=3381 normalized=3381 drops=0"
+      },
+      {
+        "check": "period_event_density",
+        "passed": true,
+        "detail": "minimum per playing period=max(8, nominal_period/120); a shoot-out needs recorded kicks"
+      },
+      {
+        "check": "period_span_coverage",
+        "passed": true,
+        "detail": "minimum per-period span coverage=70%"
+      },
+      {
+        "check": "shootout_kicks_recorded",
+        "passed": true,
+        "detail": "minimum kicks per team=3"
+      },
+      {
+        "check": "clock_monotonic_by_period",
+        "passed": true,
+        "detail": "event order is chronological by period"
+      }
+    ],
+    "confidence": 1.0,
+    "verified": true,
+    "notes": []
+  },
+  "coverage_level": "C1",
+  "score_reconciliation": {
+    "provider_score": "1-0",
+    "recorded_goals": "1-0",
+    "provider_home_score": 1,
+    "provider_away_score": 0,
+    "recorded_home_goals": 1,
+    "recorded_away_goals": 0,
+    "shootout_goals": {
+      "home": 0,
+      "away": 0
+    },
+    "consistent": true,
+    "note": "Provider index score and event-recorded goals agree."
+  },
+  "license_ref": "StatsBomb Public Data User Agreement (Standard Terms, last updated 8 September 2023) - https://github.com/statsbomb/open-data/blob/master/LICENSE.pdf",
+  "attribution_text": "Data provided by StatsBomb. Publications of analysis derived from this data must state the data source as StatsBomb and display the StatsBomb logo from their Media Pack (https://statsbomb.com/media-pack/)."
+}

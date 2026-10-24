@@ -1,9 +1,9 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { CockpitState, PerspectiveId, InspectorPayload } from "./types";
 import { Scoreboard } from "../Scoreboard";
-import { OAAITimeline } from "../OAAITimeline";
+import { OAAITimeline, buildPeriodBands } from "../OAAITimeline";
 import { MatchStage } from "../MatchStage";
 import { EventFeed } from "../EventFeed";
 import { AttackingChannelAnalysis } from "../AttackingChannelAnalysis";
@@ -85,6 +85,13 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
   const homeTeam = state.teams?.H || "Harbor FC";
   const awayTeam = state.teams?.N || "Northbridge United";
 
+  // The period structure is read from the event stream, so a match that went
+  // to extra time shows the extra time as its own stretch of momentum.
+  const periodBands = useMemo(
+    () => buildPeriodBands(state.events, isZh),
+    [state.events, isZh]
+  );
+
   // xG is shown only when a receipt actually exists. No per-shot 0.12 default.
   const receiptXgH = state.receipts?.["H.xg.cumulative"]?.value;
   const receiptXgN = state.receipts?.["N.xg.cumulative"]?.value;
@@ -147,6 +154,8 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
         currentTime={state.at}
         homeTeamName={homeTeam}
         awayTeamName={awayTeam}
+        matchDuration={state.coverage?.format_seconds}
+        periods={periodBands}
         locale={locale}
         onSeek={(tVal) => onSeek(Math.round(tVal))}
         onSelectEvent={(eventId) => {

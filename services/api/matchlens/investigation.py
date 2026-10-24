@@ -77,6 +77,9 @@ class ToolReceipt(BaseModel):
     summary: str = ""
     duration_ms: float = 0.0
     error: str | None = None
+    # None for planner-issued receipts; "Analyst"/"Verifier" when a model agent
+    # selected the tool through the registry.
+    role: str | None = None
 
 
 class Finding(BaseModel):
@@ -143,8 +146,11 @@ class InvestigationPlan(BaseModel):
     scope: InvestigationScope
     state: InvestigationState
     state_history: list[dict[str, Any]] = Field(default_factory=list)
-    execution_mode: Literal["deterministic_planner"] = "deterministic_planner"
-    agent_status: Literal["not_run", "run"] = "not_run"
+    execution_mode: Literal["deterministic_planner", "maf_agent"] = "deterministic_planner"
+    agent_status: Literal["not_run", "run", "failed"] = "not_run"
+    agent_run_id: str | None = None
+    agent_error: str | None = None
+    agent_run: dict[str, Any] | None = None
     dataset_revision: str | None
     coverage: dict[str, Any]
     completeness: dict[str, Any] = Field(default_factory=dict)
@@ -183,6 +189,9 @@ class InvestigationRun:
 
 def classify_intent(question: str, focus_type: str) -> tuple[IntentType, float]:
     text = (question or "").strip().lower()
+    if focus_type == "cross_match_diff":
+        # A cross-match diff focus is a comparison request by construction.
+        return "COMPARE_MATCHES", 0.9
     if not text:
         if focus_type in ("sequence",):
             return "EXPLAIN_SEQUENCE", 0.55
@@ -373,7 +382,7 @@ class InvestigationPlanner:
             focus_id=focus_id,
             start_s=start_s,
             end_s=end_s,
-            metric_id=focus_id if focus_type == "metric" else None,
+            metric_id=focus_id if focus_type in ("metric", "cross_match_diff") else None,
             player_id=focus_id if focus_type == "player" else None,
             sequence_id=focus_id if focus_type == "sequence" else None,
             zone_id=focus_id if focus_type == "zone" else None,
@@ -441,10 +450,14 @@ class InvestigationPlanner:
             assertion = cls._choose_assertion(metrics, focus_events, intent)
             use("find_counterevidence", assertion=assertion, team=team)
         if intent == "COMPARE_MATCHES":
-            use("compare_matches", match_ids=scope.compare_match_ids, metric_id="shots")
+            use(
+                "compare_matches",
+                match_ids=scope.compare_match_ids,
+                metric_id=(focus_id if focus_type == "cross_match_diff" and focus_id else "shots"),
+            )
         if focus_type == "player" and focus_id:
             use("get_player_actions", player_id=focus_id, start=start_s, end=end_s, limit=20)
-        if focus_type == "zone":
+        if focus_type in ("zone", "shot_location"):
             use("get_spatial_distribution", team=team)
         if intent in ("WHO_CONTRIBUTED", "FIND_COUNTEREVIDENCE", "WHY_CHANGE"):
             use("get_attacking_channels", team=team)
@@ -560,14 +573,21 @@ class InvestigationPlanner:
             return focus_events, sequence, float(sequence.get("end_t", as_of)), f"sequence {focus_id}"
 
         if focus_type in ("moment", "oaai_point"):
-            from .oaai import compute_oaai
+            # The OAAI pipeline is the expensive part of an investigation, so it
+            # runs once per plan and is handed to every later consumer through
+            # the tool context instead of being recomputed per tool call.
+            oaai = registry.context.metadata.get("oaai_timeline")
+            if oaai is None:
+                from .oaai import compute_oaai
 
-            oaai = compute_oaai(
-                events,
-                smoothing_mode="causal",
-                t_end=as_of,
-                dead_intervals=snapshot.data.get("dead_intervals", []),
-            )
+                oaai = compute_oaai(
+                    events,
+                    smoothing_mode="causal",
+                    t_end=as_of,
+                    dead_intervals=snapshot.data.get("dead_intervals", []),
+                    xt_model=registry.context.xt_model,
+                )
+                registry.context.metadata["oaai_timeline"] = oaai
             points = oaai.get("change_points", [])
             if focus_id:
                 point = next((p for p in points if p.get("change_point_id") == focus_id), None)
@@ -612,6 +632,49 @@ class InvestigationPlanner:
                 raise ToolError("invalid_focus_zone")
             zone_events = [e for e in events if str(e.get("id")) in set(cell.get("event_ids", []))]
             return zone_events, None, as_of, f"zone {focus_id}"
+
+        if focus_type == "shot_location":
+            # focus_id is either "evt:<shot event id>" or "loc:<x>,<y>".
+            if not focus_id:
+                raise ToolError("shot_focus_required")
+            if str(focus_id).startswith("evt:"):
+                event = next(
+                    (e for e in events if str(e.get("id")) == str(focus_id)[4:]), None
+                )
+                if event is None or event.get("kind") != "shot":
+                    raise ToolError("invalid_focus_shot")
+                return [event], None, float(event.get("t", as_of)), f"shot {str(focus_id)[4:]}"
+            try:
+                coords = str(focus_id).split(":", 1)[1].split(",", 1)
+                fx, fy = float(coords[0]), float(coords[1])
+            except (ValueError, IndexError):
+                raise ToolError("invalid_focus_shot_location")
+            near: list[dict] = []
+            for e in events:
+                if e.get("kind") != "shot":
+                    continue
+                # The shot position is where the shot was taken; the end
+                # coordinates are the ball's destination and can sit meters
+                # away (or in the goal).
+                pt = e.get("start") or e.get("end")
+                if not pt:
+                    continue
+                if (float(pt[0]) - fx) ** 2 + (float(pt[1]) - fy) ** 2 <= 25.0:
+                    near.append(e)
+            if not near:
+                raise ToolError("no_shot_at_location")
+            def _dist(e: dict) -> float:
+                pt = e.get("start") or e.get("end")
+                return (float(pt[0]) - fx) ** 2 + (float(pt[1]) - fy) ** 2
+            near.sort(key=_dist)
+            return near[:10], None, float(near[0].get("t", as_of)), f"shot near ({fx:.0f}, {fy:.0f})"
+
+        if focus_type == "cross_match_diff":
+            # The focus names the compared metric; the match pair lives in
+            # scope.compare_match_ids and is queried by the compare tool.
+            if not focus_id:
+                raise ToolError("metric_id_required")
+            return [], None, as_of, f"cross-match diff {focus_id}"
 
         if focus_type == "chart":
             return [], None, as_of, "chart selection"
@@ -936,6 +999,358 @@ class InvestigationPlanner:
         )
 
 
+class AgentInvestigationError(Exception):
+    """A real-agent investigation failed; carries the sanitized error code."""
+
+    def __init__(self, run_id: str, code: str):
+        super().__init__(code)
+        self.run_id = run_id
+        self.code = code
+
+
+async def run_maf_investigation(
+    *,
+    runner: Any,
+    run_store: Any,
+    match_id: str,
+    snapshot: Snapshot,
+    state: dict,
+    team: str = "H",
+    focus_type: str = "moment",
+    focus_id: str | None = None,
+    question: str = "",
+    compare_match_ids: list[str] | None = None,
+    xt_model: Any = None,
+    deadline: float = 45.0,
+) -> InvestigationPlan:
+    """Real MAF agentic investigation (roadmap C-06).
+
+    The Analyst selects registered tools dynamically through
+    ``FootballToolRegistry`` under the planner contract, proposes one typed
+    claim draft, and the Verifier independently inspects it with its own
+    bounded registry before the online publication gate decides. The returned
+    plan is the same ``InvestigationPlan`` model the deterministic planner
+    emits, so both execution modes are directly comparable. Failures degrade
+    to the deterministic planner and are reported honestly through
+    ``agent_status``/``agent_error``; no synthetic agent output is ever
+    substituted.
+    """
+    import asyncio
+    import secrets
+
+    from .agents import PROMPT_VERSION, Run, WireDraft, WireReview
+    from .budget import BudgetExceeded
+    from .contracts import ClaimDraft, VerifierDecision, publication_gate, validate_draft
+
+    started = time.perf_counter()
+    team = "N" if team == "N" else "H"
+    events = state.get("events", [])
+    coverage = snapshot.data.get("coverage", {})
+    completeness = snapshot.data.get("completeness", {}) or {}
+    dataset_revision = snapshot.data.get("dataset_revision") or snapshot.data.get("data_version")
+    intent, confidence = classify_intent(question, focus_type)
+    as_of = int(snapshot.data.get("as_of", 0))
+    investigation_id = "inv-" + _hash({
+        "snapshot": snapshot.id,
+        "focus_type": focus_type,
+        "focus": focus_id,
+        "team": team,
+        "question": question,
+        "intent": intent,
+    })
+
+    def deterministic_plan() -> InvestigationPlan:
+        return InvestigationPlanner.run(
+            match_id=match_id,
+            snapshot=snapshot,
+            state=state,
+            team=team,
+            focus_type=focus_type,
+            focus_id=focus_id,
+            question=question,
+            compare_match_ids=compare_match_ids,
+            xt_model=xt_model,
+        )
+
+    if intent == "UNKNOWN":
+        plan = deterministic_plan()
+        plan.agent_error = "agent_mode_unsupported_intent"
+        plan.unresolved.append(
+            "Agent mode requires a supported football intent; the deterministic planner produced this plan."
+        )
+        return plan
+
+    run_id = "arun-" + secrets.token_hex(8)
+    maf_run = Run(run_id, snapshot, match_id=match_id,
+                  dataset_revision=str(dataset_revision or ""), focus_team=team)
+    maf_run.audit.append({
+        "type": "trigger", "source": "investigation", "investigation_id": investigation_id,
+        "as_of": as_of, "intent": intent, "match_id": match_id,
+        "dataset_revision": dataset_revision,
+    })
+    record = run_store.create(
+        run_id=run_id,
+        trigger="investigation",
+        match_id=match_id,
+        snapshot_id=snapshot.id,
+        investigation_id=investigation_id,
+        dataset_revision=dataset_revision,
+        model="deepseek-flash",
+        prompt_version=PROMPT_VERSION,
+        audit=maf_run.audit,
+    )
+
+    def agent_summary() -> dict[str, Any]:
+        fresh = run_store.get(run_id)
+        return {
+            "run_id": run_id,
+            "state": fresh.state,
+            "state_history": fresh.state_history,
+            "requests": fresh.requests,
+            "model": fresh.model,
+            "prompt_version": fresh.prompt_version,
+            "accepted_count": fresh.accepted_count,
+            "rejected_count": fresh.rejected_count,
+            "error": fresh.error,
+        } if fresh else {"run_id": run_id}
+
+    receipts: list[ToolReceipt] = []
+    plan_run = InvestigationRun(investigation_id)
+    plan_run.transition("PLANNING", "intent and scope")
+    plan_run.transition("QUERYING", "maf agent tool plan")
+
+    try:
+        async with asyncio.timeout(deadline):
+            run_store.transition(run_id, "ANALYSING", "analyst stage with dynamic tool selection")
+
+            # Scope resolution stays deterministic (planner contract): the typed
+            # scope is fixed before the model selects any tool.
+            scope_registry = FootballToolRegistry(
+                ToolContext(match_id=match_id, snapshot=snapshot, state=state, team=team, xt_model=xt_model),
+                max_calls=18,
+            )
+
+            def use(tool: str, **args) -> ToolCall | None:
+                try:
+                    call = scope_registry.call(tool, args)
+                except ToolError as exc:
+                    receipts.append(ToolReceipt(
+                        sequence=len(receipts) + 1, tool=tool, args=args, status="skipped",
+                        snapshot_id=snapshot.id, dataset_revision=dataset_revision,
+                        summary=f"{tool}: {exc.code}", error=exc.code,
+                    ))
+                    return None
+                receipts.append(ToolReceipt(
+                    sequence=len(receipts) + 1, tool=call.tool, args=call.args, status=call.status,  # type: ignore[arg-type]
+                    snapshot_id=snapshot.id, dataset_revision=dataset_revision,
+                    result_sha256=call.result_sha256, summary=call.summary,
+                    duration_ms=call.duration_ms, error=call.error,
+                ))
+                return call
+
+            use("get_match_context")
+            use("check_data_sufficiency", start=0, end=as_of)
+            focus_events, focus_sequence, focus_time, focus_label = InvestigationPlanner._resolve_focus(
+                state=state, snapshot=snapshot, focus_type=focus_type, focus_id=focus_id,
+                team=team, intent=intent, registry=scope_registry, use=use,
+            )
+            start_s, end_s = _window_for(focus_time)
+            scope = InvestigationScope(
+                match_id=match_id, team=team, focus_type=focus_type, focus_id=focus_id,
+                start_s=start_s, end_s=end_s,
+                metric_id=focus_id if focus_type in ("metric", "cross_match_diff") else None,
+                player_id=focus_id if focus_type == "player" else None,
+                sequence_id=focus_id if focus_type == "sequence" else None,
+                zone_id=focus_id if focus_type == "zone" else None,
+                compare_match_ids=list(compare_match_ids or []),
+            )
+            if intent == "COMPARE_MATCHES" and not scope.compare_match_ids:
+                plan = deterministic_plan()
+                plan.agent_error = "agent_mode_missing_compare_ids"
+                plan.unresolved.append("Cross-match comparison requires explicit match IDs; no model was dispatched.")
+                run_store.finish(run_id, state="FAILED", reason="missing_compare_match_ids",
+                                 error="missing_compare_match_ids", origin="not_run",
+                                 audit_entries=maf_run.audit, requests=maf_run.requests)
+                return plan
+
+            analyst_prompt = (
+                f'Investigate this football question: "{question}"\n'
+                f"Focus: {focus_type} {focus_id or '(current moment)'} ({focus_label}). "
+                f"Team under analysis: {team}. Classified intent: {intent}. "
+                f"Snapshot as_of {as_of}s; standard comparison window {int(start_s)}s-{int(end_s)}s. "
+                f"Coverage: continuous={coverage.get('continuous')}, "
+                f"events={coverage.get('event_count')}, completeness={completeness.get('status', 'unknown')}.\n"
+                "Call get_evidence first. Then choose and call the registered investigation tools you "
+                "need for this question - metric observations, window comparison, event search, "
+                "possession sequence, player actions, spatial distribution, attacking channels, OAAI "
+                "contributors, counterevidence, data sufficiency - within their budgets. Analyze the "
+                "returned receipts, then return the flat WireDraft JSON for the one best supported "
+                "assertion. Never assert off-ball structure or causality."
+            )
+            analyst_registry = FootballToolRegistry(
+                ToolContext(match_id=match_id, snapshot=snapshot, state=state, team=team, xt_model=xt_model),
+                max_calls=12,
+            )
+            raw = await runner.stage_with_registry(maf_run, "Analyst", analyst_registry, analyst_prompt, max_function_calls=6)
+            draft = WireDraft.model_validate_json(raw).canonical()
+            validate_draft(draft, snapshot)
+            maf_run.draft = draft.model_dump()
+            maf_run.audit.append({"type": "handoff", "from": "Analyst", "to": "Verifier", "snapshot_id": snapshot.id,
+                                  "claim_ids": [c.id for c in draft.claims],
+                                  "draft_sha256": hashlib.sha256(json.dumps(maf_run.draft, sort_keys=True).encode()).hexdigest()})
+            run_store.attach(run_id, maf_run.audit, maf_run.requests)
+            run_store.transition(run_id, "HANDOFF", "analyst draft accepted; verifier handoff")
+
+            run_store.transition(run_id, "VERIFYING", "verifier stage with independent registry")
+            verifier_prompt = (
+                "Independently verify the handed-off investigation draft.\n"
+                f"Draft: {json.dumps(maf_run.draft, separators=(',', ':'))}\n"
+                "Call get_evidence and use the registered investigation tools you need - including "
+                "find_counterevidence and query_metric - to check the assertion, scope and refs against "
+                "the frozen receipts. Then return the flat WireReview JSON."
+            )
+            verifier_registry = FootballToolRegistry(
+                ToolContext(match_id=match_id, snapshot=snapshot, state=state, team=team, xt_model=xt_model),
+                max_calls=6,
+            )
+            raw_review = await runner.stage_with_registry(maf_run, "Verifier", verifier_registry, verifier_prompt, max_function_calls=4)
+            review = WireReview.model_validate_json(raw_review).canonical()
+            maf_run.review = review.model_dump()
+            gated = publication_gate(ClaimDraft.model_validate(maf_run.draft), review, snapshot, maf_run.audit)
+    except asyncio.CancelledError:
+        run_store.attach(run_id, maf_run.audit, maf_run.requests)
+        run_store.transition(run_id, "CANCELLED", "investigation cancelled")
+        raise
+    except TimeoutError:
+        run_store.finish(run_id, state="FAILED", reason="analysis_timeout", error="analysis_timeout",
+                         origin="live_model", audit_entries=maf_run.audit, requests=maf_run.requests)
+        raise AgentInvestigationError(run_id, "analysis_timeout") from None
+    except BudgetExceeded:
+        run_store.finish(run_id, state="FAILED", reason="inference_budget_exhausted", error="inference_budget_exhausted",
+                         origin="live_model", audit_entries=maf_run.audit, requests=maf_run.requests)
+        raise AgentInvestigationError(run_id, "inference_budget_exhausted") from None
+    except AgentInvestigationError:
+        raise
+    except Exception as exc:
+        code = "invalid_agent_output" if isinstance(exc, ValueError) else "analysis_failed"
+        run_store.finish(run_id, state="FAILED", reason=code, error=code,
+                         origin="live_model", audit_entries=maf_run.audit, requests=maf_run.requests)
+        raise AgentInvestigationError(run_id, code) from None
+
+    # ------------------------------------------------------- plan assembly
+    for registry, role in ((analyst_registry, "Analyst"), (verifier_registry, "Verifier")):
+        for call in registry.calls:
+            receipts.append(ToolReceipt(
+                sequence=len(receipts) + 1, tool=call.tool, args=call.args, status=call.status,
+                snapshot_id=snapshot.id, dataset_revision=dataset_revision,
+                result_sha256=call.result_sha256, summary=call.summary,
+                duration_ms=call.duration_ms, error=call.error, role=role,
+            ))
+
+    plan_run.transition("EVIDENCE_REVIEW", f"{len(receipts)} tool receipts")
+    metrics: dict[str, Any] = {}
+    ledger: dict[str, Any] | None = None
+    selected: list[str] = []
+    for call in analyst_registry.calls + verifier_registry.calls:
+        if call.tool == "query_metric" and call.status == "ok" and isinstance(call.result, dict):
+            key = f"{call.args.get('metric_id')}.{call.args.get('window', 'current')}"
+            metrics[key] = call.result
+            if call.args.get("metric_id") not in selected:
+                selected.append(call.args.get("metric_id"))
+        if call.tool == "explain_oaai_contributors" and call.status == "ok" and isinstance(call.result, dict):
+            ledger = call.result
+    findings = InvestigationPlanner._findings(
+        snapshot=snapshot, team=team, focus_label=focus_label, focus_events=focus_events,
+        focus_sequence=focus_sequence, metrics=metrics, ledger=ledger,
+        coverage=coverage, completeness=completeness,
+    )
+    plan_run.transition("HYPOTHESIS_FORMED", f"{len(findings)} findings")
+    explanations = InvestigationPlanner._explanations(metrics, ledger, focus_events, coverage)
+    plan_run.transition("COUNTEREVIDENCE_CHECK", "verifier review and rival hypotheses")
+
+    accepted = gated.get("accepted", [])
+    rejected = gated.get("rejected", [])
+    if accepted:
+        card = accepted[0]
+        gate = GatePreview(
+            assertion=card.get("assertion", "none"),
+            refs=list(card.get("refs", [])),
+            status="approved" if card.get("verdict") == "publish" else "disputed",
+            violations=[],
+            statement=card.get("analyst") or card.get("fan", ""),
+            claim_level=int(card.get("claim_level", 2)),
+            persisted=False,
+        )
+    elif rejected:
+        gate = GatePreview(
+            assertion=rejected[0].get("assertion", "none"),
+            refs=[],
+            status="rejected",
+            violations=[f"publication_gate: {rejected[0].get('gate', 'rejected')}"],
+            statement=rejected[0].get("reason", ""),
+            claim_level=2,
+            persisted=False,
+        )
+    else:
+        gate = GatePreview(assertion="none", refs=[], status="not_formed")
+
+    run_store.attach(run_id, maf_run.audit, maf_run.requests)
+    run_store.transition(run_id, "GATED", "publication gate executed")
+    if gate.status in ("approved", "disputed"):
+        plan_run.transition("VERIFICATION", "publication gate preview")
+        plan_run.transition("APPROVED" if gate.status == "approved" else "QUALIFIED", "publication gate verdict")
+        final_state: InvestigationState = "APPROVED" if gate.status == "approved" else "QUALIFIED"
+        run_store.finish(run_id, state="GATED", reason="gate verdict recorded; awaiting explicit user promotion",
+                         origin="live_model", accepted_count=len(accepted), rejected_count=len(rejected),
+                         audit_entries=maf_run.audit, requests=maf_run.requests)
+    else:
+        plan_run.transition("VERIFICATION", "publication gate preview")
+        plan_run.transition("WITHHELD", "publication gate rejected or withheld the draft")
+        final_state = "WITHHELD"
+        run_store.transition(run_id, "WITHHELD", "publication gate rejected or withheld the draft")
+
+    unresolved = [
+        "Chance quality requires a calibrated xG model.",
+        "Cross-match base rates require complete, comparable matches.",
+    ]
+    if coverage.get("continuous") is False:
+        unresolved.append("Partial event coverage: unobserved intervals remain Unknown.")
+    if any(explanation.status == "insufficient_evidence" for explanation in explanations):
+        unresolved.append("At least one candidate explanation lacks the evidence needed to test it.")
+
+    plan = InvestigationPlanner._finish(
+        run=plan_run,
+        investigation_id=investigation_id,
+        match_id=match_id,
+        snapshot=snapshot,
+        team=team,
+        question=question,
+        intent=intent,
+        confidence=confidence,
+        focus_type=focus_type,
+        focus_id=focus_id,
+        scope=scope,
+        dataset_revision=dataset_revision,
+        coverage=coverage,
+        completeness=completeness,
+        receipts=receipts,
+        findings=findings,
+        explanations=explanations,
+        gate=gate,
+        selected=selected,
+        unresolved=unresolved,
+        required_scope=[],
+        started=started,
+        state=final_state,
+        ledger=ledger,
+    )
+    plan.execution_mode = "maf_agent"
+    plan.agent_status = "run"
+    plan.agent_run_id = run_id
+    plan.agent_run = agent_summary()
+    return plan
+
+
 class InvestigationStore:
     """Small durable store for pending investigation plans."""
 
@@ -974,6 +1389,26 @@ class InvestigationStore:
 
     def get(self, investigation_id: str) -> InvestigationPlan | None:
         return self.plans.get(investigation_id)
+
+    def list(self, *, match_id: str | None = None, limit: int = 50) -> list[InvestigationPlan]:
+        """Saved investigations, newest first, optionally scoped to one match.
+
+        Recency comes from the first state transition (creation time); plans
+        from older store versions without a timestamp sort last.
+        """
+        def created(p: InvestigationPlan) -> float:
+            for entry in p.state_history:
+                at = entry.get("at")
+                if isinstance(at, (int, float)):
+                    return float(at)
+            return 0.0
+
+        plans = [
+            p for p in self.plans.values()
+            if match_id is None or p.match_id == match_id
+        ]
+        plans.sort(key=created, reverse=True)
+        return plans[:max(0, limit)]
 
     def cancel(self, investigation_id: str) -> InvestigationPlan:
         plan = self.plans.get(investigation_id)

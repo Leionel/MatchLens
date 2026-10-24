@@ -22,6 +22,7 @@ from typing import Literal
 
 from .agents import AgentRunner, Run, PROMPT_VERSION
 from .budget import BudgetLedger
+from .runstore import TERMINAL_STATES
 from .contracts import (
     ChallengeRequest,
     ClaimDraft,
@@ -46,7 +47,7 @@ from .football import (
     metric_receipts,
     reduce_match,
 )
-from .oaai import compute_oaai, smooth_oaai_timeline, OAAIConfig
+from .oaai import compute_oaai, smooth_oaai_timeline, chart_oaai_payload, OAAIConfig
 from .gate import publication_gate_2_0
 from .metrics import (
     MetricsService,
@@ -266,8 +267,10 @@ class Engine:
         self.runner = AgentRunner(key, self.ledger)
         from .registry import ClaimRegistry
         from .investigation import InvestigationStore
+        from .runstore import AgentRunStore
         self.registry = ClaimRegistry(runtime / "claims.json")
         self.investigations = InvestigationStore(runtime / "investigations.json")
+        self.agent_runs = AgentRunStore(runtime / "agent_runs.json")
         self.auto_enabled = os.getenv("MATCHLENS_AUTO_ANALYSE", "0") == "1"
         self.auto_limit = min(2, max(0, int(os.getenv("MATCHLENS_AUTO_RUNS_PER_SESSION", "2"))))
         self.admissions: set[str] = set()
@@ -605,7 +608,10 @@ class Engine:
             exp_data = {
                 "sequences": sequences,
                 "tactical": tactical,
-                "oaai": oaai_data,
+                # The chart receives a size-bounded copy of the timeline. The
+                # registry comparison above was computed on the full
+                # resolution timeline and is carried over unchanged.
+                "oaai": chart_oaai_payload(oaai_data),
                 "quick_recoveries": quick_rec,
                 "density_differential": density_diff,
                 "attacking_channels": channels,
@@ -704,9 +710,40 @@ class Engine:
         self.admissions.add(run.id)
         s.run_info = {"run_id": run.id, "status": "queued", "as_of": snap.data["as_of"], "epoch": s.epoch}
         s.revision += 1
+        # A lifecycle record exists only when a model run is actually possible;
+        # deterministic fallbacks are not agent runs.
+        if self.runner.key:
+            self.agent_runs.create(
+                run_id=run.id,
+                trigger=trigger,  # type: ignore[arg-type]
+                match_id=run.match_id,
+                snapshot_id=snap.id,
+                model="deepseek-flash",
+                prompt_version=PROMPT_VERSION,
+                dataset_revision=run.dataset_revision,
+                epoch=s.epoch,
+                audit=run.audit,
+            )
         s.task = asyncio.create_task(self.execute(s, snap, s.epoch, run))
+
+        def close_lifecycle(task: asyncio.Task):
+            self.admissions.discard(run.id)
+            # A task that never reached execute's result mapping (cancelled
+            # before the first step, or crashed) must not leave an ambiguous
+            # non-terminal record behind.
+            record = self.agent_runs.get(run.id) if self.runner.key else None
+            if record is None or record.state in TERMINAL_STATES:
+                return
+            if task.cancelled():
+                self.agent_runs.cancel(run.id, reason="cancelled before completion")
+            elif task.exception() is not None:
+                self.agent_runs.finish(run.id, state="FAILED", reason="run_task_crashed",
+                                       error="run_task_crashed", audit_entries=record.audit)
+            else:
+                self.agent_runs.cancel(run.id, reason="run task ended without terminal transition")
+
         # Cancellation can happen before the coroutine reaches its finally.
-        s.task.add_done_callback(lambda _: self.admissions.discard(run.id))
+        s.task.add_done_callback(close_lifecycle)
         return True
 
     def schedule_auto(self, s: Session, moments: list[dict]):
@@ -728,11 +765,30 @@ class Engine:
 
     async def execute(self, s: Session, snapshot: Snapshot, epoch: int, run: Run):
         result = None
+        def lifecycle_record():
+            return self.agent_runs.get(run.id) if self.runner.key else None
+
+        def finish_lifecycle(state, reason, **kwargs):
+            record = lifecycle_record()
+            if record is not None and record.state not in TERMINAL_STATES:
+                self.agent_runs.finish(run.id, state=state, reason=reason, **kwargs)
+
         async def progress(status: str):
             if epoch != s.epoch:
                 raise asyncio.CancelledError()
             s.run_info = {"run_id": run.id, "status": status, "as_of": snapshot.data["as_of"], "epoch": epoch}
             s.revision += 1
+            if not lifecycle_record():
+                return
+            record = self.agent_runs.get(run.id)
+            if status == "analysing":
+                self.agent_runs.attach(run.id, run.audit, run.requests)
+                self.agent_runs.transition(run.id, "ANALYSING", "analyst stage dispatch")
+            elif status == "verifying" and record is not None:
+                if record.state == "ANALYSING":
+                    self.agent_runs.transition(run.id, "HANDOFF", "analyst draft handed to verifier")
+                self.agent_runs.attach(run.id, run.audit, run.requests)
+                self.agent_runs.transition(run.id, "VERIFYING", "verifier stage dispatch")
         try:
             # Queue time is bounded separately from model time.
             async with asyncio.timeout(5):
@@ -768,6 +824,36 @@ class Engine:
                 s.cache[snapshot.id] = result
                 s.run_info = {"run_id": run.id, "status": result["status"], "as_of": result["as_of"], "epoch": epoch}
                 s.revision += 1
+                if result.get("status") == "completed":
+                    if lifecycle_record():
+                        # A completed run reached the gate even if its role
+                        # stages never emitted verifying progress; walk the
+                        # bounded path instead of jumping across the machine.
+                        record = self.agent_runs.get(run.id)
+                        walk = {
+                            "QUEUED": ["ANALYSING", "HANDOFF", "VERIFYING"],
+                            "ANALYSING": ["HANDOFF", "VERIFYING"],
+                            "TOOL_WAIT": ["ANALYSING", "HANDOFF", "VERIFYING"],
+                            "HANDOFF": ["VERIFYING"],
+                        }
+                        for target in walk.get(record.state, []):
+                            self.agent_runs.transition(run.id, target, "run completed; bounded lifecycle walk")
+                        self.agent_runs.attach(run.id, run.audit, run.requests)
+                        self.agent_runs.transition(run.id, "GATED", "publication gate executed")
+                        if result.get("accepted"):
+                            self.agent_runs.finish(run.id, state="PUBLISHED", reason="accepted cards registered",
+                                                   origin=result.get("origin"), accepted_count=len(result.get("accepted", [])),
+                                                   rejected_count=len(result.get("rejected", [])),
+                                                   audit_entries=run.audit, requests=run.requests)
+                        else:
+                            self.agent_runs.finish(run.id, state="WITHHELD", reason="gate withheld every draft claim",
+                                                   origin=result.get("origin"), accepted_count=0,
+                                                   rejected_count=len(result.get("rejected", [])),
+                                                   audit_entries=run.audit, requests=run.requests)
+                else:
+                    finish_lifecycle("FAILED", str(result.get("error") or "analysis_failed"),
+                                     error=str(result.get("error") or "analysis_failed"),
+                                     origin=result.get("origin"), audit_entries=run.audit, requests=run.requests)
             else:
                 run.audit.append({
                     "type": "superseded",
@@ -778,11 +864,18 @@ class Engine:
                     "snapshot_match_id": snapshot_match,
                     "reason": "identity_or_clock_mismatch",
                 })
+                finish_lifecycle("CANCELLED", "superseded_identity_mismatch",
+                                 origin=result.get("origin") if result else None,
+                                 audit_entries=run.audit, requests=run.requests)
         except asyncio.CancelledError:
             run.audit.append({"type": "superseded", "bound_epoch": epoch, "current_epoch": s.epoch})
+            finish_lifecycle("CANCELLED", "superseded by session epoch change",
+                             audit_entries=run.audit, requests=run.requests)
         except TimeoutError:
             result = {"status": "fallback", "origin": "deterministic", "error": "analysis_queue_busy", "accepted": [], "rejected": [],
                       "run_id": run.id, "snapshot_id": snapshot.id, "as_of": snapshot.data["as_of"], "audit": run.audit, "requests": run.requests}
+            finish_lifecycle("FAILED", "analysis_queue_busy", error="analysis_queue_busy",
+                             origin="deterministic", audit_entries=run.audit, requests=run.requests)
             if epoch == s.epoch:
                 s.cache[snapshot.id] = result
                 s.run_info = {"status": "fallback", "run_id": run.id, "as_of": result["as_of"], "epoch": epoch}
@@ -1306,6 +1399,8 @@ class ExplainQuery(BaseModel):
         "attacking_channels",
         "spatial_drilldown",
         "xt_surface",
+        "shot_location",
+        "cross_match_diff",
     ]
     team: Literal["H", "N"] | None = None
     zone_id: str | None = None
@@ -1314,6 +1409,19 @@ class ExplainQuery(BaseModel):
     point_timestamp: float | None = None
     pass_edge: tuple[str, str] | None = None
     xt_cell: tuple[int, int] | None = None
+    # Slice C explain targets: a single shot position/event and a two-match
+    # diff of one registry metric. Additive; existing fields unchanged.
+    shot_location: tuple[float, float] | None = None
+    shot_event_id: str | None = Field(default=None, max_length=80)
+    metric_id: str | None = Field(default=None, max_length=64)
+    compare_match_id: str | None = Field(default=None, max_length=80)
+    compare_label: str | None = Field(default=None, max_length=160)
+
+
+def _match_target(eng: "Engine", match_id: str) -> int:
+    """Full-match freeze target: same rule the metric endpoints use."""
+    ctx = eng.match_context(match_id)
+    return int(ctx.duration) if match_id.startswith("syn_") else int(ctx.observed_end)
 
 
 @app.post("/api/explain")
@@ -1328,6 +1436,17 @@ async def explain(body: ExplainQuery, request: Request):
         snap = eng.snapshot_for(s, s.at)
         s.snapshots[snap.id] = snap
     team = body.team or s.focus_team
+    compare_snapshot = None
+    if body.chart_type == "cross_match_diff":
+        if not body.compare_match_id:
+            raise HTTPException(400, "compare_match_id_required")
+        try:
+            compare_snapshot, _state = freeze_match_snapshot(
+                eng, body.compare_match_id, _match_target(eng, body.compare_match_id)
+            )
+        except FileNotFoundError:
+            raise HTTPException(404, f"match_not_found: {body.compare_match_id}")
+        eng.saved_snapshots[compare_snapshot.id] = compare_snapshot
     return explain_chart(
         snapshot=snap,
         chart_type=body.chart_type,
@@ -1338,6 +1457,11 @@ async def explain(body: ExplainQuery, request: Request):
         point_timestamp=body.point_timestamp,
         pass_edge=body.pass_edge,
         xt_cell=body.xt_cell,
+        shot_location=body.shot_location,
+        shot_event_id=body.shot_event_id,
+        metric_id=body.metric_id,
+        compare_snapshot=compare_snapshot,
+        compare_label=body.compare_label,
     ).model_dump()
 
 
@@ -1462,6 +1586,272 @@ async def compare_matches(
     }
 
 
+# ---------------------------------------------------------------------------
+# Slice C: cross-match profiles (team / player). All computation lives in
+# matchlens.profiles; these routes only resolve catalog facts and freeze
+# snapshots through the same path as /api/metrics.
+# ---------------------------------------------------------------------------
+
+@app.get("/api/profiles/teams")
+async def profile_team_index(request: Request):
+    from .catalog import MatchCatalog
+
+    public_rate(request, "profiles", 60)
+    index: dict[str, dict] = {}
+    for meta in MatchCatalog.list_matches():
+        for side, name, pid in (
+            ("home", meta.home_team, meta.home_provider_team_id),
+            ("away", meta.away_team, meta.away_provider_team_id),
+        ):
+            row = index.setdefault(name, {"team": name, "provider_team_ids": set(), "match_count": 0, "provider_match_count": 0, "synthetic_match_count": 0, "competitions": set()})
+            if pid:
+                row["provider_team_ids"].add(str(pid))
+            row["match_count"] += 1
+            if meta.provenance_kind == "provider_payload":
+                row["provider_match_count"] += 1
+            elif meta.provenance_kind == "synthetic":
+                row["synthetic_match_count"] += 1
+            row["competitions"].add(f"{meta.competition} {meta.season}")
+    teams = [
+        {
+            "team": row["team"],
+            "provider_team_ids": sorted(row["provider_team_ids"]),
+            "match_count": row["match_count"],
+            "provider_match_count": row["provider_match_count"],
+            "synthetic_match_count": row["synthetic_match_count"],
+            "competitions": sorted(row["competitions"]),
+        }
+        for row in index.values()
+    ]
+    teams.sort(key=lambda r: (-r["provider_match_count"], r["team"]))
+    return {"teams": teams}
+
+
+@app.get("/api/profiles/team-discovery")
+async def profile_team_discovery(request: Request, team: str):
+    from .profiles import discover_team_matches
+
+    public_rate(request, "profiles", 60)
+    if not team.strip():
+        raise HTTPException(400, "team_required")
+    return discover_team_matches(team)
+
+
+_PROFILE_SNAPSHOT_CACHE: dict[tuple[str, int, str | None], tuple[Snapshot, dict]] = {}
+_PROFILE_SNAPSHOT_CACHE_MAX = 24
+_PROFILE_SNAPSHOT_CACHE_STATS = {"hits": 0, "misses": 0}
+
+
+def _resolve_profile_snapshot(eng: "Engine", match_id: str, ctx) -> tuple[Snapshot, dict]:
+    """Freeze a full-match snapshot at the same target the metric endpoints use.
+
+    Snapshots frozen at the observed end are deterministic for a dataset
+    revision, so a small LRU keeps repeat profile requests from re-running the
+    full reduction. The cache is keyed by (match, target, dataset revision).
+    """
+    target = int(ctx.duration) if match_id.startswith("syn_") else int(ctx.observed_end)
+    key = (match_id, target, ctx.dataset_revision or ctx.data_version)
+    cached = _PROFILE_SNAPSHOT_CACHE.get(key)
+    if cached is not None:
+        _PROFILE_SNAPSHOT_CACHE_STATS["hits"] += 1
+        return cached
+    snap, state = freeze_match_snapshot(eng, match_id, target)
+    if len(_PROFILE_SNAPSHOT_CACHE) >= _PROFILE_SNAPSHOT_CACHE_MAX:
+        _PROFILE_SNAPSHOT_CACHE.pop(next(iter(_PROFILE_SNAPSHOT_CACHE)))
+    _PROFILE_SNAPSHOT_CACHE[key] = (snap, state)
+    _PROFILE_SNAPSHOT_CACHE_STATS["misses"] += 1
+    return snap, state
+
+
+@app.get("/api/profiles/team")
+async def profile_team(
+    request: Request,
+    team: str,
+    match_ids: str | None = None,
+    window: Literal["match", "aligned"] = "match",
+):
+    from .catalog import MatchCatalog
+    from .profiles import align_windows_by_period, build_team_profile
+
+    public_rate(request, "profiles", 30)
+    team = team.strip()
+    if not team:
+        raise HTTPException(400, "team_required")
+    eng = engine(request)
+    if match_ids:
+        ids = [m.strip() for m in match_ids.split(",") if m.strip()]
+    else:
+        ids = _discover_team_ids(team)
+    if not ids:
+        raise HTTPException(404, "no_matches_for_team")
+    if len(ids) > 40:
+        raise HTTPException(422, "too_many_matches_max_40")
+
+    rows: list[dict] = []
+    snap_events: list[tuple[str, list[dict]]] = []
+    for mid in ids:
+        meta = MatchCatalog.get_match(mid)
+        if meta is None:
+            raise HTTPException(404, f"match_not_found: {mid}")
+        if meta.home_team == team or meta.home_provider_team_id == team:
+            side, opponent = "H", meta.away_team
+        elif meta.away_team == team or meta.away_provider_team_id == team:
+            side, opponent = "N", meta.home_team
+        else:
+            raise HTTPException(422, f"team_not_in_match: {mid}")
+        try:
+            ctx = MatchCatalog.get_match_context(mid)
+            snap, state = _resolve_profile_snapshot(eng, mid, ctx)
+        except FileNotFoundError:
+            raise HTTPException(404, f"match_dataset_not_imported: {mid}")
+        rows.append({
+            "match_id": mid,
+            "label": meta.label,
+            "competition": meta.competition,
+            "season": meta.season,
+            "match_date": meta.match_date,
+            "side": side,
+            "side_team_name": meta.home_team if side == "H" else meta.away_team,
+            "opponent_name": opponent,
+            "provider_team_ids": [meta.home_provider_team_id if side == "H" else meta.away_provider_team_id],
+            "provenance_kind": meta.provenance_kind,
+            "coverage_status": ctx.completeness_status,
+            "continuous_coverage": ctx.continuous_coverage,
+            "dataset_revision": ctx.dataset_revision or ctx.data_version,
+            "snapshot": snap,
+            "state": state,
+            "clock_bounded": float(ctx.observed_end) > float(ctx.duration),
+        })
+        snap_events.append((mid, snap.data.get("events", [])))
+
+    if window == "aligned":
+        if len(rows) < 2:
+            raise HTTPException(422, "aligned_window_requires_two_matches")
+        alignment = align_windows_by_period(snap_events)
+        for row in rows:
+            row["window_alignment"] = alignment
+
+    result = build_team_profile(
+        team=team,
+        rows=rows,
+        window=window,
+        xt_model=eng.xt_model,
+    ).model_dump()
+    result["scope"]["snapshot_cache"] = dict(_PROFILE_SNAPSHOT_CACHE_STATS)
+    return result
+
+
+def _discover_team_ids(team: str) -> list[str]:
+    from .profiles import discover_team_matches
+
+    discovery = discover_team_matches(team)
+    return [
+        m["match_id"] for m in discovery["matches"]
+        if m["provenance_kind"] == "provider_payload" and m["dataset_imported"]
+    ]
+
+
+@app.get("/api/profiles/players")
+async def profile_player_index(
+    request: Request,
+    match_ids: str | None = None,
+    team: str | None = None,
+    q: str | None = None,
+    limit: int = 200,
+):
+    from .profiles import discover_players
+
+    public_rate(request, "profiles", 30)
+    if limit < 1 or limit > 1000:
+        raise HTTPException(422, "limit_out_of_bounds")
+    if match_ids:
+        ids = [m.strip() for m in match_ids.split(",") if m.strip()]
+    else:
+        from .catalog import MatchCatalog
+
+        ids = [
+            m.match_id for m in MatchCatalog.list_matches()
+            if m.provenance_kind == "provider_payload"
+            and m.completeness_status not in (None, "DATASET_NOT_IMPORTED")
+        ]
+    return discover_players(ids, limit=limit, team=team, q=q)
+
+
+@app.get("/api/profiles/player")
+async def profile_player(
+    request: Request,
+    player_id: str,
+    match_ids: str,
+    window: Literal["match", "aligned"] = "match",
+):
+    from .catalog import MatchCatalog
+    from .profiles import align_windows_by_period, build_player_profile, compute_player_minutes
+
+    public_rate(request, "profiles", 30)
+    player_id = player_id.strip()
+    ids = [m.strip() for m in match_ids.split(",") if m.strip()]
+    if not player_id or not ids:
+        raise HTTPException(400, "player_id_and_match_ids_required")
+    if len(ids) > 40:
+        raise HTTPException(422, "too_many_matches_max_40")
+    eng = engine(request)
+
+    rows: list[dict] = []
+    snap_events: list[tuple[str, list[dict]]] = []
+    for mid in ids:
+        meta = MatchCatalog.get_match(mid)
+        if meta is None:
+            raise HTTPException(404, f"match_not_found: {mid}")
+        try:
+            ctx = MatchCatalog.get_match_context(mid)
+            snap, state = _resolve_profile_snapshot(eng, mid, ctx)
+        except FileNotFoundError:
+            raise HTTPException(404, f"match_dataset_not_imported: {mid}")
+        normalized = MatchCatalog.load_normalized_events(mid)
+        own = [e for e in normalized if str(e.player_id or "") == player_id]
+        if not own:
+            raise HTTPException(422, f"player_not_in_match: {mid}")
+        side_counts: dict[str, int] = {}
+        for e in own:
+            side_counts[e.team_id] = side_counts.get(e.team_id, 0) + 1
+        side = max(side_counts, key=lambda t: side_counts[t])
+        minutes = compute_player_minutes(normalized, player_id, float(ctx.observed_end))
+        rows.append({
+            "match_id": mid,
+            "label": meta.label,
+            "competition": meta.competition,
+            "season": meta.season,
+            "match_date": meta.match_date,
+            "side": side,
+            "side_team_name": meta.home_team if side == "H" else meta.away_team,
+            "opponent_name": meta.away_team if side == "H" else meta.home_team,
+            "provenance_kind": meta.provenance_kind,
+            "coverage_status": ctx.completeness_status,
+            "continuous_coverage": ctx.continuous_coverage,
+            "dataset_revision": ctx.dataset_revision or ctx.data_version,
+            "snapshot": snap,
+            "state": state,
+            "minutes": minutes,
+            "clock_bounded": float(ctx.observed_end) > float(ctx.duration),
+        })
+        snap_events.append((mid, snap.data.get("events", [])))
+
+    if window == "aligned":
+        if len(rows) < 2:
+            raise HTTPException(422, "aligned_window_requires_two_matches")
+        alignment = align_windows_by_period(snap_events)
+        for row in rows:
+            row["window_alignment"] = alignment
+
+    result = build_player_profile(
+        player_id=player_id,
+        rows=rows,
+        window=window,
+    ).model_dump()
+    result["scope"]["snapshot_cache"] = dict(_PROFILE_SNAPSHOT_CACHE_STATS)
+    return result
+
+
 @app.get("/api/matches/{match_id}")
 async def get_match_detail(match_id: str, request: Request):
     from .catalog import MatchCatalog
@@ -1469,6 +1859,21 @@ async def get_match_detail(match_id: str, request: Request):
     if not meta:
         raise HTTPException(404, "match_not_found")
     return {"match": meta.model_dump()}
+
+
+@app.get("/api/matches/{match_id}/detail")
+async def get_match_full_detail(match_id: str, request: Request):
+    """Complete Match Detail: overview, lineups, shots, stats, tactics, insights."""
+    from .matchdetail import build_match_detail
+
+    public_rate(request, "match_detail", 20)
+    eng = engine(request)
+    try:
+        return build_match_detail(eng, match_id, _resolve_profile_snapshot)
+    except FileNotFoundError:
+        raise HTTPException(404, "match_not_found")
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
 
 
 @app.get("/api/matches/{match_id}/completeness")
@@ -1511,6 +1916,110 @@ async def get_xt_model_info(resolution: str = "16x12"):
         raise HTTPException(400, "invalid_resolution")
     model = ExpectedThreatModel.load_default(resolution)
     return model.metadata
+
+
+@app.get("/api/models/governance")
+async def get_model_governance():
+    """xG/xT model governance (Slice C-3).
+
+    One place that states where each model comes from, how (if at all) it is
+    trained, how to evaluate it, what it may and may not be used for, and
+    which surfaces must label its output as heuristic. Statements here are
+    binding for every chart, tool and profile that exposes the models.
+    """
+    from .metrics import DEFINITIONS
+    from .models.xt import ExpectedThreatModel
+
+    xt = ExpectedThreatModel.load_default("16x12")
+    meta = xt.metadata
+    return {
+        "governance_version": "model-governance-v1",
+        "models": {
+            "xt": {
+                "model_id": "matchlens_xt_grid",
+                "model_version": meta.get("model_version"),
+                "model_type": meta.get("model_type"),
+                "calibration_status": meta.get("calibration_status"),
+                "source": (
+                    "Analytical spatial prior following the Karun Singh (2019) formulation; "
+                    "generated by MatchLens analytical curves, not fitted to match outcomes."
+                ),
+                "training_protocol": {
+                    "fitted": False,
+                    "training_corpus": meta.get("training_corpus"),
+                    "path_a": "Static precomputed grid shipped with the package (line production).",
+                    "path_b": (
+                        "Empirical fitting via ExpectedThreatFitter (Laplacian smoothing + empirical-Bayes "
+                        "shrinkage) is available for research on sufficient samples and must never silently "
+                        "replace the shipped grid."
+                    ),
+                    "monotonicity": "Axial grid values must increase from own goal toward the attacking goal.",
+                },
+                "evaluation_interface": {
+                    "model_info": "/api/models/xt?resolution=16x12|12x8",
+                    "fitted_vs_baseline": "/api/models/xt/compare?match_id=...&resolution=16x12",
+                },
+                "permitted_uses": [
+                    "ΔxT for successful ball-retaining progression actions (completed passes, carries) only.",
+                    "Spatial threat context for OAAI event weights and shot-position explanations.",
+                ],
+                "forbidden_uses": [
+                    "ΔxT as a generic value measure for tackles, saves, fouls or defensive actions.",
+                    "Presenting xT as shot quality (that is xG's role) or as possession probability.",
+                    "Claiming empirical calibration without the Path B protocol and a declared corpus.",
+                ],
+                "labelling": "Every surface exposing xT must label it as a heuristic, uncalibrated spatial prior.",
+                "consumers": ["oaai weights", "xt_surface chart", "shot_location explain", "what-if sandbox", "profiles delta_xt_heuristic"],
+            },
+            "pre_shot_xg": {
+                "model_id": "matchlens_pre_shot_xg",
+                "model_type": "geometric_heuristic",
+                "source": "Goal-mouth distance and visible-angle geometry evaluated before any outcome is known.",
+                "training_protocol": {
+                    "fitted": False,
+                    "outcome_leakage": "Strictly forbidden; outcome has zero effect on pre_shot_xg.",
+                },
+                "evaluation_interface": {
+                    "explanation": "/api/explain chart_type=shot_location returns the heuristic figure with its formula",
+                },
+                "permitted_uses": ["Relative pre-shot danger context inside OAAI shot weights and shot explanations."],
+                "forbidden_uses": [
+                    "Publishing it as a calibrated xG model output.",
+                    "Using post-shot outcomes to adjust the figure.",
+                ],
+                "labelling": "Must be labelled 'geometric heuristic, not calibrated'.",
+                "consumers": ["oaai shot weights", "shot_location explain"],
+            },
+            "registry_xg": {
+                "model_id": "xg",
+                "metric_status": DEFINITIONS["xg"].model_status,
+                "statement": (
+                    "No calibrated xG model receipt exists in this build; the registry metric 'xg' stays "
+                    "not_calibrated and never collapses to a fabricated zero."
+                ),
+            },
+            "oaai": {
+                "model_id": "oaai",
+                "model_version": "oaai-1.0.0",
+                "model_status": DEFINITIONS["oaai"].model_status,
+                "smoothing": "Causal one-sided exponential decay; dead-ball intervals frozen via dead_intervals only.",
+                "statement": (
+                    "OAAI is MatchLens' own observed attacking activity index. It is not a reconstruction, "
+                    "reverse-engineering or equivalent of any commercial product metric (including Sofascore "
+                    "Attack Momentum), and must never be presented as one."
+                ),
+                "labelling": "Heuristic model output; a momentum proxy, not psychological momentum or causality.",
+                "consumers": ["oaai_momentum chart", "registry metric 'oaai'", "investigation ledger"],
+            },
+        },
+        "inference_levels": {
+            "rule": (
+                "Model outputs are Level 2 metric attributions (algebraic contributions), never Level 4 causal "
+                "claims. Off-ball shape and pressing intent remain not_inferable without optical tracking."
+            ),
+            "sufficiency_advisor": "/api/sufficiency/{match_id}",
+        },
+    }
 
 
 @app.get("/api/models/xt/compare")
@@ -1587,7 +2096,10 @@ async def get_exploration_oaai(request: Request, smoothing_mode: Literal["causal
         chart_smoothing_mode=smoothing_mode,
         data=chart_data,
     )
-    return result
+    # The unsmoothed timeline only exists to derive the registry's causal
+    # curve. It is not part of the chart contract and doubles the response.
+    result.pop("timeline_raw", None)
+    return chart_oaai_payload(result)
 
 
 @app.get("/api/matches/{match_id}/exploration")
@@ -1681,17 +2193,102 @@ class InvestigationBody(BaseModel):
     at: int | None = None
     team: Literal["H", "N"] = "H"
     focus_type: Literal[
-        "moment", "oaai_point", "event", "metric", "sequence", "player", "zone", "chart"
+        "moment", "oaai_point", "event", "metric", "sequence", "player", "zone", "chart",
+        "shot_location", "cross_match_diff",
     ] = "moment"
     focus_id: str | None = Field(default=None, max_length=160)
     question: str = Field(default="", max_length=500)
     compare_match_ids: list[str] = Field(default_factory=list, max_length=3)
+    # "maf_agent" dispatches the real Analyst → Verifier model pair under the
+    # frozen budget; any failure degrades to the deterministic planner and is
+    # reported honestly through agent_status/agent_error.
+    execution_mode: Literal["deterministic_planner", "maf_agent"] = "deterministic_planner"
+
+
+async def run_investigation_plan(eng: "Engine", body: InvestigationBody, snap: Snapshot, state: dict):
+    """Produce an InvestigationPlan in the requested execution mode.
+
+    maf_agent requires a configured model and budget runway; otherwise — and on
+    any agent failure — the deterministic planner produces the structurally
+    identical plan and the degradation is recorded on it.
+    """
+    from .investigation import AgentInvestigationError, InvestigationPlanner, run_maf_investigation
+
+    def deterministic() -> "object":
+        return InvestigationPlanner.run(
+            match_id=body.match_id,
+            snapshot=snap,
+            state=state,
+            team=body.team,
+            focus_type=body.focus_type,
+            focus_id=body.focus_id,
+            question=body.question,
+            compare_match_ids=body.compare_match_ids,
+            xt_model=eng.xt_model,
+        )
+
+    if body.execution_mode != "maf_agent":
+        return deterministic()
+    if not eng.runner.key:
+        plan = deterministic()
+        plan.agent_error = "model_not_configured"
+        plan.unresolved.append(
+            "Real-agent execution was requested but no model provider is configured; "
+            "the deterministic planner produced this plan."
+        )
+        return plan
+    if not eng.ledger.has_runway(6):
+        plan = deterministic()
+        plan.agent_error = "agent_budget_no_runway"
+        plan.unresolved.append(
+            "Real-agent execution was requested but the inference budget has no runway; "
+            "the deterministic planner produced this plan."
+        )
+        return plan
+    try:
+        return await run_maf_investigation(
+            runner=eng.runner,
+            run_store=eng.agent_runs,
+            match_id=body.match_id,
+            snapshot=snap,
+            state=state,
+            team=body.team,
+            focus_type=body.focus_type,
+            focus_id=body.focus_id,
+            question=body.question,
+            compare_match_ids=body.compare_match_ids,
+            xt_model=eng.xt_model,
+        )
+    except asyncio.CancelledError:
+        raise
+    except AgentInvestigationError as exc:
+        plan = deterministic()
+        plan.agent_status = "failed"
+        plan.agent_run_id = exc.run_id
+        plan.agent_error = exc.code
+        record = eng.agent_runs.get(exc.run_id)
+        if record is not None:
+            plan.agent_run = {
+                "run_id": record.run_id,
+                "state": record.state,
+                "state_history": record.state_history,
+                "requests": record.requests,
+                "model": record.model,
+                "prompt_version": record.prompt_version,
+                "accepted_count": record.accepted_count,
+                "rejected_count": record.rejected_count,
+                "error": record.error,
+            }
+        plan.unresolved.append(
+            f"Real-agent execution failed ({exc.code}); the deterministic planner produced this "
+            "plan and the agent run audit is preserved."
+        )
+        return plan
 
 
 @app.post("/api/investigate")
 async def investigate(body: InvestigationBody, request: Request):
     from .catalog import MatchCatalog
-    from .investigation import InvestigationPlanner
 
     public_rate(request, "investigate", 30)
     try:
@@ -1708,7 +2305,7 @@ async def investigate(body: InvestigationBody, request: Request):
 
     # Freeze the investigation at the selected football moment, not merely at
     # the session clock. This keeps current-window metrics and the focus aligned.
-    if body.focus_type in ("event", "sequence", "moment", "oaai_point"):
+    if body.focus_type in ("event", "sequence", "moment", "oaai_point", "shot_location"):
         pre_state = reduce_match(
             events,
             at,
@@ -1727,6 +2324,16 @@ async def investigate(body: InvestigationBody, request: Request):
             event = next((e for e in pre_state.get("events", []) if str(e.get("id")) == body.focus_id), None)
             if event is not None:
                 at = int(float(event.get("t", at)))
+        elif body.focus_type == "shot_location" and (body.focus_id or "").startswith("evt:"):
+            # A shot pinned by event id freezes the investigation at the shot.
+            # Coordinates-only foci keep the requested moment; the planner
+            # resolves the nearest recorded shot itself.
+            event = next(
+                (e for e in pre_state.get("events", []) if str(e.get("id")) == body.focus_id[4:]),
+                None,
+            )
+            if event is not None:
+                at = int(float(event.get("t", at)))
         elif body.focus_type == "sequence" and body.focus_id:
             sequence = next(
                 (s for s in build_sequences(pre_state) if s.get("sequence_id") == body.focus_id),
@@ -1735,15 +2342,17 @@ async def investigate(body: InvestigationBody, request: Request):
             if sequence is not None:
                 at = int(float(sequence.get("end_t", at)))
         else:
-            oaai = compute_oaai(
-                pre_state.get("events", []),
-                t_end=at,
-                dead_intervals=pre_state.get("dead_intervals", []),
-                xt_model=eng.xt_model,
-            )
-            points = oaai.get("change_points", [])
-            point = None
+            # The OAAI pipeline is expensive on a full provider payload, so it
+            # only runs when the caller did not pin the moment itself.
             if body.at is None:
+                oaai = compute_oaai(
+                    pre_state.get("events", []),
+                    t_end=at,
+                    dead_intervals=pre_state.get("dead_intervals", []),
+                    xt_model=eng.xt_model,
+                )
+                points = oaai.get("change_points", [])
+                point = None
                 if body.focus_id:
                     point = next((p for p in points if p.get("change_point_id") == body.focus_id), None)
                 elif points:
@@ -1753,19 +2362,48 @@ async def investigate(body: InvestigationBody, request: Request):
 
     snap, state = freeze_match_snapshot(eng, body.match_id, at)
     eng.saved_snapshots[snap.id] = snap
-    plan = InvestigationPlanner.run(
-        match_id=body.match_id,
-        snapshot=snap,
-        state=state,
-        team=body.team,
-        focus_type=body.focus_type,
-        focus_id=body.focus_id,
-        question=body.question,
-        compare_match_ids=body.compare_match_ids,
-        xt_model=eng.xt_model,
-    )
+    if body.execution_mode == "maf_agent":
+        # A real agent run dispatches paid model requests; rate it separately
+        # from deterministic reads, on top of the durable budget ledger.
+        public_rate(request, "investigate-agent", 6)
+    plan = await run_investigation_plan(eng, body, snap, state)
     eng.investigations.save(plan)
     return plan.model_dump()
+
+
+@app.get("/api/investigations")
+async def list_investigations(request: Request, match_id: str | None = None, limit: int = 50):
+    """Saved investigation summaries (Slice C-4 Match Detail list)."""
+    public_rate(request, "investigations", 60)
+    if limit < 1 or limit > 200:
+        raise HTTPException(422, "limit_out_of_bounds")
+    eng = engine(request)
+    plans = eng.investigations.list(match_id=match_id, limit=limit)
+    return {
+        "match_id": match_id,
+        "count": len(plans),
+        "investigations": [
+            {
+                "investigation_id": p.investigation_id,
+                "match_id": p.match_id,
+                "snapshot_id": p.snapshot_id,
+                "state": p.state,
+                "focus_type": p.focus_type,
+                "focus_id": p.focus_id,
+                "team": p.team,
+                "as_of": p.as_of,
+                "question": p.question,
+                "intent": p.intent,
+                "execution_mode": p.execution_mode,
+                "agent_status": p.agent_status,
+                "gate_status": p.gate_preview.status,
+                "gate_assertion": p.gate_preview.assertion,
+                "finding_count": len(p.findings),
+                "dataset_revision": p.dataset_revision,
+            }
+            for p in plans
+        ],
+    }
 
 
 @app.get("/api/investigations/{investigation_id}")
@@ -1820,6 +2458,10 @@ async def promote_investigation(investigation_id: str, request: Request):
         source_run=plan.investigation_id,
     )
     plan.gate_preview.persisted = record.gate_status == "approved"
+    if plan.agent_run_id:
+        agent_record = eng.agent_runs.get(plan.agent_run_id)
+        if agent_record is not None and agent_record.state == "GATED" and plan.gate_preview.persisted:
+            eng.agent_runs.transition(plan.agent_run_id, "PUBLISHED", "claim promoted to registry by user")
     eng.investigations.save(plan)
     return {
         "claim": record.model_dump(),
@@ -1827,6 +2469,42 @@ async def promote_investigation(investigation_id: str, request: Request):
         "gate_status": record.gate_status,
         "current_revision_id": record.current_revision_id,
     }
+
+
+@app.get("/api/agent-runs")
+async def list_agent_runs(request: Request, limit: int = 50, state: str | None = None):
+    """Persisted agent-run lifecycle records (roadmap C-09), newest first."""
+    eng = engine(request)
+    records = eng.agent_runs.list(limit=min(max(limit, 1), 200))
+    if state:
+        records = [record for record in records if record.state == state]
+    return {"runs": [record.model_dump() for record in records], "budget": eng.ledger.summary()}
+
+
+@app.get("/api/agent-runs/{run_id}")
+async def get_agent_run(run_id: str, request: Request):
+    record = engine(request).agent_runs.get(run_id)
+    if record is None:
+        raise HTTPException(404, "agent_run_not_found")
+    return record.model_dump()
+
+
+@app.post("/api/agent-runs/{run_id}/cancel")
+async def cancel_agent_run(run_id: str, request: Request):
+    """Close a non-terminal run record as CANCELLED.
+
+    Live session runs are cancelled through the session epoch (which cancels
+    the task and records CANCELLED); this endpoint closes records left
+    non-terminal by a restart or a lost dispatch so no run stays ambiguous.
+    """
+    eng = engine(request)
+    try:
+        record = eng.agent_runs.cancel(run_id)
+    except KeyError:
+        raise HTTPException(404, "agent_run_not_found")
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+    return record.model_dump()
 
 
 @app.get("/api/matches/{match_id}/story")
@@ -2070,6 +2748,24 @@ async def get_broadcast_rundown(request: Request, match_id: str, snapshot_id: st
     }
 
 
+@app.get("/api/broadcast/manifests")
+async def broadcast_manifest_history(request: Request, match_id: str, snapshot_id: str):
+    """Bounded export-manifest history for one snapshot (producer scope)."""
+    from .auth import require_content_editor
+
+    principal = require_content_editor(request)
+    eng = engine(request)
+    history = eng.broadcast.manifest_history(match_id, snapshot_id)
+    return {
+        "match_id": match_id,
+        "snapshot_id": snapshot_id,
+        "projection": "producer",
+        "principal": principal.subject,
+        "count": len(history),
+        "manifests": [m.model_dump() for m in history],
+    }
+
+
 @app.post("/api/broadcast/export")
 async def broadcast_export(body: ExportBody, request: Request):
     from .auth import require_content_editor
@@ -2136,6 +2832,7 @@ async def broadcast_export(body: ExportBody, request: Request):
         actor=principal.subject,
         package_payload=package.payload,
     )
+    eng.broadcast.record_manifest(manifest)
     valid_claim_ids = [item.claim_id for item in validation.items if item.valid]
     approved_by = sorted({
         r.editorial_approver for r in approved
@@ -2335,6 +3032,19 @@ async def get_benchmark_abc(
     public_rate(request, "benchmark", 10)
     from .benchmark import run_agent_benchmark_harness
     return run_agent_benchmark_harness(match_id=match_id)
+
+
+@app.get("/api/benchmark/agent-contract")
+async def get_benchmark_agent_contract(request: Request):
+    """Recorded-replay contract benchmark for the agentic publication path.
+
+    Replays genuine recorded model outputs through the real validation and
+    gate code; live comparison arms are reported as Not Run until an
+    authorized paid budget exists.
+    """
+    public_rate(request, "benchmark", 10)
+    from .benchmark import run_agent_contract_benchmark
+    return run_agent_contract_benchmark()
 
 
 @app.get("/api/matches/{match_id}/evidence-graph")

@@ -71,15 +71,26 @@ class Run:
     focus_team: str = "H"
 
 
-def instructions(role: str, focus_team: str = "H") -> str:
+def instructions(role: str, focus_team: str = "H", tool_menu: str | None = None) -> str:
     t = "N" if focus_team == "N" else "H"
+    if tool_menu is None:
+        tools_sentence = (
+            "You may also use decompose_window, query_causal_chain, assess_alternative_hypotheses, "
+            "explain_oaai_contributors and query_metric to inspect event contributions, sequence chains, "
+            "metric observations and rival explanations."
+        )
+    else:
+        tools_sentence = (
+            "You may also call the registered investigation tools listed at the end of this prompt "
+            "to inspect event contributions, sequence chains, metric observations and rival explanations."
+        )
     common = f"""You are MatchLens AI, an evidence-grounded football intelligence system adhering to the Four-Level Tactical Inference Framework:
 - Level 1 (Observable Facts): Direct counts and raw coordinates of completed passes, recoveries, shots, and goals.
 - Level 2 (Metric Attribution): Mathematical formula decompositions (e.g. OAAI, xT delta, Attacking Activity Index). Not tactical causality.
 - Level 3 (Statistical Association): Multi-event empirical correlation with rival hypothesis testing.
 - Level 4 (Causal Inference): Strictly guarded. Never claim causal tactical impact without 25Hz tracking, off-ball defensive shape, and counterfactual validation.
 
-You MUST call get_evidence with the supplied snapshot_id at least once in your role's session before your first answer, even when another agent supplied evidence. You may also use decompose_window, query_causal_chain, assess_alternative_hypotheses, explain_oaai_contributors and query_metric to inspect event contributions, sequence chains, metric observations and rival explanations. Only tool evidence is authoritative. Return one JSON object, no markdown.
+You MUST call get_evidence with the supplied snapshot_id at least once in your role's session before your first answer, even when another agent supplied evidence. {tools_sentence} Only tool evidence is authoritative. Return one JSON object, no markdown.
 
 Football principles:
 - Possession measures controlled ball time; entries measure passes crossing attacking third (x=70m); shots measure attempts.
@@ -112,12 +123,109 @@ Do not force any particular verdict. Give a BRIEF reason, at most 45 words and 4
     task = task[:task.index("JSON structure:")] if "JSON structure:" in task else task
     task = task.replace("primary.id='primary'. conservative is null unless a narrower version of the SAME true assertion is useful; conservative.id='conservative'.", "conservative_fan and conservative_analyst are both null unless a narrower version of the SAME true assertion is useful.")
     schema = WireDraft.model_json_schema() if role == "Analyst" else WireReview.model_json_schema()
-    return common+task+"\nUse the FLAT JSON schema below. No claims/decisions array or primary object. No extra fields. "+json.dumps(schema, separators=(",", ":"))
+    return common+task+"\nUse the FLAT JSON schema below. No claims/decisions array or primary object. No extra fields. "+json.dumps(schema, separators=(",", ":"))+(("\n\n"+tool_menu) if tool_menu else "")
+
+
+def investigation_tool_menu() -> str:
+    """Dynamic-tool menu shown to investigation agents (roadmap C-06)."""
+    from .tools import TOOL_BUDGET, TOOL_DESCRIPTIONS
+
+    lines = [f"- {name}: {TOOL_DESCRIPTIONS.get(name, name)} (at most {TOOL_BUDGET[name]} call(s))" for name in TOOL_BUDGET]
+    return (
+        "Registered investigation tools for this session. Call them by exact name to gather "
+        "evidence for the question; tool names not in this list do not exist. The registry "
+        "enforces the per-tool call budget and rejects calls outside the frozen snapshot.\n"
+        + "\n".join(lines)
+    )
+
+
+def investigation_instructions(role: str, focus_team: str = "H") -> str:
+    return instructions(role, focus_team=focus_team, tool_menu=investigation_tool_menu())
 
 
 class AgentRunner:
     def __init__(self, key: str | None, ledger: BudgetLedger, deadline: float = 25):
         self.key, self.ledger, self.deadline = key, ledger, deadline
+
+    def _transport_hooks(self, run: Run, role: str):
+        """Durable reservation + audit hooks shared by every model dispatch."""
+
+        async def before(request: httpx.Request) -> None:
+            raw = request.content
+            body = json.loads(raw)
+            if request.url.host != "api.deepseek.com" or request.url.scheme != "https" or request.url.path != "/chat/completions":
+                raise ValueError("provider_endpoint_not_allowed")
+            if len(raw) > MAX_BODY_BYTES or body.get("model") != "deepseek-flash" or body.get("max_tokens") != MAX_OUTPUT_TOKENS or body.get("thinking") != {"type": "disabled"}:
+                raise ValueError("provider_request_bound")
+            if run.requests >= 6:
+                raise BudgetExceeded("run_request_budget_exhausted")
+            if sum(e.get("type") == "http_dispatch" and e.get("role") == role for e in run.audit) >= 3:
+                raise BudgetExceeded("role_request_budget_exhausted")
+            request_id = self.ledger.reserve(run.id, role)
+            run.requests += 1
+            request.extensions["matchlens_request_id"] = request_id
+            run.audit.append({"type": "http_dispatch", "role": role, "request_id": request_id,
+                              "body_bytes": len(raw), "model": body["model"], "max_tokens": body["max_tokens"]})
+            for message in body.get("messages", []):
+                content = message.get("content", "")
+                if message.get("role") == "tool" and isinstance(content, str) and run.snapshot.id in content:
+                    run.audit.append({"type": "tool_receipt", "role": role, "snapshot_id": run.snapshot.id,
+                                      "tool_call_id": message.get("tool_call_id"), "sha256": hashlib.sha256(content.encode()).hexdigest()})
+
+        async def after(response: httpx.Response) -> None:
+            await response.aread()
+            try:
+                data = response.json()
+            except ValueError:
+                data = {}
+            request_id = response.request.extensions["matchlens_request_id"]
+            self.ledger.complete(request_id, response.status_code, data.get("usage"))
+            run.audit.append({"type": "http_receipt", "role": role, "request_id": request_id,
+                              "status": response.status_code, "usage": data.get("usage"), "returned_model": data.get("model")})
+
+        return before, after
+
+    async def _run_model(self, run: Run, role: str, tools: list, prompt: str, instructions_text: str,
+                         *, max_iterations: int, max_function_calls: int) -> str:
+        before, after = self._transport_hooks(run, role)
+        # Real credential exists only in the server-side SDK, never tools or receipts.
+        async with httpx.AsyncClient(timeout=httpx.Timeout(23), event_hooks={"request": [before], "response": [after]}) as transport:
+            async with AsyncOpenAI(api_key=self.key, base_url="https://api.deepseek.com", max_retries=0,
+                                   timeout=23, http_client=transport) as sdk:
+                client = OpenAIChatCompletionClient(model="deepseek-flash", async_client=sdk,
+                    function_invocation_configuration={"max_iterations": max_iterations, "max_function_calls": max_function_calls})
+                agent = Agent(client=client, name=role, instructions=instructions_text,
+                    tools=tools, default_options={"response_format": {"type": "json_object"},
+                    "extra_body": {"thinking": {"type": "disabled"}, "max_tokens": MAX_OUTPUT_TOKENS}})
+                session = agent.create_session()
+                response = await agent.run(prompt, session=session)
+                raw = response.text
+                run.raw_outputs.append({"role": role, "attempt": "initial", "text": raw})
+                try:
+                    self.validate_stage(raw, role, run)
+                except ValueError as exc:
+                    # One bounded format correction, same role/session/evidence.
+                    # No code changes the assertion or fabricates missing prose.
+                    feedback = str(exc)[:900]
+                    run.audit.append({"type": "schema_correction", "role": role, "validation": feedback})
+                    t_slot = "N" if run.focus_team == "N" else "H"
+                    response = await agent.run("Your JSON failed local validation: "+feedback+
+                        ". Return a corrected complete JSON object using the evidence already retrieved. "
+                        "Do not call tools again. Follow the flat output schema, without extra fields or nested claim objects. "
+                        f"Slots are exactly {{{{{t_slot}.possession.current}}}}, not .value; percentage slots already include %. "
+                        "No literal digits in public prose, including reasons/limitations. Change only invalid fields; preserve other text. "
+                        "Never change claim_id, assertion or scope. Keep review reason below 400 characters.", session=session)
+                    raw = response.text
+                    run.raw_outputs.append({"role": role, "attempt": "format_correction", "text": raw})
+                    try:
+                        original = json.loads(run.raw_outputs[-2]["text"])
+                        corrected = json.loads(raw)
+                    except ValueError:
+                        raise ValueError("format_correction_core_not_comparable")
+                    if any(original.get(k) != corrected.get(k) for k in ("claim_id", "assertion", "scope")):
+                        raise ValueError("format_correction_changed_core")
+                    self.validate_stage(raw, role, run)
+                return raw
 
     async def stage(self, run: Run, role: str, prompt: str) -> str:
         run.role = role
@@ -221,77 +329,59 @@ class AgentRunner:
             run.audit.append({"type": "tool", "role": role, "name": "assess_alternative_hypotheses", "snapshot_id": run.snapshot.id})
             return res.model_dump_json()
 
-        async def before(request: httpx.Request) -> None:
-            raw = request.content
-            body = json.loads(raw)
-            if request.url.host != "api.deepseek.com" or request.url.scheme != "https" or request.url.path != "/chat/completions":
-                raise ValueError("provider_endpoint_not_allowed")
-            if len(raw) > MAX_BODY_BYTES or body.get("model") != "deepseek-flash" or body.get("max_tokens") != MAX_OUTPUT_TOKENS or body.get("thinking") != {"type": "disabled"}:
-                raise ValueError("provider_request_bound")
-            if run.requests >= 6:
-                raise BudgetExceeded("run_request_budget_exhausted")
-            if sum(e.get("type") == "http_dispatch" and e.get("role") == role for e in run.audit) >= 3:
-                raise BudgetExceeded("role_request_budget_exhausted")
-            request_id = self.ledger.reserve(run.id, role)
-            run.requests += 1
-            request.extensions["matchlens_request_id"] = request_id
-            run.audit.append({"type": "http_dispatch", "role": role, "request_id": request_id,
-                              "body_bytes": len(raw), "model": body["model"], "max_tokens": body["max_tokens"]})
-            for message in body.get("messages", []):
-                content = message.get("content", "")
-                if message.get("role") == "tool" and isinstance(content, str) and run.snapshot.id in content:
-                    run.audit.append({"type": "tool_receipt", "role": role, "snapshot_id": run.snapshot.id,
-                                      "tool_call_id": message.get("tool_call_id"), "sha256": hashlib.sha256(content.encode()).hexdigest()})
+        return await self._run_model(
+            run, role,
+            [get_evidence, get_event_chain, get_sequence, decompose_window, query_causal_chain,
+             assess_alternative_hypotheses, explain_oaai_contributors, query_metric],
+            prompt,
+            instructions(role, focus_team=run.focus_team),
+            max_iterations=3, max_function_calls=2,
+        )
 
-        async def after(response: httpx.Response) -> None:
-            await response.aread()
-            try:
-                data = response.json()
-            except ValueError:
-                data = {}
-            request_id = response.request.extensions["matchlens_request_id"]
-            self.ledger.complete(request_id, response.status_code, data.get("usage"))
-            run.audit.append({"type": "http_receipt", "role": role, "request_id": request_id,
-                              "status": response.status_code, "usage": data.get("usage"), "returned_model": data.get("model")})
+    async def stage_with_registry(self, run: Run, role: str, registry, prompt: str,
+                                  *, max_function_calls: int = 6) -> str:
+        """Investigation stage whose tool calls run through FootballToolRegistry.
 
-        # Real credential exists only in the server-side SDK, never tools or receipts.
-        async with httpx.AsyncClient(timeout=httpx.Timeout(23), event_hooks={"request": [before], "response": [after]}) as transport:
-            async with AsyncOpenAI(api_key=self.key, base_url="https://api.deepseek.com", max_retries=0,
-                                   timeout=23, http_client=transport) as sdk:
-                client = OpenAIChatCompletionClient(model="deepseek-flash", async_client=sdk,
-                    function_invocation_configuration={"max_iterations": 3, "max_function_calls": 2})
-                agent = Agent(client=client, name=role, instructions=instructions(role, focus_team=run.focus_team),
-                    tools=[get_evidence, get_event_chain, get_sequence, decompose_window, query_causal_chain, assess_alternative_hypotheses, explain_oaai_contributors, query_metric], default_options={"response_format": {"type": "json_object"},
-                    "extra_body": {"thinking": {"type": "disabled"}, "max_tokens": MAX_OUTPUT_TOKENS}})
-                session = agent.create_session()
-                response = await agent.run(prompt, session=session)
-                raw = response.text
-                run.raw_outputs.append({"role": role, "attempt": "initial", "text": raw})
+        The model selects tools dynamically, but every call goes through the
+        same allow-list, per-tool budgets and receipt hashing as the
+        deterministic planner (roadmap C-06). No new execution path exists.
+        """
+        from .tools import TOOL_BUDGET, TOOL_DESCRIPTIONS, ToolError
+
+        run.role = role
+
+        def get_evidence(snapshot_id: str) -> str:
+            """Read immutable metric receipts, sample limitations and recorded football event chains."""
+            if snapshot_id != run.snapshot.id:
+                raise ValueError("snapshot_outside_tool_scope")
+            run.audit.append({"type": "tool", "role": role, "name": "get_evidence", "snapshot_id": snapshot_id})
+            return json.dumps(tool_evidence(run.snapshot, focus_team=run.focus_team), separators=(",", ":"))
+
+        def make_registry_tool(name: str):
+            def call(**kwargs) -> str:
                 try:
-                    self.validate_stage(raw, role, run)
-                except ValueError as exc:
-                    # One bounded format correction, same role/session/evidence.
-                    # No code changes the assertion or fabricates missing prose.
-                    feedback = str(exc)[:900]
-                    run.audit.append({"type": "schema_correction", "role": role, "validation": feedback})
-                    t_slot = "N" if run.focus_team == "N" else "H"
-                    response = await agent.run("Your JSON failed local validation: "+feedback+
-                        ". Return a corrected complete JSON object using the evidence already retrieved. "
-                        "Do not call tools again. Follow the flat output schema, without extra fields or nested claim objects. "
-                        f"Slots are exactly {{{{{t_slot}.possession.current}}}}, not .value; percentage slots already include %. "
-                        "No literal digits in public prose, including reasons/limitations. Change only invalid fields; preserve other text. "
-                        "Never change claim_id, assertion or scope. Keep review reason below 400 characters.", session=session)
-                    raw = response.text
-                    run.raw_outputs.append({"role": role, "attempt": "format_correction", "text": raw})
-                    try:
-                        original = json.loads(run.raw_outputs[-2]["text"])
-                        corrected = json.loads(raw)
-                    except ValueError:
-                        raise ValueError("format_correction_core_not_comparable")
-                    if any(original.get(k) != corrected.get(k) for k in ("claim_id", "assertion", "scope")):
-                        raise ValueError("format_correction_changed_core")
-                    self.validate_stage(raw, role, run)
-                return raw
+                    tool_call = registry.call(name, kwargs)
+                except ToolError as exc:
+                    run.audit.append({"type": "tool_error", "role": role, "name": name, "error": exc.code})
+                    raise ValueError(exc.code)
+                run.audit.append({"type": "tool", "role": role, "name": name, "snapshot_id": run.snapshot.id,
+                                  "tool_sequence": tool_call.sequence, "status": tool_call.status,
+                                  "result_sha256": tool_call.result_sha256})
+                return json.dumps(
+                    {"sequence": tool_call.sequence, "status": tool_call.status, "summary": tool_call.summary,
+                     "result": tool_call.result, "error": tool_call.error, "result_sha256": tool_call.result_sha256},
+                    separators=(",", ":"), default=str,
+                )
+            call.__name__ = name
+            call.__doc__ = TOOL_DESCRIPTIONS.get(name, name)
+            return call
+
+        tools = [get_evidence] + [make_registry_tool(name) for name in TOOL_BUDGET]
+        return await self._run_model(
+            run, role, tools, prompt,
+            investigation_instructions(role, focus_team=run.focus_team),
+            max_iterations=3, max_function_calls=max_function_calls,
+        )
 
     @staticmethod
     def validate_stage(raw: str, role: str, run: Run) -> None:

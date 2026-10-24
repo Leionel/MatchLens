@@ -193,7 +193,7 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div>
             <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-emerald)", textTransform: "uppercase" }}>
-              {isZh ? "BL-09 数学空间拟合" : ""}
+              {isZh ? "空间威胁模型" : "Spatial Threat Model"}
             </span>
             <h3 style={{ fontSize: 18, fontWeight: 750, margin: "2px 0 0" }}>
               {t.xtContractionTitle}
@@ -334,7 +334,7 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
         <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <div>
             <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-cyan)", textTransform: "uppercase" }}>
-              {isZh ? "SLICE C-3 模型治理" : ""}
+              {isZh ? "模型治理" : "Model Governance"}
             </span>
             <h3 style={{ fontSize: 16, fontWeight: 750, margin: "2px 0 0" }}>
               {isZh ? "xG / xT / OAAI 模型来源、训练协议与评测接口" : "xG / xT / OAAI provenance, training protocol and evaluation"}
@@ -350,9 +350,23 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
               <div key={key} style={{ border: "0.5px solid var(--glass-border)", borderRadius: 8, padding: 12, display: "grid", gap: 6 }}>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
                   <b style={{ fontSize: 13, color: "var(--text-primary)" }}>{key}</b>
-                  <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 999, border: "0.5px solid var(--glass-border)", color: "var(--text-gold)" }}>
-                    {model.model_type || model.model_status || "—"}
-                  </span>
+                  {(() => {
+                    const status = String(model.model_type || model.model_status || "—");
+                    const heuristic = /heuristic|uncalibrated|not_run|not_calibrated/i.test(status);
+                    return (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                          border: `0.5px solid ${heuristic ? "color-mix(in srgb, var(--amber-9) 45%, transparent)" : "color-mix(in srgb, var(--green-9) 45%, transparent)"}`,
+                          color: heuristic ? "var(--text-gold)" : "var(--text-emerald)",
+                        }}
+                      >
+                        {status}
+                      </span>
+                    );
+                  })()}
                   {model.model_version && (
                     <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>v{model.model_version}</span>
                   )}
@@ -407,7 +421,7 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
         <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <div>
             <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-cyan)", textTransform: "uppercase" }}>
-              {isZh ? "TRACK E 确定性契约基准测试 (DETERMINISTIC CONTRACT BENCHMARK)" : ""}
+              {isZh ? "智能体契约审计" : "Agent Contract Audit"}
             </span>
             <h3 style={{ fontSize: 18, fontWeight: 750, margin: "2px 0 0" }}>
               {isZh ? "智能体架构 A / B / C 确定性契约对照评测" : "Deterministic Contract Audit: Agent Architecture A / B / C"}
@@ -495,16 +509,13 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
       {/* 4. What-if Counterfactual Research Sandbox (Level 3 Exploratory) */}
       <div className="glass-panel" style={{ padding: 18 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            
-            <div>
-              <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-gold)", textTransform: "uppercase" }}>
-                {isZh ? "LEVEL 3 探索性科研实验" : ""}
-              </span>
-              <h3 style={{ fontSize: 18, fontWeight: 750, margin: "2px 0 0" }}>
-                {isZh ? "What-If 反事实推演沙盒 (模拟战术干预)" : "What-If Counterfactual Sandbox (Simulated Interventions)"}
-              </h3>
-            </div>
+          <div>
+            <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-gold)", textTransform: "uppercase" }}>
+              {isZh ? "探索性推演" : "Exploratory Simulation"}
+            </span>
+            <h3 style={{ fontSize: 18, fontWeight: 750, margin: "2px 0 0" }}>
+              {isZh ? "What-If 反事实推演沙盒 (模拟战术干预)" : "What-If Counterfactual Sandbox (Simulated Interventions)"}
+            </h3>
           </div>
 
           <span

@@ -1,12 +1,12 @@
 {
   "version": "statsbomb-corpus-import-v2",
-  "imported_at": "2026-10-24T09:56:21Z",
+  "imported_at": "2026-10-24T12:53:54Z",
   "match_id": "sb_3869354",
   "provider": "statsbomb_open_data",
   "provider_match_id": 3869354,
   "competition": "FIFA World Cup",
   "season": "2022",
-  "stage": "semi_final",
+  "stage": "quarter_final",
   "match_date": "2022-12-10",
   "home_team": "England",
   "away_team": "France",
@@ -19,7 +19,7 @@
   "lineups_file": "data\\raw\\statsbomb\\lineups_3869354.json",
   "lineups_sha256": "526af08fd372b2f8530dfdd8e4dd523cf9b2efc9eabd2afb9d710895dda9b828",
   "target_file": "data\\datasets\\sb_3869354.json",
-  "target_sha256": "ef044132d5cf93162164d6016ce464f29a89823fe53fcf31c84007de1fe9d3ad",
+  "target_sha256": "80db00a5c78714a42e6d2991c182d46781eb21438d0ab89125b54556de90d8d7",
   "raw_event_count": 3239,
   "normalized_event_count": 3239,
   "observed_end_seconds": 6322.982,
@@ -114,7 +114,7 @@
       {
         "check": "period_event_density",
         "passed": true,
-        "detail": "minimum per period=max(8, nominal_period/120)"
+        "detail": "minimum per playing period=max(8, nominal_period/120); a shoot-out needs recorded kicks"
       },
       {
         "check": "period_span_coverage",

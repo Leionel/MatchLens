@@ -97,7 +97,7 @@ Defect IDs use the `DEF-` prefix so they never collide with Track D work items
 | DEF-12 | Story/export do not explicitly require dataset revision equality | `registry.claim_validity` compares dataset revision, current pointer, payload and evidence hash at read time; test `test_public_producer_projection_and_stale_rundown` | Fixed at `3746fee` | P1 |
 | DEF-13 | Investigation UI needs manually typed IDs | OAAI peak → `调查这个峰值` → seeded auto-run (`InvestigationSeed`) | Fixed at `ee388ed` | P1 |
 | DEF-14 | Third Specialist Agent absent | `agents.py` two-stage workflow; attribution remains a deterministic tool layer | Open by design (not implemented) | Research |
-| DEF-15 | Real data remains a partial fixture | `sb_wc2022_final.json` (12 events) is now labelled `SPARSE_SAMPLE_FIXTURE` in the hub, context and rail | Open (external data); labelling fixed at `3746fee` | External |
+| DEF-15 | Real data remains a partial fixture | 71 provider matches are imported and `COMPLETE_VERIFIED`; the 12-event fixture stays labelled `SPARSE_SAMPLE_FIXTURE` | Closed — real corpus in place | Closed |
 
 ---
 
@@ -105,7 +105,8 @@ Defect IDs use the `DEF-` prefix so they never collide with Track D work items
 
 | Gap | Impact | Closure item | Status |
 | --- | --- | --- | --- |
-| No complete licensed match | no full-match/agent generalization claim | B-01/B-02 | Open — external data |
+| No complete licensed match | no full-match/agent generalization claim | B-01/B-02 | Closed — 71 provider matches, all `COMPLETE_VERIFIED` |
+| No independent score oracle | provider score cannot be cross-checked outside the provider's own index | B-01 | Open — needs a second results source |
 | Metrics not one service | chart/ask/story numbers can diverge | B-04/A-01 | Mostly closed; story phase counts remain |
 | Immutable revisions | audit cannot prove historical wording | A-02 | Closed at `3746fee` |
 | Investigation doesn't understand questions | generic reports, poor agency | C-01/C-03/C-05 | Closed at `3746fee` |
@@ -467,24 +468,31 @@ research value; they are not a uniform P0 list.
 ### Track B — Football Data & Analytics
 
 #### B-01 — Complete licensed match import (P0, external)
-- **Current Status**: Importer ready; data blocked.
+- **Current Status**: Implemented & Verified. 71 provider matches imported through
+  `scripts/fetch_statsbomb_open_data.py` + `scripts/ingest_statsbomb_corpus.py`.
 - **Goal**: One complete real match flows through import, verification, metrics,
   UI and Agent.
 - **User Value**: A fan can explore a real full match rather than a 12-event sample.
 - **Affected Modules**: `ingest.py`, data directory, `catalog.py`, tests.
 - **Dependencies**: A-03.
-- **Data Prerequisites**: Licensed StatsBomb payload with provider team/player IDs
-  and explicit usage terms.
+- **Data Prerequisites**: StatsBomb Open Data payloads. The provider agreement
+  forbids redistribution, so only metadata, receipts and the source manifest are
+  committed; the payloads are fetched by a repeatable script into git-ignored
+  directories.
 - **Implementation Scope**: Import, verify periods and identities, issue a
   `COMPLETE_VERIFIED` receipt and register the match.
 - **Acceptance**: L1 source and target hashes match the receipt; L2 periods,
   score and identities are valid; L3 full-match journey works in the UI.
 - **Verification Method**: E2E on the supplied payload.
 - **Deliverable**: Licensed data, provenance receipt and import report.
-- **Blocked By**: External license/payload.
+- **Blocked By**: — closed. Corpus covers 11 competition-seasons across 3
+  confederations and 6 decades; every imported match is `COMPLETE_VERIFIED` and
+  reproduces its declared score from its own event stream.
 
 #### B-02 — Real match intelligence (P1)
-- **Current Status**: Planned; waits B-01.
+- **Current Status**: Implemented & Verified for the metric and completeness
+  surface (full-coverage metrics, period semantics, coverage labels, evidence
+  links on real matches); cross-match views still wait B-03.
 - **Goal**: Full-match statistics, player/team summaries, windows and evidence.
 - **User Value**: An analyst can understand a complete match without synthetic
   volume or name-based guesses.

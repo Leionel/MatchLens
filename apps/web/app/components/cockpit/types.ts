@@ -36,6 +36,10 @@ export type FootballEvent = {
   possession_id: number;
   gain_m?: number | null;
   xt_value?: number;
+  /** The period of play the provider annotated on the event. */
+  period?: number;
+  /** The provider's own minute label for the event. */
+  provider_minute?: number;
 };
 
 export type Receipt = {

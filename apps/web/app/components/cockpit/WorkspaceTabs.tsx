@@ -28,8 +28,8 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
     {
       id: "match_hub",
       index: "00",
-      label: isZh ? "比赛库" : "Match Hub",
-      countBadge: isZh ? "选择" : "Browse",
+      label: isZh ? "比赛库" : "Match Library",
+      countBadge: isZh ? "赛事" : "Browse",
     },
     {
       id: "match_center",
@@ -59,7 +59,7 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
       id: "validation_lab",
       index: "05",
       label: t.workspaceValidationLab,
-      countBadge: "xT CONTRACT",
+      countBadge: "xT",
     },
   ];
 

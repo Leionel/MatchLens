@@ -54,7 +54,7 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
       <div className="cockpit-header-inner">
         {/* Brand & System Badges */}
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <a href="/" className="cockpit-brand" aria-label="MatchLens AI Home">
+          <a href="/" className="cockpit-brand" aria-label={`${t.brandTitle} AI Home`}>
             <svg
               viewBox="0 0 32 32"
               style={{
@@ -74,6 +74,7 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
               <span style={{ fontSize: 18, fontWeight: 900, letterSpacing: -0.5, color: "var(--text-primary)" }}>
                 {t.brandTitle}
               </span>
+              {" "}
               <span style={{ fontSize: 12, fontWeight: 900, color: "var(--text-emerald)" }}>AI</span>
             </div>
           </a>
@@ -84,41 +85,8 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
           </span>
         </div>
 
-        {/* Match Switcher Dropdown */}
-        <div className="match-selector-wrap" title="Select Match Archetype or Real Scenario">
-          <label htmlFor="cockpit-match-select" style={{ fontSize: 12, fontWeight: 700, color: "var(--text-tertiary)", textTransform: "uppercase" }}>
-            {t.matchLabel}
-          </label>
-          <select
-            id="cockpit-match-select"
-            className="match-selector-select"
-            value={state.match_id === "sb_wc2022_final" ? "sb_wc2022_final" : state.scenario || "default"}
-            disabled={busy}
-            onChange={(e) => {
-              const val = e.target.value;
-              if (val.startsWith("sb_")) {
-                onControl({ action: "set_match", match_id: val });
-              } else {
-                onControl({ action: "set_scenario", scenario: val });
-              }
-            }}
-          >
-            {(state.scenarios && state.scenarios.length > 0) ? (
-              state.scenarios.map((sc) => (
-                <option key={sc.id} value={sc.id}>
-                  {sc.label} ({sc.archetype})
-                </option>
-              ))
-            ) : (
-              <>
-                <option value="default">Harbor FC vs Northbridge (Default)</option>
-                <option value="comeback">Harbor FC vs Northbridge (Comeback)</option>
-                <option value="counter">Harbor FC vs Northbridge (Counter)</option>
-              </>
-            )}
-            <option value="sb_wc2022_final">FIFA World Cup Final 2022 (ARG 3-3 FRA)</option>
-          </select>
-        </div>
+        {/* Match switching lives in the Match Library workspace, which covers
+            the whole catalog with provenance and completeness metadata. */}
 
         {/* Global Timeline Scrubber Cluster */}
         <div className="header-scrubber-cluster" aria-label="Global Replay Scrubber">
@@ -160,6 +128,8 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
             disabled={busy}
             onChange={(e) => onControl({ action: "seek", at: Number(e.target.value) })}
             className="header-slider"
+            aria-label={isZh ? "回放时间轴" : "Replay timeline"}
+            aria-valuetext={`${clock(currentSeconds)} / ${clock(totalSeconds)}`}
             title={`Seek: ${clock(currentSeconds)} / ${clock(totalSeconds)}`}
           />
 

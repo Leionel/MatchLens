@@ -73,7 +73,9 @@ export function Scoreboard({
           <span className="league-title">{[competition, season].filter(Boolean).join(" ") || t.competitionTag}</span>
           <span className="format-badge">
             {coverage
-              ? `${coverage.continuous ? "Full coverage" : "Partial coverage"} (${Math.round((coverage.time_coverage || 0) * 100)}%)`
+              ? isZh
+                ? `覆盖${coverage.continuous ? "连续" : "有缺口"} · 已观测 ${Math.round((coverage.time_coverage || 0) * 100)}%`
+                : `${coverage.continuous ? "Continuous" : "Gapped"} coverage · ${Math.round((coverage.time_coverage || 0) * 100)}% observed`
               : t.matchFormatTag}
           </span>
         </div>

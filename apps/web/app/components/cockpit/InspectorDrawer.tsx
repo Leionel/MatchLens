@@ -60,6 +60,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
       className={`inspector-drawer ${isOpen ? "open" : ""}`}
       aria-label="Tactical Inspector Drawer"
       aria-hidden={!isOpen}
+      inert={!isOpen}
     >
       {/* Drawer Header */}
       <div className="drawer-header">

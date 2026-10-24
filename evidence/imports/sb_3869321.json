@@ -1,0 +1,204 @@
+{
+  "version": "statsbomb-corpus-import-v2",
+  "imported_at": "2026-10-24T12:53:53Z",
+  "match_id": "sb_3869321",
+  "provider": "statsbomb_open_data",
+  "provider_match_id": 3869321,
+  "competition": "FIFA World Cup",
+  "season": "2022",
+  "stage": "quarter_final",
+  "match_date": "2022-12-09",
+  "home_team": "Netherlands",
+  "away_team": "Argentina",
+  "home_score": 2,
+  "away_score": 2,
+  "home_provider_team_id": "941",
+  "away_provider_team_id": "779",
+  "source_file": "data\\raw\\statsbomb\\events_3869321.json",
+  "source_sha256": "dd0472e758207eea4dc1726c778f506e91c1f630b3020b101cf111267c2621ed",
+  "lineups_file": "data\\raw\\statsbomb\\lineups_3869321.json",
+  "lineups_sha256": "c3e75882a4f22945a1843392cfbdf751f4dd171e474ed83e189f1e73037d9d33",
+  "target_file": "data\\datasets\\sb_3869321.json",
+  "target_sha256": "34ce2c5f0bd3f40a5546c3b76a6eeff062cfaa0ae426549b28e07f8183677bcc",
+  "raw_event_count": 4708,
+  "normalized_event_count": 4708,
+  "observed_end_seconds": 8856.689,
+  "expected_duration_seconds": 7800.0,
+  "reordered_events": [],
+  "completeness_status": "COMPLETE_VERIFIED",
+  "completeness": {
+    "status": "COMPLETE_VERIFIED",
+    "synthetic": false,
+    "source_declaration": "statsbomb_open_data",
+    "raw_event_count": 4708,
+    "normalized_event_count": 4708,
+    "conversion_drop_count": 0,
+    "drop_reasons": [],
+    "observed_periods": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "expected_periods": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "coverage_by_period": [
+      {
+        "period": 1,
+        "expected_start": 0,
+        "expected_end": 2700.0,
+        "observed_start": 0.0,
+        "observed_end": 3063.72,
+        "event_count": 1903,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 2,
+        "expected_start": 2700.0,
+        "expected_end": 5400.0,
+        "observed_start": 3063.72,
+        "observed_end": 6524.38,
+        "event_count": 1698,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 3,
+        "expected_start": 5400.0,
+        "expected_end": 6300.0,
+        "observed_start": 6524.38,
+        "observed_end": 7427.45,
+        "event_count": 562,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 4,
+        "expected_start": 6300.0,
+        "expected_end": 7200.0,
+        "observed_start": 7427.45,
+        "observed_end": 8391.04,
+        "event_count": 518,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 5,
+        "expected_start": 7200.0,
+        "expected_end": 7800.0,
+        "observed_start": 8391.04,
+        "observed_end": 8856.69,
+        "event_count": 27,
+        "coverage": 0.776,
+        "event_density_ok": true,
+        "completeness_rule": "recorded_kicks",
+        "shootout_kicks_by_team": {
+          "941": 5,
+          "779": 5
+        },
+        "shootout_kicks_ok": true
+      }
+    ],
+    "expected_duration": 7800.0,
+    "observed_start": 0.0,
+    "observed_end": 8856.69,
+    "known_missing_segments": [],
+    "provider_consistency": true,
+    "integrity_checks": [
+      {
+        "check": "events_present",
+        "passed": true,
+        "detail": "4708 normalized events"
+      },
+      {
+        "check": "event_ids_present",
+        "passed": true,
+        "detail": "every event has an ID"
+      },
+      {
+        "check": "event_ids_unique",
+        "passed": true,
+        "detail": "duplicates=[]"
+      },
+      {
+        "check": "clock_in_bounds",
+        "passed": true,
+        "detail": "invalid=[]"
+      },
+      {
+        "check": "team_mapping_declared",
+        "passed": true,
+        "detail": "unmapped=[]"
+      },
+      {
+        "check": "periods_present",
+        "passed": true,
+        "detail": "observed=[1, 2, 3, 4, 5] expected=[1, 2, 3, 4, 5]"
+      },
+      {
+        "check": "conversion_accounted",
+        "passed": true,
+        "detail": "raw=4708 normalized=4708 drops=0"
+      },
+      {
+        "check": "period_event_density",
+        "passed": true,
+        "detail": "minimum per playing period=max(8, nominal_period/120); a shoot-out needs recorded kicks"
+      },
+      {
+        "check": "period_span_coverage",
+        "passed": true,
+        "detail": "minimum per-period span coverage=70%"
+      },
+      {
+        "check": "shootout_kicks_recorded",
+        "passed": true,
+        "detail": "minimum kicks per team=3"
+      },
+      {
+        "check": "clock_monotonic_by_period",
+        "passed": true,
+        "detail": "event order is chronological by period"
+      }
+    ],
+    "confidence": 1.0,
+    "verified": true,
+    "notes": []
+  },
+  "coverage_level": "C1",
+  "score_reconciliation": {
+    "provider_score": "2-2",
+    "recorded_goals": "2-2",
+    "provider_home_score": 2,
+    "provider_away_score": 2,
+    "recorded_home_goals": 2,
+    "recorded_away_goals": 2,
+    "shootout_goals": {
+      "home": 3,
+      "away": 4
+    },
+    "consistent": true,
+    "note": "Provider index score and event-recorded goals agree."
+  },
+  "license_ref": "StatsBomb Public Data User Agreement (Standard Terms, last updated 8 September 2023) - https://github.com/statsbomb/open-data/blob/master/LICENSE.pdf",
+  "attribution_text": "Data provided by StatsBomb. Publications of analysis derived from this data must state the data source as StatsBomb and display the StatsBomb logo from their Media Pack (https://statsbomb.com/media-pack/)."
+}

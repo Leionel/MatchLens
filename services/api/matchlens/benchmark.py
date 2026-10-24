@@ -14,6 +14,7 @@ with those labels is *contract agreement*, not empirical model accuracy.
 """
 from __future__ import annotations
 
+import json
 import time
 from typing import Any, Literal, Optional, Sequence
 from pydantic import BaseModel, ConfigDict, Field, computed_field
@@ -380,3 +381,182 @@ def run_agent_benchmark_harness(match_id: str = "syn_default", num_trials: int =
     """Executes the deterministic publication-pipeline benchmark (no model dispatch)."""
     harness = AgentBenchmarkHarness(match_id=match_id)
     return harness.run(num_trials=num_trials)
+
+
+# ---------------------------------------------------------------------------
+# Agentic evaluation harness (roadmap F-01 groundwork)
+#
+# The recorded-replay arm executes the REAL validation and gate code paths
+# against genuine recorded model outputs from previously authorized runs. It
+# is a contract check, not a live-model evaluation and not an accuracy
+# measurement. Live arms are reported as Not Run until a paid budget is
+# explicitly authorized; no metric for them is estimated or prefilled.
+# ---------------------------------------------------------------------------
+
+EvaluationArmId = Literal[
+    "deterministic_gate",
+    "recorded_replay_analyst_verifier",
+    "live_single_agent",
+    "live_self_review",
+    "live_analyst_verifier",
+    "live_pair_plus_tools",
+]
+
+
+class AgentEvaluationArmResult(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    arm: EvaluationArmId
+    benchmark_type: Literal["deterministic_contract", "recorded_replay", "live_agent_empirical"]
+    status: Literal["executed", "not_run"] = "executed"
+    is_live_model_evaluation: bool = False
+    records_found: Optional[int] = None
+    records_replayed: Optional[int] = None
+    raw_outputs_validated: Optional[int] = None
+    raw_outputs_failed: Optional[int] = None
+    gate_accepted: Optional[int] = None
+    gate_rejected: Optional[int] = None
+    replay_failures: list[str] = Field(default_factory=list)
+    latency_ms_measured: Optional[float] = None
+    token_cost_usd: Optional[float] = None
+    token_source: Literal["not_run", "live_usage"] = "not_run"
+    notes: str = ""
+
+
+class AgentEvaluationSuiteResult(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    benchmark_id: str
+    arms: list[AgentEvaluationArmResult]
+    recorded_runs_source: str
+    live_model_status: Literal["not_run", "run"] = "not_run"
+    summary: str
+    recommendation: str
+
+
+def _recorded_run_records() -> list[tuple[str, dict[str, Any]]]:
+    """Load genuine recorded run receipts from the evidence directory."""
+    import json as _json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3]
+    records: list[tuple[str, dict[str, Any]]] = []
+    for path in sorted((root / "evidence").glob("*/runs/*.json")):
+        try:
+            data = _json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(data, dict) and data.get("draft") and data.get("review") and data.get("evidence"):
+            records.append((path.relative_to(root).as_posix(), data))
+    return records
+
+
+def run_agent_contract_benchmark() -> AgentEvaluationSuiteResult:
+    """Recorded-replay contract benchmark for the agentic publication path."""
+    from .agents import AgentRunner, Run
+    from .contracts import ClaimDraft, VerifierDecision, publication_gate
+    from .football import Snapshot
+
+    started = time.perf_counter()
+    records = _recorded_run_records()
+
+    validated = 0
+    failed = 0
+    failures: list[str] = []
+    replayed = 0
+    gate_accepted = 0
+    gate_rejected = 0
+    for source, record in records:
+        try:
+            snap = Snapshot(id=str(record["snapshot_id"]), canonical=json.dumps(record["evidence"], ensure_ascii=False))
+        except Exception as exc:
+            failures.append(f"{source}: snapshot_reconstruction_failed:{type(exc).__name__}")
+            continue
+        replayed += 1
+        # Replay each role's final recorded output through the real validator.
+        last_by_role: dict[str, str] = {}
+        for item in record.get("raw_outputs", []):
+            role, text = str(item.get("role", "")), str(item.get("text", ""))
+            if role in ("Analyst", "Verifier") and text:
+                last_by_role[role] = text
+        for role, text in last_by_role.items():
+            try:
+                AgentRunner.validate_stage(text, role, Run(f"replay-{record.get('run_id', source)}", snap))
+                validated += 1
+            except Exception as exc:
+                failed += 1
+                failures.append(f"{source}:{role}:{type(exc).__name__}")
+        try:
+            checked = publication_gate(
+                ClaimDraft.model_validate(record["draft"]),
+                VerifierDecision.model_validate(record["review"]),
+                snap,
+                record.get("audit", []),
+            )
+            gate_accepted += len(checked.get("accepted", []))
+            gate_rejected += len(checked.get("rejected", []))
+        except Exception as exc:
+            failures.append(f"{source}:gate:{type(exc).__name__}")
+
+    latency_ms = (time.perf_counter() - started) * 1000.0
+    replay_arm = AgentEvaluationArmResult(
+        arm="recorded_replay_analyst_verifier",
+        benchmark_type="recorded_replay",
+        status="executed" if records else "not_run",
+        records_found=len(records),
+        records_replayed=replayed,
+        raw_outputs_validated=validated,
+        raw_outputs_failed=failed,
+        gate_accepted=gate_accepted,
+        gate_rejected=gate_rejected,
+        replay_failures=failures[:20],
+        latency_ms_measured=round(latency_ms, 3),
+        notes=(
+            "Genuine recorded model outputs from previously authorized runs are replayed through "
+            "the current slot-validation and publication-gate code. Contract check only: not a "
+            "live-model evaluation, not an accuracy measurement, and no token was spent."
+        ) if records else "No recorded run receipts with draft/review/evidence were available.",
+    )
+
+    deterministic_arm = AgentEvaluationArmResult(
+        arm="deterministic_gate",
+        benchmark_type="deterministic_contract",
+        status="executed",
+        notes="The A/B/C deterministic pipeline suite (run_agent_benchmark_harness) covers the executed rule-engine baseline.",
+    )
+
+    live_arms = [
+        AgentEvaluationArmResult(
+            arm=arm,
+            benchmark_type="live_agent_empirical",
+            status="not_run",
+            is_live_model_evaluation=True,
+            notes="Requires an explicitly authorized paid model budget and frozen samples; reported as Not Run, never estimated.",
+        )
+        for arm in ("live_single_agent", "live_self_review", "live_analyst_verifier", "live_pair_plus_tools")
+    ]
+
+    executed = [a for a in (replay_arm,) if a.status == "executed"]
+    if replay_arm.status == "executed":
+        summary = (
+            f"Recorded-replay contract check executed on {replayed} recorded run receipt(s): "
+            f"{validated} recorded model output(s) re-validated, {failed} failed, "
+            f"gate accepted {gate_accepted} / rejected {gate_rejected}. "
+            "These are contract outcomes, not accuracy claims. "
+            "Live A/B arms: NOT RUN (no authorized paid budget)."
+        )
+    else:
+        summary = "No recorded run receipts available; live arms NOT RUN."
+    recommendation = (
+        "Use the deterministic gate (A/B/C) plus this recorded-replay contract check as the "
+        "agentic-path evidence baseline. Authorizing a paid budget is required before any live "
+        "single-agent, self-review, pair or pair+tools comparison is run and reported."
+    )
+    return AgentEvaluationSuiteResult(
+        benchmark_id="bm-agent-contract-recorded",
+        arms=[deterministic_arm, replay_arm, *live_arms],
+        recorded_runs_source="evidence/*/runs/*.json",
+        live_model_status="not_run",
+        summary=summary,
+        recommendation=recommendation,
+    )

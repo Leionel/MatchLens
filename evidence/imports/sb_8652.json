@@ -1,0 +1,204 @@
+{
+  "version": "statsbomb-corpus-import-v2",
+  "imported_at": "2026-10-24T12:53:51Z",
+  "match_id": "sb_8652",
+  "provider": "statsbomb_open_data",
+  "provider_match_id": 8652,
+  "competition": "FIFA World Cup",
+  "season": "2018",
+  "stage": "quarter_final",
+  "match_date": "2018-07-07",
+  "home_team": "Russia",
+  "away_team": "Croatia",
+  "home_score": 2,
+  "away_score": 2,
+  "home_provider_team_id": "796",
+  "away_provider_team_id": "785",
+  "source_file": "data\\raw\\statsbomb\\events_8652.json",
+  "source_sha256": "0c17c5424fef71cd74c10a67eca55007c2da5594d85af159cd384b3d974c56cd",
+  "lineups_file": "data\\raw\\statsbomb\\lineups_8652.json",
+  "lineups_sha256": "2858036684d680daf7f865c5c531dd5a56291ef89d99fccbdd518cb6f7b6a27e",
+  "target_file": "data\\datasets\\sb_8652.json",
+  "target_sha256": "4c51f959804e1ba6c02afc99a8156009dac6e25996f061c688585e31394dac08",
+  "raw_event_count": 4041,
+  "normalized_event_count": 4041,
+  "observed_end_seconds": 8349.312,
+  "expected_duration_seconds": 7800.0,
+  "reordered_events": [],
+  "completeness_status": "COMPLETE_VERIFIED",
+  "completeness": {
+    "status": "COMPLETE_VERIFIED",
+    "synthetic": false,
+    "source_declaration": "statsbomb_open_data",
+    "raw_event_count": 4041,
+    "normalized_event_count": 4041,
+    "conversion_drop_count": 0,
+    "drop_reasons": [],
+    "observed_periods": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "expected_periods": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "coverage_by_period": [
+      {
+        "period": 1,
+        "expected_start": 0,
+        "expected_end": 2700.0,
+        "observed_start": 0.0,
+        "observed_end": 2828.25,
+        "event_count": 1482,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 2,
+        "expected_start": 2700.0,
+        "expected_end": 5400.0,
+        "observed_start": 2828.25,
+        "observed_end": 5832.34,
+        "event_count": 1601,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 3,
+        "expected_start": 5400.0,
+        "expected_end": 6300.0,
+        "observed_start": 5832.34,
+        "observed_end": 6883.79,
+        "event_count": 487,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 4,
+        "expected_start": 6300.0,
+        "expected_end": 7200.0,
+        "observed_start": 6883.79,
+        "observed_end": 7864.47,
+        "event_count": 447,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 5,
+        "expected_start": 7200.0,
+        "expected_end": 7800.0,
+        "observed_start": 7864.47,
+        "observed_end": 8349.31,
+        "event_count": 24,
+        "coverage": 0.808,
+        "event_density_ok": true,
+        "completeness_rule": "recorded_kicks",
+        "shootout_kicks_by_team": {
+          "796": 5,
+          "785": 5
+        },
+        "shootout_kicks_ok": true
+      }
+    ],
+    "expected_duration": 7800.0,
+    "observed_start": 0.0,
+    "observed_end": 8349.31,
+    "known_missing_segments": [],
+    "provider_consistency": true,
+    "integrity_checks": [
+      {
+        "check": "events_present",
+        "passed": true,
+        "detail": "4041 normalized events"
+      },
+      {
+        "check": "event_ids_present",
+        "passed": true,
+        "detail": "every event has an ID"
+      },
+      {
+        "check": "event_ids_unique",
+        "passed": true,
+        "detail": "duplicates=[]"
+      },
+      {
+        "check": "clock_in_bounds",
+        "passed": true,
+        "detail": "invalid=[]"
+      },
+      {
+        "check": "team_mapping_declared",
+        "passed": true,
+        "detail": "unmapped=[]"
+      },
+      {
+        "check": "periods_present",
+        "passed": true,
+        "detail": "observed=[1, 2, 3, 4, 5] expected=[1, 2, 3, 4, 5]"
+      },
+      {
+        "check": "conversion_accounted",
+        "passed": true,
+        "detail": "raw=4041 normalized=4041 drops=0"
+      },
+      {
+        "check": "period_event_density",
+        "passed": true,
+        "detail": "minimum per playing period=max(8, nominal_period/120); a shoot-out needs recorded kicks"
+      },
+      {
+        "check": "period_span_coverage",
+        "passed": true,
+        "detail": "minimum per-period span coverage=70%"
+      },
+      {
+        "check": "shootout_kicks_recorded",
+        "passed": true,
+        "detail": "minimum kicks per team=3"
+      },
+      {
+        "check": "clock_monotonic_by_period",
+        "passed": true,
+        "detail": "event order is chronological by period"
+      }
+    ],
+    "confidence": 1.0,
+    "verified": true,
+    "notes": []
+  },
+  "coverage_level": "C1",
+  "score_reconciliation": {
+    "provider_score": "2-2",
+    "recorded_goals": "2-2",
+    "provider_home_score": 2,
+    "provider_away_score": 2,
+    "recorded_home_goals": 2,
+    "recorded_away_goals": 2,
+    "shootout_goals": {
+      "home": 3,
+      "away": 4
+    },
+    "consistent": true,
+    "note": "Provider index score and event-recorded goals agree."
+  },
+  "license_ref": "StatsBomb Public Data User Agreement (Standard Terms, last updated 8 September 2023) - https://github.com/statsbomb/open-data/blob/master/LICENSE.pdf",
+  "attribution_text": "Data provided by StatsBomb. Publications of analysis derived from this data must state the data source as StatsBomb and display the StatsBomb logo from their Media Pack (https://statsbomb.com/media-pack/)."
+}

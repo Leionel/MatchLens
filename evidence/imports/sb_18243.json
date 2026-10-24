@@ -1,0 +1,212 @@
+{
+  "version": "statsbomb-corpus-import-v2",
+  "imported_at": "2026-10-24T12:53:46Z",
+  "match_id": "sb_18243",
+  "provider": "statsbomb_open_data",
+  "provider_match_id": 18243,
+  "competition": "Champions League",
+  "season": "2015/2016",
+  "stage": "final",
+  "match_date": "2016-05-28",
+  "home_team": "Real Madrid",
+  "away_team": "Atlético Madrid",
+  "home_score": 1,
+  "away_score": 1,
+  "home_provider_team_id": "220",
+  "away_provider_team_id": "212",
+  "source_file": "data\\raw\\statsbomb\\events_18243.json",
+  "source_sha256": "d6e5e1a71fa0433b380519a5355a134573784c2919c92b96776cd38c5b974514",
+  "lineups_file": "data\\raw\\statsbomb\\lineups_18243.json",
+  "lineups_sha256": "39070f16d7525d88b1929e433028eb1d52039f1a984338f6ba5b5b7e3e00b3e4",
+  "target_file": "data\\datasets\\sb_18243.json",
+  "target_sha256": "5e90f7b776638e39f1662b4312c3846788c375ca616b4f9a992acac5c8f8dca5",
+  "raw_event_count": 4708,
+  "normalized_event_count": 4708,
+  "observed_end_seconds": 7941.65,
+  "expected_duration_seconds": 7800.0,
+  "reordered_events": [
+    {
+      "provider_event_id": "7c4ad190-72c8-49e4-ba02-246413f294b0",
+      "index": 4683,
+      "period": 4,
+      "clock_seconds": 0.777,
+      "reason": "out_of_order_period_timestamp"
+    }
+  ],
+  "completeness_status": "COMPLETE_VERIFIED",
+  "completeness": {
+    "status": "COMPLETE_VERIFIED",
+    "synthetic": false,
+    "source_declaration": "statsbomb_open_data",
+    "raw_event_count": 4708,
+    "normalized_event_count": 4708,
+    "conversion_drop_count": 0,
+    "drop_reasons": [],
+    "observed_periods": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "expected_periods": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "coverage_by_period": [
+      {
+        "period": 1,
+        "expected_start": 0,
+        "expected_end": 2700.0,
+        "observed_start": 0.0,
+        "observed_end": 2768.46,
+        "event_count": 1966,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 2,
+        "expected_start": 2700.0,
+        "expected_end": 5400.0,
+        "observed_start": 2768.46,
+        "observed_end": 5693.12,
+        "event_count": 1606,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 3,
+        "expected_start": 5400.0,
+        "expected_end": 6300.0,
+        "observed_start": 5693.12,
+        "observed_end": 6601.94,
+        "event_count": 631,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 4,
+        "expected_start": 6300.0,
+        "expected_end": 7200.0,
+        "observed_start": 6601.94,
+        "observed_end": 7627.22,
+        "event_count": 483,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 5,
+        "expected_start": 7200.0,
+        "expected_end": 7800.0,
+        "observed_start": 7627.22,
+        "observed_end": 7941.65,
+        "event_count": 22,
+        "coverage": 0.524,
+        "event_density_ok": true,
+        "completeness_rule": "recorded_kicks",
+        "shootout_kicks_by_team": {
+          "220": 5,
+          "212": 4
+        },
+        "shootout_kicks_ok": true
+      }
+    ],
+    "expected_duration": 7800.0,
+    "observed_start": 0.0,
+    "observed_end": 7941.65,
+    "known_missing_segments": [],
+    "provider_consistency": true,
+    "integrity_checks": [
+      {
+        "check": "events_present",
+        "passed": true,
+        "detail": "4708 normalized events"
+      },
+      {
+        "check": "event_ids_present",
+        "passed": true,
+        "detail": "every event has an ID"
+      },
+      {
+        "check": "event_ids_unique",
+        "passed": true,
+        "detail": "duplicates=[]"
+      },
+      {
+        "check": "clock_in_bounds",
+        "passed": true,
+        "detail": "invalid=[]"
+      },
+      {
+        "check": "team_mapping_declared",
+        "passed": true,
+        "detail": "unmapped=[]"
+      },
+      {
+        "check": "periods_present",
+        "passed": true,
+        "detail": "observed=[1, 2, 3, 4, 5] expected=[1, 2, 3, 4, 5]"
+      },
+      {
+        "check": "conversion_accounted",
+        "passed": true,
+        "detail": "raw=4708 normalized=4708 drops=0"
+      },
+      {
+        "check": "period_event_density",
+        "passed": true,
+        "detail": "minimum per playing period=max(8, nominal_period/120); a shoot-out needs recorded kicks"
+      },
+      {
+        "check": "period_span_coverage",
+        "passed": true,
+        "detail": "minimum per-period span coverage=70%"
+      },
+      {
+        "check": "shootout_kicks_recorded",
+        "passed": true,
+        "detail": "minimum kicks per team=3"
+      },
+      {
+        "check": "clock_monotonic_by_period",
+        "passed": true,
+        "detail": "event order is chronological by period"
+      }
+    ],
+    "confidence": 1.0,
+    "verified": true,
+    "notes": []
+  },
+  "coverage_level": "C1",
+  "score_reconciliation": {
+    "provider_score": "1-1",
+    "recorded_goals": "1-1",
+    "provider_home_score": 1,
+    "provider_away_score": 1,
+    "recorded_home_goals": 1,
+    "recorded_away_goals": 1,
+    "shootout_goals": {
+      "home": 5,
+      "away": 3
+    },
+    "consistent": true,
+    "note": "Provider index score and event-recorded goals agree."
+  },
+  "license_ref": "StatsBomb Public Data User Agreement (Standard Terms, last updated 8 September 2023) - https://github.com/statsbomb/open-data/blob/master/LICENSE.pdf",
+  "attribution_text": "Data provided by StatsBomb. Publications of analysis derived from this data must state the data source as StatsBomb and display the StatsBomb logo from their Media Pack (https://statsbomb.com/media-pack/)."
+}

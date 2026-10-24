@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./cockpit-polish.css";
 
 export const metadata: Metadata = {
   title: "MatchLens AI — Football Intelligence You Can Challenge",

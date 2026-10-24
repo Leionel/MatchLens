@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useId, useState } from "react";
+import React, { useId, useMemo, useState } from "react";
 import { Locale, getTranslation } from "../lib/i18n";
 
 export type OAAITimelinePoint = {
@@ -37,6 +37,7 @@ export type OAAIChangePoint = {
   disclaimer: string;
   window_seconds: number;
   top_contributors: OAAIContributor[];
+  top_contributors_truncated?: number;
 };
 
 export type OAAIRegistryObservation = {
@@ -82,13 +83,115 @@ export type OAAIData = {
   change_points: OAAIChangePoint[];
   disclaimer: string;
   registry_comparison?: OAAIRegistryComparison;
+  chart_sampling?: {
+    timeline_points_full: number;
+    timeline_points_chart: number;
+    max_points: number;
+  };
 };
+
+/** A stretch of the match that belongs to one period of play. */
+export type OAAIPeriodBand = {
+  period: number;
+  start: number;
+  end: number;
+  label: string;
+  minuteLabel?: string;
+};
+
+type EventWithPeriod = {
+  t?: number;
+  period?: number;
+  provider_minute?: number;
+};
+
+const PERIOD_LABELS_ZH: Record<number, string> = {
+  1: "上半场",
+  2: "下半场",
+  3: "加时 · 上半场",
+  4: "加时 · 下半场",
+  5: "点球大战",
+};
+
+const PERIOD_LABELS_EN: Record<number, string> = {
+  1: "First half",
+  2: "Second half",
+  3: "Extra time · 1st",
+  4: "Extra time · 2nd",
+  5: "Penalty shoot-out",
+};
+
+/**
+ * The period structure of a match, read from the event stream itself.
+ *
+ * The provider annotates every event with the period it belongs to, so the
+ * bands are evidence rather than an assumption about how long a half lasts.
+ * A match that went to extra time therefore shows the extra time as its own
+ * stretch of momentum instead of hiding it inside one long second half.
+ */
+export function buildPeriodBands(
+  events: EventWithPeriod[] | undefined,
+  isZh: boolean,
+): OAAIPeriodBand[] {
+  if (!events || events.length === 0) return [];
+  const byPeriod = new Map<number, { start: number; end: number; minute: number | null }>();
+  for (const event of events) {
+    const t = Number(event?.t);
+    if (!Number.isFinite(t)) continue;
+    const period = Number.isFinite(Number(event?.period)) ? Number(event?.period) : 1;
+    const minute = Number.isFinite(Number(event?.provider_minute))
+      ? Number(event?.provider_minute)
+      : null;
+    const current = byPeriod.get(period);
+    if (!current) {
+      byPeriod.set(period, { start: t, end: t, minute });
+    } else {
+      current.start = Math.min(current.start, t);
+      current.end = Math.max(current.end, t);
+    }
+  }
+  const labels = isZh ? PERIOD_LABELS_ZH : PERIOD_LABELS_EN;
+  return Array.from(byPeriod.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([period, value]) => ({
+      period,
+      start: value.start,
+      end: value.end,
+      label: labels[period] ?? (isZh ? `第 ${period} 节` : `Period ${period}`),
+      minuteLabel: value.minute === null ? undefined : `${value.minute}'`,
+    }));
+}
+
+/** Axis steps in minutes, coarse enough that the labels never collide. */
+const AXIS_STEPS_MINUTES = [1, 2, 5, 10, 15, 20, 30, 45, 60];
+
+function formatClock(seconds: number): string {
+  const safe = Math.max(0, Math.round(seconds));
+  const minutes = Math.floor(safe / 60);
+  const rest = safe % 60;
+  return `${minutes}:${String(rest).padStart(2, "0")}`;
+}
+
+function pickAxisStep(durationSeconds: number, maxTicks: number): number {
+  const minutes = Math.max(1, Math.round(durationSeconds / 60));
+  for (const step of AXIS_STEPS_MINUTES) {
+    if (minutes / step <= maxTicks) return step * 60;
+  }
+  return (AXIS_STEPS_MINUTES[AXIS_STEPS_MINUTES.length - 1] || 30) * 60;
+}
+
+/** How many change points may carry a label before the curve stops being readable. */
+const MAX_LABELLED_CHANGE_POINTS = 6;
 
 interface OAAITimelineProps {
   data?: OAAIData | null;
   currentTime?: number;
   homeTeamName?: string;
   awayTeamName?: string;
+  /** The full length of the match, so the axis does not rescale while replaying. */
+  matchDuration?: number;
+  /** The period structure of the match, read from its event stream. */
+  periods?: OAAIPeriodBand[];
   onSeek?: (t: number) => void;
   onSelectEvent?: (eventId: string) => void;
   onInvestigateChangePoint?: (changePoint: OAAIChangePoint) => void;
@@ -102,6 +205,8 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
   currentTime = 0,
   homeTeamName = "Harbor FC",
   awayTeamName = "Northbridge United",
+  matchDuration,
+  periods = [],
   onSeek,
   onSelectEvent,
   onInvestigateChangePoint,
@@ -114,6 +219,36 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
   const isZh = locale === "zh";
 
   const [selectedChangePoint, setSelectedChangePoint] = useState<OAAIChangePoint | null>(null);
+  const [hoverTime, setHoverTime] = useState<number | null>(null);
+
+  const timeline = data?.timeline ?? [];
+  const changePoints = data?.change_points ?? [];
+
+  // The change points of a full match outnumber what the curve can show, so
+  // every one of them is drawn on a rug below the axis and only the strongest
+  // keep a label on the curve itself.
+  const strongestChangePoints = useMemo(() => {
+    return [...changePoints]
+      .sort((a, b) => Math.abs(b.oaai_amplitude || 0) - Math.abs(a.oaai_amplitude || 0))
+      .slice(0, MAX_LABELLED_CHANGE_POINTS)
+      .map((cp) => cp.change_point_id);
+  }, [changePoints]);
+  const labelledChangePoints = new Set(strongestChangePoints);
+
+  // Hover readout
+  const hoverPoint = useMemo(() => {
+    if (hoverTime === null) return null;
+    let best: OAAITimelinePoint | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const point of timeline) {
+      const distance = Math.abs(point.t - hoverTime);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = point;
+      }
+    }
+    return best;
+  }, [hoverTime, timeline]);
 
   if (!data || !data.timeline || data.timeline.length === 0) {
     return (
@@ -134,10 +269,19 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
     );
   }
 
-  const timeline = data.timeline;
-  const maxT = Math.max(...timeline.map((p) => p.t), 720);
+  const observedEnd = timeline.length ? timeline[timeline.length - 1].t : 0;
+  // The axis spans the whole match so the curve does not rescale on every
+  // tick; the part that has not been observed yet stays empty.
+  const axisEnd = Math.max(
+    observedEnd,
+    Number.isFinite(matchDuration) && Number(matchDuration) > 0 ? Number(matchDuration) : 0,
+  );
+  const maxT = axisEnd || Math.max(observedEnd, 720);
+
+  const amplitudeOf = (point: OAAITimelinePoint) => Math.abs(point.oaai_value ?? point.oaai_raw ?? 0);
   const maxAmp = Math.max(
-    ...timeline.map((p) => Math.abs(p.oaai_value ?? p.oaai_raw ?? 0)),
+    ...timeline.map(amplitudeOf),
+    ...(data.change_points || []).map((cp) => Math.abs(cp.oaai_amplitude || 0)),
     0.8
   );
 
@@ -155,7 +299,6 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
   const scaleX = (valT: number) => padLeft + (valT / maxT) * plotWidth;
   const scaleY = (val: number) => zeroY - (val / (maxAmp * 1.15)) * (plotHeight / 2);
 
-  // Construct SVG points
   const points = timeline.map((pt) => ({
     x: scaleX(pt.t),
     y: scaleY(pt.oaai_value ?? pt.oaai_raw ?? 0),
@@ -166,7 +309,7 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
     ""
   );
 
-  const areaPath = `${linePath} L ${scaleX(maxT)} ${zeroY} L ${scaleX(0)} ${zeroY} Z`;
+  const areaPath = `${linePath} L ${scaleX(observedEnd)} ${zeroY} L ${scaleX(0)} ${zeroY} Z`;
   const currentX = scaleX(currentTime);
 
   // Current point
@@ -174,6 +317,16 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
   const currentVal = currentPoint?.oaai_value ?? currentPoint?.oaai_raw ?? 0;
   const isCurrentHomeLead = currentVal > 0.05;
   const isCurrentAwayLead = currentVal < -0.05;
+
+  // The change points of a full match outnumber what the curve can show, so
+  // every one of them is drawn on a rug below the axis and only the strongest
+  // keep a label on the curve itself.
+  const hoverValue = hoverPoint?.oaai_value ?? hoverPoint?.oaai_raw ?? 0;
+
+  // Axis ticks
+  const axisStep = pickAxisStep(maxT, 12);
+  const axisTicks: number[] = [];
+  for (let stamp = 0; stamp <= maxT + 1; stamp += axisStep) axisTicks.push(stamp);
 
   // Registry consistency statement (DEF-11 / B-04). The backend publishes the
   // registry observation for the same snapshot; when the chart and the
@@ -183,6 +336,11 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
   const registryAway = registry?.observations?.["N"]?.["current"];
   const registryText = (obs?: OAAIRegistryObservation) =>
     !obs ? "-" : obs.value === null ? (isZh ? "未观测" : "not observed") : obs.value.toFixed(4);
+
+  const strongestChangePoint = changePoints.reduce<OAAIChangePoint | null>((best, cp) => {
+    if (!best) return cp;
+    return Math.abs(cp.oaai_amplitude || 0) > Math.abs(best.oaai_amplitude || 0) ? cp : best;
+  }, null);
 
   return (
     <div
@@ -212,7 +370,7 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
         </div>
 
         {/* Live Momentum Pill & Smoothing Mode Controls */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           {/* Live Momentum Pill */}
           <div
             style={{
@@ -312,6 +470,62 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
         </div>
       </div>
 
+      {/* Match extent: how much of the match the curve actually covers */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "6px 14px",
+          fontSize: 11,
+          color: "var(--text-tertiary)",
+          alignItems: "center",
+        }}
+      >
+        <span data-testid="oaai-observed-span">
+          {isZh ? "已观测" : "Observed"}: {formatClock(observedEnd)}
+          {maxT > observedEnd + 1 ? ` / ${formatClock(maxT)}` : ""}
+        </span>
+        {periods.length > 0 && (
+          <span data-testid="oaai-period-strip" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {periods.map((band) => (
+              <span
+                key={band.period}
+                style={{
+                  padding: "1px 7px",
+                  borderRadius: 4,
+                  border: "0.5px solid color-mix(in srgb, var(--slate-12) 14%, transparent)",
+                  background: "color-mix(in srgb, var(--slate-12) 6%, transparent)",
+                }}
+              >
+                {band.label}
+                {band.minuteLabel ? ` (${band.minuteLabel})` : ""}
+              </span>
+            ))}
+          </span>
+        )}
+        {changePoints.length > 0 && (
+          <span data-testid="oaai-change-point-summary">
+            {isZh
+              ? `指标拐点 ${changePoints.length} 处`
+              : `${changePoints.length} metric change points`}
+            {strongestChangePoint
+              ? ` · ${isZh ? "最强" : "strongest"} ${
+                  strongestChangePoint.leading_team === "H" ? homeTeamName : strongestChangePoint.leading_team === "N" ? awayTeamName : isZh ? "中立" : "neutral"
+                } ${strongestChangePoint.oaai_amplitude > 0 ? "+" : ""}${strongestChangePoint.oaai_amplitude.toFixed(2)} @ ${Math.floor(
+                  strongestChangePoint.at / 60
+                )}'`
+              : ""}
+          </span>
+        )}
+        {data.chart_sampling && data.chart_sampling.timeline_points_full > data.chart_sampling.timeline_points_chart && (
+          <span title={isZh ? "图表按像素分辨率抽样，峰值保留；指标本身未做抽样" : "Chart samples the timeline to pixel resolution; peaks are kept, the metric is not sampled"}>
+            {isZh
+              ? `曲线采样 ${data.chart_sampling.timeline_points_chart}/${data.chart_sampling.timeline_points_full} 点（峰值保留）`
+              : `curve ${data.chart_sampling.timeline_points_chart}/${data.chart_sampling.timeline_points_full} samples (peaks kept)`}
+          </span>
+        )}
+      </div>
+
       {/* Registry consistency statement (same snapshot, same metric) */}
       {registry ? (
         <div
@@ -370,6 +584,12 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
 
         <svg
           viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+          role="img"
+          aria-label={
+            isZh
+              ? `进攻活动指数动量曲线，已观测 ${formatClock(observedEnd)}，${changePoints.length} 处指标拐点`
+              : `Attacking activity momentum curve, ${formatClock(observedEnd)} observed, ${changePoints.length} metric change points`
+          }
           style={{ width: "100%", height: "auto", cursor: "crosshair", userSelect: "none" }}
           onClick={(e) => {
             const rect = e.currentTarget.getBoundingClientRect();
@@ -377,17 +597,59 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
             const clickedT = Math.max(0, Math.min(maxT, clickRatio * maxT));
             onSeek?.(clickedT);
           }}
+          onMouseMove={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const ratio = (e.clientX - rect.left - (padLeft / svgWidth) * rect.width) / ((plotWidth / svgWidth) * rect.width);
+            setHoverTime(Math.max(0, Math.min(maxT, ratio * maxT)));
+          }}
+          onMouseLeave={() => setHoverTime(null)}
         >
           <defs>
-            <linearGradient id={`${gradientId}-home`} x1="0" y1="0" x2="0" y2="1">
+            <linearGradient id={`${gradientId}-signed`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="var(--green-9)" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="var(--green-9)" stopOpacity="0.0" />
-            </linearGradient>
-            <linearGradient id={`${gradientId}-away`} x1="0" y1="1" x2="0" y2="0">
-              <stop offset="0%" stopColor="var(--amber-9)" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="var(--amber-9)" stopOpacity="0.0" />
+              <stop offset={`${(zeroY / svgHeight) * 100 - 0.01}%`} stopColor="var(--green-9)" stopOpacity="0.08" />
+              <stop offset={`${(zeroY / svgHeight) * 100 + 0.01}%`} stopColor="var(--amber-9)" stopOpacity="0.08" />
+              <stop offset="100%" stopColor="var(--amber-9)" stopOpacity="0.35" />
             </linearGradient>
           </defs>
+
+          {/* Period bands: the periods the provider annotated on the events */}
+          {periods.map((band) => {
+            const x0 = scaleX(band.start);
+            const x1 = scaleX(band.end);
+            const isLast = band.period === periods[periods.length - 1]?.period;
+            return (
+              <g key={band.period}>
+                <rect
+                  x={x0}
+                  y={padTop}
+                  width={Math.max(0, x1 - x0)}
+                  height={plotHeight}
+                  fill={band.period % 2 === 0 ? "color-mix(in srgb, var(--slate-12) 5%, transparent)" : "transparent"}
+                />
+                {!isLast && (
+                  <line
+                    x1={x1}
+                    y1={padTop}
+                    x2={x1}
+                    y2={svgHeight - padBottom}
+                    stroke="color-mix(in srgb, var(--slate-12) 22%, transparent)"
+                    strokeWidth="1"
+                    strokeDasharray="3 3"
+                  />
+                )}
+                <text
+                  x={x0 + 4}
+                  y={padTop + 10}
+                  fill="var(--text-tertiary)"
+                  fontSize="9"
+                  fontWeight="600"
+                >
+                  {band.label}
+                </text>
+              </g>
+            );
+          })}
 
           {/* Grid lines */}
           <line
@@ -401,8 +663,7 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
           />
 
           {/* Time axis marks */}
-          {Array.from({ length: Math.floor(maxT / 120) + 1 }).map((_, idx) => {
-            const tVal = idx * 120;
+          {axisTicks.map((tVal) => {
             const xPos = scaleX(tVal);
             return (
               <g key={`t-mark-${tVal}`}>
@@ -439,8 +700,8 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
             -{maxAmp.toFixed(1)}
           </text>
 
-          {/* Area fill */}
-          <path d={areaPath} fill={`url(#${gradientId}-home)`} />
+          {/* Area fill: green above the zero line, amber below */}
+          <path d={areaPath} fill={`url(#${gradientId}-signed)`} />
 
           {/* Wave Curve Line */}
           <path
@@ -451,6 +712,40 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
             strokeLinecap="round"
             strokeLinejoin="round"
           />
+
+          {/* Change point rug: every metric change point of the match */}
+          {changePoints.length > 0 && (
+            <g data-testid="oaai-change-point-rug">
+              {changePoints.map((cp) => {
+                const rugX = scaleX(cp.at);
+                const height = 4 + Math.min(10, Math.abs(cp.oaai_amplitude || 0) * 6);
+                const isHome = cp.leading_team === "H";
+                const isSelected = selectedChangePoint?.change_point_id === cp.change_point_id;
+                return (
+                  <line
+                    key={cp.change_point_id}
+                    x1={rugX}
+                    y1={svgHeight - padBottom - height}
+                    x2={rugX}
+                    y2={svgHeight - padBottom}
+                    stroke={isHome ? "var(--green-9)" : "var(--amber-9)"}
+                    strokeWidth={isSelected ? 2.4 : 1.2}
+                    opacity={isSelected ? 1 : 0.65}
+                    style={{ cursor: "pointer" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedChangePoint(isSelected ? null : cp);
+                      onSeek?.(cp.at);
+                    }}
+                  >
+                    <title>
+                      {cp.change_point_id} · {Math.floor(cp.at / 60)}' · {(cp.oaai_amplitude > 0 ? "+" : "") + cp.oaai_amplitude.toFixed(2)}
+                    </title>
+                  </line>
+                );
+              })}
+            </g>
+          )}
 
           {/* Current playback time vertical cursor */}
           <line
@@ -471,8 +766,58 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
             strokeWidth="2.5"
           />
 
-          {/* Change Points / Inflection Markers */}
-          {data.change_points.map((cp) => {
+          {/* Hover crosshair and readout */}
+          {hoverPoint && hoverTime !== null && (
+            <g pointerEvents="none">
+              <line
+                x1={scaleX(hoverPoint.t)}
+                y1={padTop}
+                x2={scaleX(hoverPoint.t)}
+                y2={svgHeight - padBottom}
+                stroke="color-mix(in srgb, var(--white) 45%, transparent)"
+                strokeWidth="1"
+              />
+              <circle
+                cx={scaleX(hoverPoint.t)}
+                cy={scaleY(hoverValue)}
+                r="3.5"
+                fill="var(--white)"
+                opacity="0.9"
+              />
+              <g transform={`translate(${Math.min(svgWidth - 168, Math.max(padLeft + 4, scaleX(hoverPoint.t) + 8))}, ${padTop + 4})`}>
+                <rect
+                  x="0"
+                  y="0"
+                  width="156"
+                  height="42"
+                  rx="5"
+                  fill="color-mix(in srgb, var(--slate-2) 92%, transparent)"
+                  stroke="color-mix(in srgb, var(--slate-12) 18%, transparent)"
+                />
+                <text x="8" y="15" fill="var(--text-secondary)" fontSize="11" fontFamily="monospace">
+                  {Math.floor(hoverPoint.t / 60)}'{String(Math.floor(hoverPoint.t % 60)).padStart(2, "0")}"
+                </text>
+                <text
+                  x="8"
+                  y="31"
+                  fill={hoverValue >= 0 ? "var(--text-emerald)" : "var(--text-gold)"}
+                  fontSize="11"
+                  fontWeight="700"
+                  fontFamily="monospace"
+                >
+                  {hoverValue >= 0 ? "+" : ""}
+                  {hoverValue.toFixed(3)}
+                </text>
+                <text x="70" y="31" fill="var(--text-tertiary)" fontSize="10">
+                  {hoverValue > 0.05 ? homeTeamName : hoverValue < -0.05 ? awayTeamName : isZh ? "平衡" : "balanced"}
+                </text>
+              </g>
+            </g>
+          )}
+
+          {/* Change Points / Inflection Markers: only the strongest ones are labelled */}
+          {changePoints.map((cp) => {
+            if (!labelledChangePoints.has(cp.change_point_id)) return null;
             const cpX = scaleX(cp.at);
             const cpY = scaleY(cp.oaai_amplitude);
             const isSelected = selectedChangePoint?.change_point_id === cp.change_point_id;
@@ -510,7 +855,7 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
                   x={cpX}
                   y={cpY - (isHome ? 9 : -16)}
                   fill="var(--slate-12)"
-                  fontSize="12"
+                  fontSize="11"
                   fontWeight="bold"
                   textAnchor="middle"
                 >
@@ -520,7 +865,6 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
             );
           })}
         </svg>
-
       </div>
 
       {/* Level 2 Attribution Drawer when an Inflection Point is clicked */}
@@ -641,6 +985,13 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
               </div>
             ))}
           </div>
+          {selectedChangePoint.top_contributors_truncated ? (
+            <p style={{ fontSize: 11, color: "var(--text-tertiary)", margin: 0 }}>
+              {isZh
+                ? `另有 ${selectedChangePoint.top_contributors_truncated} 个贡献事件未随图表下发，可在事件流中按时间检索。`
+                : `${selectedChangePoint.top_contributors_truncated} further contributing events were not shipped with the chart; look them up in the event stream by time.`}
+            </p>
+          ) : null}
         </div>
       )}
     </div>

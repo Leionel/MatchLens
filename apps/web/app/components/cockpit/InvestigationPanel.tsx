@@ -28,6 +28,19 @@ type Plan = {
   state_history: { state: string; reason?: string }[];
   execution_mode: string;
   agent_status: string;
+  agent_run_id?: string | null;
+  agent_error?: string | null;
+  agent_run?: {
+    run_id: string;
+    state: string;
+    state_history: { state: string; reason?: string }[];
+    requests: number;
+    model: string | null;
+    prompt_version: string | null;
+    accepted_count?: number;
+    rejected_count?: number;
+    error?: string | null;
+  } | null;
   dataset_revision?: string | null;
   completeness?: { status?: string; confidence?: number };
   selected_metrics: string[];
@@ -58,6 +71,7 @@ type Plan = {
     result_sha256?: string;
     duration_ms?: number;
     error?: string | null;
+    role?: string | null;
   }[];
   findings: {
     finding_id: string;
@@ -106,6 +120,23 @@ const statusTone: Record<string, string> = {
   CANCELLED: "var(--text-tertiary)",
 };
 
+/**
+ * The engine that produced the plan and the state of the model agent are two
+ * different facts: a deterministic plan is a real result, and "Not Run" only
+ * says that no paid model was called. The UI must never blur the two.
+ */
+const EXECUTION_LABELS: Record<string, { zh: string; en: string }> = {
+  deterministic_planner: { zh: "确定性引擎", en: "Deterministic" },
+  maf_agent: { zh: "真实 Agent", en: "Real Agent" },
+};
+
+const AGENT_STATUS_LABELS: Record<string, { zh: string; en: string }> = {
+  not_run: { zh: "模型未运行", en: "Not Run" },
+  run: { zh: "模型已运行", en: "Agent Run" },
+  failed: { zh: "Agent 失败（已回退确定性）", en: "Agent Failed (fell back)" },
+};
+
+
 export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
   state,
   locale = "zh",
@@ -116,6 +147,7 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
 }) => {
   const isZh = locale === "zh";
   const [question, setQuestion] = useState("");
+  const [executionMode, setExecutionMode] = useState<"deterministic_planner" | "maf_agent">("deterministic_planner");
   const [focusType, setFocusType] = useState<"moment" | "oaai_point" | "event" | "metric" | "sequence" | "player" | "zone">("moment");
   const [focusId, setFocusId] = useState("");
   const [team, setTeam] = useState<"H" | "N">(state.focus_team ?? "H");
@@ -148,6 +180,7 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
             focus_type: targetType,
             focus_id: targetId,
             question: useSeed?.question ?? question,
+            execution_mode: executionMode,
           }),
         });
         if (!res.ok) throw new Error(`Investigation failed (${res.status})`);
@@ -166,7 +199,7 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
         setBusy(false);
       }
     },
-    [focusId, focusType, question, seed, state.at, state.match_id, state.snapshot_as_of, team]
+    [executionMode, focusId, focusType, question, seed, state.at, state.match_id, state.snapshot_as_of, team]
   );
 
   useEffect(() => {
@@ -216,8 +249,32 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
           <span className="rail-chip neutral" style={{ color: statusTone[plan?.state || ""] || undefined }}>
             {plan ? plan.state : isZh ? "未开始" : "Not started"}
           </span>
+          <span
+            className="rail-chip neutral"
+            data-testid="investigation-execution-mode"
+            data-execution-mode={plan?.execution_mode || ""}
+            title={isZh ? "产生该计划的执行引擎" : "Engine that produced this plan"}
+          >
+            {plan
+              ? (EXECUTION_LABELS[plan.execution_mode]?.en ?? plan.execution_mode)
+              : isZh
+                ? "确定性引擎"
+                : "Deterministic"}
+          </span>
+          <span
+            className="rail-chip neutral"
+            data-testid="investigation-agent-status"
+            data-agent-status={plan?.agent_status || ""}
+            title={isZh ? "模型智能体是否真的执行过" : "Whether a model agent actually ran"}
+          >
+            {plan
+              ? (AGENT_STATUS_LABELS[plan.agent_status]?.en ?? plan.agent_status)
+              : isZh
+                ? "模型未运行"
+                : "Not Run"}
+          </span>
           <span className="rail-chip neutral" title={plan?.dataset_revision || undefined}>
-            {plan?.completeness?.status || plan?.agent_status || "—"}
+            {plan?.completeness?.status || "—"}
           </span>
         </div>
       </div>
@@ -267,6 +324,18 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
             style={{ minHeight: 34, background: "var(--input-bg)", color: "var(--input-text)", border: "0.5px solid var(--pitch-border)", borderRadius: 6, padding: "4px 8px" }}
           />
         </label>
+        <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)" }}>
+          {isZh ? "执行引擎" : "Engine"}
+          <select
+            value={executionMode}
+            onChange={(e) => setExecutionMode(e.target.value as typeof executionMode)}
+            data-testid="investigation-engine-select"
+            style={{ minHeight: 34, background: "var(--input-bg)", color: "var(--input-text)", border: "0.5px solid var(--pitch-border)", borderRadius: 6, padding: "4px 8px" }}
+          >
+            <option value="deterministic_planner">{isZh ? "确定性引擎（免费）" : "Deterministic (free)"}</option>
+            <option value="maf_agent">{isZh ? "真实 Agent（消耗模型预算）" : "Real Agent (uses model budget)"}</option>
+          </select>
+        </label>
         <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)", gridColumn: "span 2" }}>
           {isZh ? "问题" : "Question"}
           <input
@@ -285,7 +354,7 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
       </div>
 
       {plan && (
-        <div style={{ display: "grid", gap: 12 }}>
+        <div style={{ display: "grid", gap: 12 }} data-testid="investigation-plan">
           <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
             {isZh ? "快照" : "Snapshot"} <code>{plan.snapshot_id.slice(0, 18)}</code> / {plan.as_of}s / {plan.tool_receipts.length} {isZh ? "次工具调用" : "tool calls"}
           </div>
@@ -335,17 +404,69 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
             </div>
           )}
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>{isZh ? "工具回执" : "Tool receipts"}</div>
-            {plan.tool_receipts.map((step) => (
-              <div key={step.sequence} style={{ display: "flex", gap: 8, alignItems: "baseline", fontSize: 12, color: "var(--text-secondary)" }}>
-                <code>{step.sequence.toString().padStart(2, "0")}</code>
-                <b style={{ color: "var(--text-primary)" }}>{step.tool}</b>
-                <span style={{ color: statusTone[step.status] || "var(--text-tertiary)" }}>{step.status}</span>
-                <span style={{ color: "var(--text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{step.summary}</span>
+          <details open={plan.tool_receipts.length <= 8} style={{ display: "grid", gap: 6 }}>
+            <summary style={{ fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+              {isZh ? "工具回执" : "Tool receipts"} ({plan.tool_receipts.length})
+            </summary>
+            <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
+              {plan.tool_receipts.map((step) => (
+                <div key={step.sequence} style={{ display: "flex", gap: 8, alignItems: "baseline", fontSize: 12, color: "var(--text-secondary)" }}>
+                  <code>{step.sequence.toString().padStart(2, "0")}</code>
+                  {step.role && (
+                    <span
+                      className="rail-chip neutral"
+                      style={{ fontSize: 10, padding: "0 6px" }}
+                      title={isZh ? "选择该工具的智能体角色" : "Agent role that selected this tool"}
+                    >
+                      {step.role}
+                    </span>
+                  )}
+                  <b style={{ color: "var(--text-primary)" }}>{step.tool}</b>
+                  <span style={{ color: statusTone[step.status] || "var(--text-tertiary)" }}>{step.status}</span>
+                  <span style={{ color: "var(--text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{step.summary}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+
+          {plan.agent_run && (
+            <details style={{ display: "grid", gap: 6 }} data-testid="investigation-agent-run">
+              <summary style={{ fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                {isZh ? "Agent 执行轨迹" : "Agent run trajectory"}
+                {plan.agent_run.model ? ` · ${plan.agent_run.model}` : ""}
+                {` · ${plan.agent_run.state}`}
+              </summary>
+              <div style={{ display: "grid", gap: 4, marginTop: 6 }}>
+                <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                  {isZh ? "运行 ID" : "Run ID"} <code>{plan.agent_run.run_id}</code>
+                  {typeof plan.agent_run.requests === "number" && (
+                    <> / {isZh ? "模型请求" : "model requests"} {plan.agent_run.requests}</>
+                  )}
+                  {plan.agent_run.prompt_version && (
+                    <> / prompt {plan.agent_run.prompt_version}</>
+                  )}
+                </div>
+                {plan.agent_run.state_history.map((entry, index) => (
+                  <div key={`${entry.state}-${index}`} style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                    <b style={{ color: statusTone[entry.state] || "var(--text-primary)" }}>{entry.state}</b>
+                    {entry.reason && <span style={{ color: "var(--text-tertiary)" }}> — {entry.reason}</span>}
+                  </div>
+                ))}
+                {plan.agent_run.error && (
+                  <div style={{ fontSize: 12, color: "var(--red-11)" }}>{plan.agent_run.error}</div>
+                )}
               </div>
-            ))}
-          </div>
+            </details>
+          )}
+
+          {plan.agent_error && (
+            <div
+              data-testid="investigation-agent-error"
+              style={{ padding: 10, borderRadius: 6, border: "0.5px solid var(--text-gold)", color: "var(--text-gold)", fontSize: 12 }}
+            >
+              {isZh ? "Agent 降级原因" : "Agent degradation"}: {plan.agent_error}
+            </div>
+          )}
 
           <div style={{ display: "grid", gap: 6 }}>
             <div style={{ fontSize: 14, fontWeight: 700 }}>{isZh ? "已记录发现" : "Findings"}</div>

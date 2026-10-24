@@ -38,6 +38,10 @@ class MatchMetadata(BaseModel):
     label: str
     competition: str
     season: str
+    #: The round the match was played in, as declared by the provider. The
+    #: library groups matches by it, so an unannotated fixture reports None
+    #: rather than being folded into a round it never belonged to.
+    stage: Optional[str] = None
     match_date: Optional[str] = None
     home_team: str
     away_team: str
@@ -84,6 +88,7 @@ class MatchCatalog:
                     label=sc["label"],
                     competition="MatchLens Simulation League",
                     season="2025/2026",
+                    stage="scenario",
                     match_date="2026-03-15",
                     home_team=TEAMS["H"],
                     away_team=TEAMS["N"],
@@ -192,6 +197,14 @@ class MatchCatalog:
             meta.setdefault("match_id", match_id)
             if not meta.get("match_id"):
                 continue
+            # The manifest keeps one completeness report per match. The metadata
+            # reads it back from there instead of carrying a second copy.
+            if meta.get("completeness") is None and entry.get("completeness") is not None:
+                meta["completeness"] = entry["completeness"]
+            # The round the match was played in lives on the manifest entry. It
+            # is copied into the metadata so the library can group by it.
+            if meta.get("stage") is None and entry.get("stage"):
+                meta["stage"] = entry["stage"]
             try:
                 out.append(MatchMetadata(**meta))
             except Exception as exc:
@@ -292,10 +305,25 @@ class MatchCatalog:
         }, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
         return revision, content_sha
 
+    _dataset_revision_cache: dict[tuple[Any, ...], dict[str, Any]] = {}
+
     @classmethod
     def dataset_revision(cls, match_id: str) -> dict[str, Any]:
+        # The revision is content-addressed, so the memo is keyed by the
+        # dataset file's content digest (provider matches) or by the scenario
+        # id (synthetic matches, whose generated events are deterministic).
+        # A signature weaker than content — e.g. event ids — would serve a
+        # stale revision after an in-place content edit with a preserved id.
+        if match_id.startswith("syn_"):
+            cache_key: tuple[Any, ...] = (match_id, "synthetic")
+            events = cls.load_normalized_events(match_id)
+        else:
+            digest, events = cls._load_dataset(match_id)
+            cache_key = (match_id, digest)
+        cached = cls._dataset_revision_cache.get(cache_key)
+        if cached is not None:
+            return cached
         meta = cls.get_match(match_id)
-        events = cls.load_normalized_events(match_id)
         coverage = meta.coverage_level.value if meta else "unknown"
         revision, content_sha = cls.content_revision_from_events(
             match_id=match_id,
@@ -308,7 +336,7 @@ class MatchCatalog:
             ),
             coverage=coverage,
         )
-        return {
+        result = {
             "match_id": match_id,
             "revision": revision,
             "content_sha256": content_sha,
@@ -319,6 +347,8 @@ class MatchCatalog:
             "metric_version": "football-v2",
             "model_version": "oaai-1.0.0",
         }
+        cls._dataset_revision_cache[cache_key] = result
+        return result
 
     @classmethod
     def data_version(cls, match_id: str) -> str:
@@ -534,10 +564,29 @@ class MatchCatalog:
             official_away_score=meta.away_score,
         )
 
+    _dataset_digest_cache: dict[tuple[Any, ...], str] = {}
+
     @classmethod
     def _dataset_digest(cls, path: Path) -> str:
-        """Content hash of the dataset file. Identity is content, never mtime."""
-        return hashlib.sha256(path.read_bytes()).hexdigest()
+        """Content hash of the dataset file. Identity is content, never mtime.
+
+        The hash itself is memoized per (path, mtime, size): re-reading a
+        multi-megabyte payload on every completeness lookup made every catalog
+        read pay the full digest cost even when nothing changed.
+        """
+        try:
+            stat = path.stat()
+            cache_key = (str(path), stat.st_mtime_ns, stat.st_size)
+        except OSError:
+            cache_key = None
+        if cache_key is not None:
+            cached = cls._dataset_digest_cache.get(cache_key)
+            if cached is not None:
+                return cached
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        if cache_key is not None:
+            cls._dataset_digest_cache[cache_key] = digest
+        return digest
 
     @classmethod
     def _load_dataset(cls, match_id: str) -> tuple[str, list[NormalizedEvent]]:

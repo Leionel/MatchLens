@@ -1,46 +1,50 @@
 {
   "version": "statsbomb-corpus-import-v2",
-  "imported_at": "2026-10-24T09:56:20Z",
-  "match_id": "sb_3941019",
+  "imported_at": "2026-10-24T12:53:56Z",
+  "match_id": "sb_3794686",
   "provider": "statsbomb_open_data",
-  "provider_match_id": 3941019,
+  "provider_match_id": 3794686,
   "competition": "UEFA Euro",
-  "season": "2024",
+  "season": "2020",
   "stage": "round_of_16",
-  "match_date": "2024-07-01",
-  "home_team": "France",
-  "away_team": "Belgium",
-  "home_score": 1,
-  "away_score": 0,
-  "home_provider_team_id": "771",
-  "away_provider_team_id": "782",
-  "source_file": "data\\raw\\statsbomb\\events_3941019.json",
-  "source_sha256": "3d2e6e72f95bf7c4aca447f8e8c082ada20f5fc78a64a4ea50456a8159f29428",
-  "lineups_file": "data\\raw\\statsbomb\\lineups_3941019.json",
-  "lineups_sha256": "19e89f3aa313c45d08b9e147bb277c6e384400ed5618e2a5105699c7194a06b4",
-  "target_file": "data\\datasets\\sb_3941019.json",
-  "target_sha256": "e14ecdbf54cead36306c8db20bee71bda0aaa5d2db9f78f1d473878f039413b8",
-  "raw_event_count": 3943,
-  "normalized_event_count": 3943,
-  "observed_end_seconds": 5657.865,
-  "expected_duration_seconds": 5400.0,
+  "match_date": "2021-06-28",
+  "home_team": "Croatia",
+  "away_team": "Spain",
+  "home_score": 3,
+  "away_score": 5,
+  "home_provider_team_id": "785",
+  "away_provider_team_id": "772",
+  "source_file": "data\\raw\\statsbomb\\events_3794686.json",
+  "source_sha256": "dcba23892f0ff0244494c32096afccd21f5cf1e7295c3a9d31f53e131e61edb8",
+  "lineups_file": "data\\raw\\statsbomb\\lineups_3794686.json",
+  "lineups_sha256": "a28650c2c88b4a1586292cef5147854c0c297730c9a50e4c7497faf6171069fe",
+  "target_file": "data\\datasets\\sb_3794686.json",
+  "target_sha256": "81980e2882d0e8f74e5885abed58bd28238e2806ecd5b177df500470a357d3b6",
+  "raw_event_count": 4858,
+  "normalized_event_count": 4858,
+  "observed_end_seconds": 7756.141,
+  "expected_duration_seconds": 7200.0,
   "reordered_events": [],
   "completeness_status": "COMPLETE_VERIFIED",
   "completeness": {
     "status": "COMPLETE_VERIFIED",
     "synthetic": false,
     "source_declaration": "statsbomb_open_data",
-    "raw_event_count": 3943,
-    "normalized_event_count": 3943,
+    "raw_event_count": 4858,
+    "normalized_event_count": 4858,
     "conversion_drop_count": 0,
     "drop_reasons": [],
     "observed_periods": [
       1,
-      2
+      2,
+      3,
+      4
     ],
     "expected_periods": [
       1,
-      2
+      2,
+      3,
+      4
     ],
     "coverage_by_period": [
       {
@@ -48,8 +52,8 @@
         "expected_start": 0,
         "expected_end": 2700.0,
         "observed_start": 0.0,
-        "observed_end": 2767.43,
-        "event_count": 2005,
+        "observed_end": 2768.89,
+        "event_count": 1854,
         "coverage": 1.0,
         "event_density_ok": true,
         "completeness_rule": "span_coverage",
@@ -60,9 +64,35 @@
         "period": 2,
         "expected_start": 2700.0,
         "expected_end": 5400.0,
-        "observed_start": 2767.43,
-        "observed_end": 5657.86,
-        "event_count": 1938,
+        "observed_start": 2768.89,
+        "observed_end": 5829.31,
+        "event_count": 1651,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 3,
+        "expected_start": 5400.0,
+        "expected_end": 6300.0,
+        "observed_start": 5829.31,
+        "observed_end": 6790.19,
+        "event_count": 604,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 4,
+        "expected_start": 6300.0,
+        "expected_end": 7200.0,
+        "observed_start": 6790.19,
+        "observed_end": 7756.14,
+        "event_count": 749,
         "coverage": 1.0,
         "event_density_ok": true,
         "completeness_rule": "span_coverage",
@@ -70,16 +100,16 @@
         "shootout_kicks_ok": true
       }
     ],
-    "expected_duration": 5400.0,
+    "expected_duration": 7200.0,
     "observed_start": 0.0,
-    "observed_end": 5657.86,
+    "observed_end": 7756.14,
     "known_missing_segments": [],
     "provider_consistency": true,
     "integrity_checks": [
       {
         "check": "events_present",
         "passed": true,
-        "detail": "3943 normalized events"
+        "detail": "4858 normalized events"
       },
       {
         "check": "event_ids_present",
@@ -104,17 +134,17 @@
       {
         "check": "periods_present",
         "passed": true,
-        "detail": "observed=[1, 2] expected=[1, 2]"
+        "detail": "observed=[1, 2, 3, 4] expected=[1, 2, 3, 4]"
       },
       {
         "check": "conversion_accounted",
         "passed": true,
-        "detail": "raw=3943 normalized=3943 drops=0"
+        "detail": "raw=4858 normalized=4858 drops=0"
       },
       {
         "check": "period_event_density",
         "passed": true,
-        "detail": "minimum per period=max(8, nominal_period/120)"
+        "detail": "minimum per playing period=max(8, nominal_period/120); a shoot-out needs recorded kicks"
       },
       {
         "check": "period_span_coverage",
@@ -138,12 +168,12 @@
   },
   "coverage_level": "C1",
   "score_reconciliation": {
-    "provider_score": "1-0",
-    "recorded_goals": "1-0",
-    "provider_home_score": 1,
-    "provider_away_score": 0,
-    "recorded_home_goals": 1,
-    "recorded_away_goals": 0,
+    "provider_score": "3-5",
+    "recorded_goals": "3-5",
+    "provider_home_score": 3,
+    "provider_away_score": 5,
+    "recorded_home_goals": 3,
+    "recorded_away_goals": 5,
     "shootout_goals": {
       "home": 0,
       "away": 0

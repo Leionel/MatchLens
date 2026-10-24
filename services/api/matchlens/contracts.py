@@ -115,8 +115,11 @@ def assertion_supported(assertion: str, snapshot: Snapshot, team: str = "H") -> 
             return False
         return trans >= 2 and (high >= 1 or team == "N")
     if assertion == "goal_sequence":
-        goal_rec = r.get(f"{team}.goals.match", {"value": 0, "chains": []})
-        return goal_rec["value"] > 0 and bool(goal_rec["chains"])
+        goal_rec = r.get(f"{team}.goals.match") or {}
+        goal_value = goal_rec.get("value")
+        if not isinstance(goal_value, (int, float)):
+            return False
+        return goal_value > 0 and bool(goal_rec.get("chains"))
     return False  # Temporal association cannot establish recoveries_caused_shots.
 
 
@@ -190,7 +193,14 @@ def evidence_summary(assertion: str, snapshot: Snapshot, team: str = "H") -> tup
         fan = f"Quick attacks after winning the ball: {value('transition_shots')} recovery-to-shot chains in this window. {team_name} also recorded {value('high_recoveries')} high recoveries."
         analyst = f"Window {window}. High recoveries: {value('high_recoveries')}. Recovery-to-shot chains within 10 seconds without a loss of possession: {value('transition_shots')}. Inspect each chain's recovery location and elapsed time. This is a short-window association, not evidence of pressing or causation."
     else:
-        chain = r[f"{team}.goals.match"]["chains"][-1]
+        chains = (r.get(f"{team}.goals.match") or {}).get("chains") or []
+        if not chains:
+            return (
+                f"{team_name} has no recorded goal chain in this snapshot.",
+                f"As of {at//60:02d}:{at%60:02d}: no uninterrupted scoring chain is recorded, "
+                "so no goal sequence can be described.",
+            )
+        chain = chains[-1]
         fan = f"{team_name} scored. Follow the {len(chain)} recorded on-ball events in the scoring move, ending with the goal."
         analyst = f"As of {at//60:02d}:{at%60:02d}: {team_name} has {value('goals', 'match')} recorded goal(s). The latest uninterrupted scoring chain contains {len(chain)} events, from {chain[0]} to {chain[-1]}. The sequence establishes what happened on the ball; it does not explain off-ball tactics or why the goal occurred."
     return fan, analyst

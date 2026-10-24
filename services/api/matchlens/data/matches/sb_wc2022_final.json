@@ -4,6 +4,7 @@
     "label": "2022 World Cup Final: Argentina 3-3 France (4-2 pens)",
     "competition": "FIFA World Cup",
     "season": "2022",
+    "stage": "final",
     "match_date": "2022-12-18",
     "home_team": "Argentina",
     "away_team": "France",

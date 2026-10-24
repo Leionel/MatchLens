@@ -12,11 +12,65 @@ OAAI measures recorded attacking activity intensity, NOT psychological momentum 
 """
 from __future__ import annotations
 
+import bisect
 import math
 from typing import Any, Literal, Optional, Sequence
 from pydantic import BaseModel, ConfigDict, Field
 
 from .schema import ActionType, DerivedMetric, NormalizedEvent
+
+
+class _DeadTimeIndex:
+    """Merged, prefix-summed dead-ball intervals.
+
+    The decay of an event has to subtract the dead time between the event and
+    the sample. Scanning the interval list for every event of every sample is
+    quadratic in the number of dead balls, which is what made a full provider
+    match take minutes to chart. The intervals are merged once and
+    prefix-summed, so a query costs a bisect instead of a scan.
+    """
+
+    __slots__ = ("_starts", "_ends", "_prefix")
+
+    def __init__(self, intervals: Optional[Sequence[dict]] = None) -> None:
+        merged: list[list[float]] = []
+        for interval in sorted(
+            intervals or [],
+            key=lambda iv: (float(iv.get("start", 0.0) or 0.0), float(iv.get("end", 0.0) or 0.0)),
+        ):
+            start = float(interval.get("start", 0.0) or 0.0)
+            end = float(interval.get("end", 0.0) or 0.0)
+            if end <= start:
+                continue
+            if merged and start <= merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], end)
+                continue
+            merged.append([start, end])
+        self._starts = [interval[0] for interval in merged]
+        self._ends = [interval[1] for interval in merged]
+        prefix = [0.0]
+        for start, end in merged:
+            prefix.append(prefix[-1] + (end - start))
+        self._prefix = prefix
+
+    def __bool__(self) -> bool:
+        return bool(self._starts)
+
+    def seconds_between(self, start: float, end: float) -> float:
+        """Dead seconds inside (start, end]."""
+        if end <= start or not self._starts:
+            return 0.0
+        first = bisect.bisect_right(self._ends, start)
+        last = bisect.bisect_left(self._starts, end)
+        if first >= last:
+            return 0.0
+        if last - first == 1:
+            return max(0.0, min(self._ends[first], end) - max(self._starts[first], start))
+        total = max(0.0, min(self._ends[first], end) - max(self._starts[first], start))
+        total += max(0.0, min(self._ends[last - 1], end) - max(self._starts[last - 1], start))
+        if last - first > 2:
+            total += self._prefix[last - 1] - self._prefix[first + 1]
+        return total
 
 
 class OAAIConfig(BaseModel):
@@ -373,6 +427,8 @@ def aggregate_oaai_timeline(
             })
         return timeline
 
+    dead_index = _DeadTimeIndex(dead_intervals)
+
     for step_idx in range(total_steps):
         t = round(step_idx * step, 2)
 
@@ -393,16 +449,8 @@ def aggregate_oaai_timeline(
                 continue  # Invariant guard against negative dt
 
             # Handle dead-time freeze if requested
-            if cfg.freeze_dead_time and dead_intervals:
-                # Subtract dead time that occurred between item["t"] and t
-                dead_seconds = 0.0
-                for iv in dead_intervals:
-                    iv_s, iv_e = iv.get("start", 0), iv.get("end", 0)
-                    overlap_s = max(item["t"], iv_s)
-                    overlap_e = min(t, iv_e)
-                    if overlap_e > overlap_s:
-                        dead_seconds += (overlap_e - overlap_s)
-                dt = max(0.0, dt - dead_seconds)
+            dead_seconds = dead_index.seconds_between(item["t"], t)
+            dt = max(0.0, dt - dead_seconds)
 
             weight = math.exp(-decay_lambda * dt)
             net_differential += item["signed_c"] * weight
@@ -649,14 +697,7 @@ def compute_oaai_contribution_ledger(
     dead = dead_intervals or []
     decay_lambda = math.log(2) / cfg.half_life_seconds
 
-    def dead_between(start: float, end: float) -> float:
-        total = 0.0
-        for interval in dead:
-            overlap_start = max(start, float(interval.get("start", 0.0)))
-            overlap_end = min(end, float(interval.get("end", 0.0)))
-            if overlap_end > overlap_start:
-                total += overlap_end - overlap_start
-        return total
+    dead_index = _DeadTimeIndex(dead)
 
     rows: list[dict] = []
     for event in norm_events:
@@ -665,7 +706,10 @@ def compute_oaai_contribution_ledger(
         signed, magnitude, explanation = compute_event_contribution(
             event, cfg, xt_model=xt_model, home_team=home_team
         )
-        effective_dt = max(0.0, float(at) - event["t"] - dead_between(event["t"], float(at)))
+        effective_dt = max(
+            0.0,
+            float(at) - event["t"] - dead_index.seconds_between(event["t"], float(at)),
+        )
         weight = math.exp(-decay_lambda * effective_dt)
         net = signed * weight
         team_contribution = 0.0
@@ -794,3 +838,100 @@ def compute_oaai(
     if include_raw:
         result["timeline_raw"] = timeline_raw
     return result
+
+
+def _plotted_value(point: dict) -> float:
+    """The value the momentum chart draws for a timeline sample."""
+    value = point.get("oaai_value")
+    if value is None:
+        value = point.get("oaai_raw")
+    try:
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def downsample_oaai_timeline(timeline: Sequence[dict], max_points: int = 600) -> list[dict]:
+    """Reduce a chart timeline to a renderable size without hiding peaks.
+
+    A full match samples the activity index every two seconds, which is far
+    more detail than the chart's pixel width can resolve - and every sample
+    travels to the browser on each state push. Each bucket keeps its extreme
+    sample, so a spike is never averaged into invisibility, and the first and
+    the last sample of the match are always preserved. The samples themselves
+    are returned unchanged: this is a rendering budget, not a new metric.
+    """
+    points = list(timeline)
+    if max_points < 4 or len(points) <= max_points:
+        return points
+
+    buckets = max(2, max_points // 2)
+    size = len(points)
+    kept: list[dict] = []
+    for index in range(buckets):
+        lo = (index * size) // buckets
+        hi = ((index + 1) * size) // buckets
+        chunk = points[lo:hi]
+        if not chunk:
+            continue
+        low = min(chunk, key=_plotted_value)
+        high = max(chunk, key=_plotted_value)
+        extremes = [low] if low is high else [low, high]
+        for point in sorted(extremes, key=lambda p: p["t"]):
+            if not kept or kept[-1] is not point:
+                kept.append(point)
+
+    first, last = points[0], points[-1]
+    if not kept or kept[0] is not first:
+        kept.insert(0, first)
+    if kept[-1] is not last:
+        kept.append(last)
+    return kept
+
+
+def trim_change_point_contributors(
+    change_points: Sequence[dict], max_contributors: int = 2
+) -> list[dict]:
+    """Keep every change point but shorten its contributor list.
+
+    The number of change points is evidence and stays untouched; only the
+    number of supporting events carried with each of them is reduced, because
+    the inspector shows the strongest contributors anyway.
+    """
+    if max_contributors < 1:
+        raise ValueError("max_contributors must be positive")
+    trimmed: list[dict] = []
+    for point in change_points:
+        contributors = point.get("top_contributors") or []
+        if len(contributors) <= max_contributors:
+            trimmed.append(point)
+            continue
+        copy = dict(point)
+        copy["top_contributors"] = list(contributors[:max_contributors])
+        copy["top_contributors_truncated"] = len(contributors) - max_contributors
+        trimmed.append(copy)
+    return trimmed
+
+
+def chart_oaai_payload(
+    oaai_data: dict,
+    max_points: int = 600,
+    max_contributors: int = 2,
+) -> dict:
+    """A chart-sized copy of an OAAI result.
+
+    The registry comparison inside the payload was computed on the full
+    resolution timeline and is carried over unchanged, so trimming the chart
+    copy never changes what the registry publishes.
+    """
+    payload = dict(oaai_data)
+    payload["timeline"] = downsample_oaai_timeline(oaai_data.get("timeline") or [], max_points)
+    payload["change_points"] = trim_change_point_contributors(
+        oaai_data.get("change_points") or [], max_contributors
+    )
+    payload["chart_sampling"] = {
+        "timeline_points_full": len(oaai_data.get("timeline") or []),
+        "timeline_points_chart": len(payload["timeline"]),
+        "max_points": max_points,
+    }
+    return payload

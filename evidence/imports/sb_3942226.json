@@ -1,0 +1,186 @@
+{
+  "version": "statsbomb-corpus-import-v2",
+  "imported_at": "2026-10-24T12:54:00Z",
+  "match_id": "sb_3942226",
+  "provider": "statsbomb_open_data",
+  "provider_match_id": 3942226,
+  "competition": "UEFA Euro",
+  "season": "2024",
+  "stage": "quarter_final",
+  "match_date": "2024-07-05",
+  "home_team": "Spain",
+  "away_team": "Germany",
+  "home_score": 2,
+  "away_score": 1,
+  "home_provider_team_id": "772",
+  "away_provider_team_id": "770",
+  "source_file": "data\\raw\\statsbomb\\events_3942226.json",
+  "source_sha256": "e4e0aba5eecdc7d136a54173fc5a3a51b3f179efc5e815be3aa8291e0ae5437c",
+  "lineups_file": "data\\raw\\statsbomb\\lineups_3942226.json",
+  "lineups_sha256": "ad20455a175e9a6c76212807a7cc710396b56dac2a809576a6df4db41371240c",
+  "target_file": "data\\datasets\\sb_3942226.json",
+  "target_sha256": "000e7f49e88bf30922fd427b04db58e59a7929671b8bfb402c38edf39a3d5106",
+  "raw_event_count": 4463,
+  "normalized_event_count": 4463,
+  "observed_end_seconds": 8003.509,
+  "expected_duration_seconds": 7200.0,
+  "reordered_events": [],
+  "completeness_status": "COMPLETE_VERIFIED",
+  "completeness": {
+    "status": "COMPLETE_VERIFIED",
+    "synthetic": false,
+    "source_declaration": "statsbomb_open_data",
+    "raw_event_count": 4463,
+    "normalized_event_count": 4463,
+    "conversion_drop_count": 0,
+    "drop_reasons": [],
+    "observed_periods": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "expected_periods": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "coverage_by_period": [
+      {
+        "period": 1,
+        "expected_start": 0,
+        "expected_end": 2700.0,
+        "observed_start": 0.0,
+        "observed_end": 2826.57,
+        "event_count": 1701,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 2,
+        "expected_start": 2700.0,
+        "expected_end": 5400.0,
+        "observed_start": 2826.57,
+        "observed_end": 5774.01,
+        "event_count": 1655,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 3,
+        "expected_start": 5400.0,
+        "expected_end": 6300.0,
+        "observed_start": 5774.01,
+        "observed_end": 6737.12,
+        "event_count": 596,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 4,
+        "expected_start": 6300.0,
+        "expected_end": 7200.0,
+        "observed_start": 6737.12,
+        "observed_end": 8003.51,
+        "event_count": 511,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      }
+    ],
+    "expected_duration": 7200.0,
+    "observed_start": 0.0,
+    "observed_end": 8003.51,
+    "known_missing_segments": [],
+    "provider_consistency": true,
+    "integrity_checks": [
+      {
+        "check": "events_present",
+        "passed": true,
+        "detail": "4463 normalized events"
+      },
+      {
+        "check": "event_ids_present",
+        "passed": true,
+        "detail": "every event has an ID"
+      },
+      {
+        "check": "event_ids_unique",
+        "passed": true,
+        "detail": "duplicates=[]"
+      },
+      {
+        "check": "clock_in_bounds",
+        "passed": true,
+        "detail": "invalid=[]"
+      },
+      {
+        "check": "team_mapping_declared",
+        "passed": true,
+        "detail": "unmapped=[]"
+      },
+      {
+        "check": "periods_present",
+        "passed": true,
+        "detail": "observed=[1, 2, 3, 4] expected=[1, 2, 3, 4]"
+      },
+      {
+        "check": "conversion_accounted",
+        "passed": true,
+        "detail": "raw=4463 normalized=4463 drops=0"
+      },
+      {
+        "check": "period_event_density",
+        "passed": true,
+        "detail": "minimum per playing period=max(8, nominal_period/120); a shoot-out needs recorded kicks"
+      },
+      {
+        "check": "period_span_coverage",
+        "passed": true,
+        "detail": "minimum per-period span coverage=70%"
+      },
+      {
+        "check": "shootout_kicks_recorded",
+        "passed": true,
+        "detail": "minimum kicks per team=3"
+      },
+      {
+        "check": "clock_monotonic_by_period",
+        "passed": true,
+        "detail": "event order is chronological by period"
+      }
+    ],
+    "confidence": 1.0,
+    "verified": true,
+    "notes": []
+  },
+  "coverage_level": "C1",
+  "score_reconciliation": {
+    "provider_score": "2-1",
+    "recorded_goals": "2-1",
+    "provider_home_score": 2,
+    "provider_away_score": 1,
+    "recorded_home_goals": 2,
+    "recorded_away_goals": 1,
+    "shootout_goals": {
+      "home": 0,
+      "away": 0
+    },
+    "consistent": true,
+    "note": "Provider index score and event-recorded goals agree."
+  },
+  "license_ref": "StatsBomb Public Data User Agreement (Standard Terms, last updated 8 September 2023) - https://github.com/statsbomb/open-data/blob/master/LICENSE.pdf",
+  "attribution_text": "Data provided by StatsBomb. Publications of analysis derived from this data must state the data source as StatsBomb and display the StatsBomb logo from their Media Pack (https://statsbomb.com/media-pack/)."
+}

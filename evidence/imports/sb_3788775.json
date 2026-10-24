@@ -1,0 +1,156 @@
+{
+  "version": "statsbomb-corpus-import-v2",
+  "imported_at": "2026-10-24T12:53:56Z",
+  "match_id": "sb_3788775",
+  "provider": "statsbomb_open_data",
+  "provider_match_id": 3788775,
+  "competition": "UEFA Euro",
+  "season": "2020",
+  "stage": "group_stage",
+  "match_date": "2021-06-23",
+  "home_team": "Slovakia",
+  "away_team": "Spain",
+  "home_score": 0,
+  "away_score": 5,
+  "home_provider_team_id": "908",
+  "away_provider_team_id": "772",
+  "source_file": "data\\raw\\statsbomb\\events_3788775.json",
+  "source_sha256": "11e537fc89de74c3574c8c5d91df03a34b7e078d3edd7c4ea5834ebeb67ee2dd",
+  "lineups_file": "data\\raw\\statsbomb\\lineups_3788775.json",
+  "lineups_sha256": "617237450d01d0f916832727c8f97679d950101609f10e82a6f8af65f71e2471",
+  "target_file": "data\\datasets\\sb_3788775.json",
+  "target_sha256": "2c5be420cba3645502f6ee37d4e46a14e0b26e87680f1001a5d3cfa697ae39ef",
+  "raw_event_count": 3627,
+  "normalized_event_count": 3627,
+  "observed_end_seconds": 5922.152,
+  "expected_duration_seconds": 5400.0,
+  "reordered_events": [],
+  "completeness_status": "COMPLETE_VERIFIED",
+  "completeness": {
+    "status": "COMPLETE_VERIFIED",
+    "synthetic": false,
+    "source_declaration": "statsbomb_open_data",
+    "raw_event_count": 3627,
+    "normalized_event_count": 3627,
+    "conversion_drop_count": 0,
+    "drop_reasons": [],
+    "observed_periods": [
+      1,
+      2
+    ],
+    "expected_periods": [
+      1,
+      2
+    ],
+    "coverage_by_period": [
+      {
+        "period": 1,
+        "expected_start": 0,
+        "expected_end": 2700.0,
+        "observed_start": 0.0,
+        "observed_end": 2963.67,
+        "event_count": 1663,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 2,
+        "expected_start": 2700.0,
+        "expected_end": 5400.0,
+        "observed_start": 2963.67,
+        "observed_end": 5922.15,
+        "event_count": 1964,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      }
+    ],
+    "expected_duration": 5400.0,
+    "observed_start": 0.0,
+    "observed_end": 5922.15,
+    "known_missing_segments": [],
+    "provider_consistency": true,
+    "integrity_checks": [
+      {
+        "check": "events_present",
+        "passed": true,
+        "detail": "3627 normalized events"
+      },
+      {
+        "check": "event_ids_present",
+        "passed": true,
+        "detail": "every event has an ID"
+      },
+      {
+        "check": "event_ids_unique",
+        "passed": true,
+        "detail": "duplicates=[]"
+      },
+      {
+        "check": "clock_in_bounds",
+        "passed": true,
+        "detail": "invalid=[]"
+      },
+      {
+        "check": "team_mapping_declared",
+        "passed": true,
+        "detail": "unmapped=[]"
+      },
+      {
+        "check": "periods_present",
+        "passed": true,
+        "detail": "observed=[1, 2] expected=[1, 2]"
+      },
+      {
+        "check": "conversion_accounted",
+        "passed": true,
+        "detail": "raw=3627 normalized=3627 drops=0"
+      },
+      {
+        "check": "period_event_density",
+        "passed": true,
+        "detail": "minimum per playing period=max(8, nominal_period/120); a shoot-out needs recorded kicks"
+      },
+      {
+        "check": "period_span_coverage",
+        "passed": true,
+        "detail": "minimum per-period span coverage=70%"
+      },
+      {
+        "check": "shootout_kicks_recorded",
+        "passed": true,
+        "detail": "minimum kicks per team=3"
+      },
+      {
+        "check": "clock_monotonic_by_period",
+        "passed": true,
+        "detail": "event order is chronological by period"
+      }
+    ],
+    "confidence": 1.0,
+    "verified": true,
+    "notes": []
+  },
+  "coverage_level": "C1",
+  "score_reconciliation": {
+    "provider_score": "0-5",
+    "recorded_goals": "0-5",
+    "provider_home_score": 0,
+    "provider_away_score": 5,
+    "recorded_home_goals": 0,
+    "recorded_away_goals": 5,
+    "shootout_goals": {
+      "home": 0,
+      "away": 0
+    },
+    "consistent": true,
+    "note": "Provider index score and event-recorded goals agree."
+  },
+  "license_ref": "StatsBomb Public Data User Agreement (Standard Terms, last updated 8 September 2023) - https://github.com/statsbomb/open-data/blob/master/LICENSE.pdf",
+  "attribution_text": "Data provided by StatsBomb. Publications of analysis derived from this data must state the data source as StatsBomb and display the StatsBomb logo from their Media Pack (https://statsbomb.com/media-pack/)."
+}

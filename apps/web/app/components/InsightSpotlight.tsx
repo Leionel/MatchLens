@@ -406,7 +406,7 @@ export function InsightSpotlight({
         <RevisionTimeline
           revisions={revisions}
           onOpenChallengeModal={() => setIsChallengeOpen(true)}
-          canChallenge={!!card || !!activeMoment}
+          canChallenge={!!snapshotId}
         />
       )}
 

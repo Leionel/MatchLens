@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 from matchlens.catalog import MatchCatalog
-from matchlens.completeness import NOMINAL_PERIOD_SECONDS
+from matchlens.completeness import NOMINAL_PERIOD_SECONDS, PENALTY_SHOOTOUT_PERIOD
 from matchlens.provider_terms import (
     STATSBOMB_ATTRIBUTION_TEXT,
     STATSBOMB_LICENSE_REF,
@@ -289,17 +289,69 @@ def test_imported_match_keeps_every_coordinate_inside_the_pitch(entries: list[di
                 assert 0.0 <= event.end_y <= 68.0
 
 
+def _annotated_playing_periods(events) -> list[int]:
+    return sorted({int(e.period) for e in events if int(e.period) < PENALTY_SHOOTOUT_PERIOD})
+
+
+def _has_shootout(events) -> bool:
+    return any(int(e.period) >= PENALTY_SHOOTOUT_PERIOD for e in events)
+
+
 def test_imported_match_has_contiguous_periods_and_a_full_clock(entries: list[dict]):
+    """The annotated halves form a contiguous run and the clock reaches the end.
+
+    A shoot-out may follow the second half directly: some competitions award
+    it after regular time, and the provider stamps every kick at minute 120
+    whatever preceded it. What the payload may never do is open a hole
+    between two annotated halves.
+    """
     imported = _imported_match_ids(entries)
     if not imported:
         pytest.skip("no imported corpus dataset is present locally")
     for match_id in imported:
         events = MatchCatalog.load_normalized_events(match_id)
         periods = sorted({e.period for e in events})
-        assert periods == list(range(1, max(periods) + 1)), f"{match_id} has a period gap: {periods}"
-        nominal = sum(NOMINAL_PERIOD_SECONDS.get(p, 2700.0) for p in periods)
+        playing = _annotated_playing_periods(events)
+        assert playing == list(range(1, len(playing) + 1)), (
+            f"{match_id} has a gap between annotated halves: {periods}"
+        )
+        nominal = sum(NOMINAL_PERIOD_SECONDS.get(p, 2700.0) for p in playing)
         observed_end = max(e.clock_seconds for e in events)
         assert observed_end >= nominal * 0.9, f"{match_id} clock stops at {observed_end}s of {nominal}s"
+
+
+def test_shootout_matches_follow_the_provider_period_annotation(entries: list[dict]):
+    """The verifier must not read an unplayed half as a missing segment.
+
+    The 2024 Copa America quarter-finals and the third-place match were
+    settled by penalties straight after regular time. The provider annotated
+    periods 1, 2 and 5 and no extra time, so the expected period set must be
+    the observed one.
+    """
+    imported = _imported_match_ids(entries)
+    if not imported:
+        pytest.skip("no imported corpus dataset is present locally")
+    checked = 0
+    for match_id in imported:
+        events = MatchCatalog.load_normalized_events(match_id)
+        if not _has_shootout(events):
+            continue
+        report = MatchCatalog.completeness_report(match_id)
+        assert report.expected_periods == report.observed_periods, (
+            f"{match_id} expects {report.expected_periods} but the provider annotated "
+            f"{report.observed_periods}"
+        )
+        shootout_row = next(
+            row for row in report.coverage_by_period
+            if row["period"] == PENALTY_SHOOTOUT_PERIOD
+        )
+        assert shootout_row["completeness_rule"] == "recorded_kicks"
+        assert shootout_row["shootout_kicks_ok"] is True, (
+            f"{match_id} recorded {shootout_row['shootout_kicks_by_team']} shoot-out kicks"
+        )
+        checked += 1
+    if checked == 0:
+        pytest.skip("no shoot-out match is present locally")
 
 
 def test_imported_match_contains_no_synthetic_event(entries: list[dict]):
@@ -317,13 +369,22 @@ def test_imported_match_contains_no_synthetic_event(entries: list[dict]):
 
 
 def test_imported_match_reports_a_verified_completeness(entries: list[dict]):
+    """Every curated match must be verified complete, with no open segment.
+
+    The corpus is curated, so a match whose payload holds a gap does not
+    belong in it. The contract is checked here rather than left to the
+    curator's memory.
+    """
     imported = _imported_match_ids(entries)
     if not imported:
         pytest.skip("no imported corpus dataset is present locally")
     for match_id in imported:
         report = MatchCatalog.completeness_report(match_id)
-        assert report.status in ("COMPLETE_VERIFIED", "COMPLETE_CLAIMED_UNVERIFIED"), (
+        assert report.status == "COMPLETE_VERIFIED", (
             f"{match_id} is {report.status}: {report.known_missing_segments}"
+        )
+        assert report.known_missing_segments == [], (
+            f"{match_id} still holds an open segment: {report.known_missing_segments}"
         )
         assert report.provider_consistency is True, f"{match_id} provider consistency failed"
         assert report.raw_event_count >= report.normalized_event_count
@@ -363,6 +424,27 @@ def test_source_manifest_records_provenance_without_payloads(entries: list[dict]
         assert match["completeness"]["status"]
 
 
+def test_manifest_completeness_agrees_with_the_live_verifier(entries: list[dict]):
+    """The committed manifest must carry the verdict the verifier still gives."""
+    if not MANIFEST_PATH.exists():
+        pytest.skip("no source manifest is present")
+    manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    imported = set(_imported_match_ids(entries))
+    checked = 0
+    for match in manifest["matches"]:
+        match_id = match["match_id"]
+        if match_id not in imported:
+            continue
+        report = MatchCatalog.completeness_report(match_id)
+        assert match["completeness"]["status"] == report.status, (
+            f"{match_id} manifest says {match['completeness']['status']} but the "
+            f"verifier now says {report.status}; re-run the ingestion"
+        )
+        checked += 1
+    if checked == 0:
+        pytest.skip("no imported corpus dataset is present locally")
+
+
 def test_manifest_carries_no_provider_payload():
     """The manifest is committed, so it must not embed provider event data."""
     if not MANIFEST_PATH.exists():
@@ -387,8 +469,11 @@ def test_import_receipts_record_the_conversion_accounting(entries: list[dict]):
         assert receipt["provider"] == "statsbomb_open_data"
         assert receipt["raw_event_count"] >= receipt["normalized_event_count"]
         assert receipt["source_sha256"] and receipt["target_sha256"]
-        assert receipt["completeness_status"] in (
-            "COMPLETE_VERIFIED",
-            "COMPLETE_CLAIMED_UNVERIFIED",
-        )
         assert receipt["license_ref"] == STATSBOMB_LICENSE_REF
+        # The receipt is the evidence of a specific import. When the verifier
+        # changes, a receipt that still carries the previous verdict is stale.
+        report = MatchCatalog.completeness_report(match_id)
+        assert receipt["completeness_status"] == report.status, (
+            f"{match_id} receipt says {receipt['completeness_status']} but the "
+            f"verifier now says {report.status}; re-run the ingestion"
+        )

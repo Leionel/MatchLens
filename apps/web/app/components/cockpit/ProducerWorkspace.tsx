@@ -50,6 +50,17 @@ type ManifestItem = {
   reasons?: string[];
 };
 
+type ManifestHistoryEntry = {
+  manifest_id: string;
+  generated_at: number;
+  generated_by?: string;
+  valid: boolean;
+  dataset_revision?: string | null;
+  package_sha256?: string | null;
+  stale_items?: string[];
+  items: { claim_id: string; valid: boolean }[];
+};
+
 type ExportResult = {
   filename: string;
   payload: string;
@@ -86,6 +97,9 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
   const [selected, setSelected] = useState<string[]>([]);
   const [rundown, setRundown] = useState<RundownView | null>(null);
   const [exported, setExported] = useState<ExportResult | null>(null);
+  const [manifestHistory, setManifestHistory] = useState<ManifestHistoryEntry[]>([]);
+  const [showPreview, setShowPreview] = useState(false);
+  const [highlightClaimId, setHighlightClaimId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -147,6 +161,35 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
     setRundown(data);
     return data as RundownView;
   }, [matchId, snapshotId]);
+
+  // The persisted rundown is read back from the server on every snapshot
+  // change, so an editor sees a rundown that a withdrawal has invalidated
+  // instead of an empty panel.
+  useEffect(() => {
+    void loadRundown();
+  }, [loadRundown]);
+
+  const loadManifestHistory = useCallback(async () => {
+    if (!token || !snapshotId) return;
+    try {
+      const res = await fetch(
+        `/api/broadcast/manifests?match_id=${encodeURIComponent(matchId)}&snapshot_id=${encodeURIComponent(snapshotId)}`,
+        { headers }
+      );
+      if (!res.ok) {
+        setManifestHistory([]);
+        return;
+      }
+      const data = await res.json();
+      setManifestHistory(data.manifests || []);
+    } catch {
+      setManifestHistory([]);
+    }
+  }, [headers, matchId, snapshotId, token]);
+
+  useEffect(() => {
+    void loadManifestHistory();
+  }, [loadManifestHistory]);
 
   const decide = async (claimId: string, decision: "approved" | "rejected") => {
     if (!snapshotId) return;
@@ -220,6 +263,20 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
     setExported(null);
   };
 
+  const removeFromSelection = (claimId: string) => {
+    setSelected((current) => current.filter((id) => id !== claimId));
+    setRundown(null);
+    setExported(null);
+  };
+
+  /** Jump a stale rundown item back into the review queue for re-review. */
+  const reviewStaleClaim = (claimId: string) => {
+    setHighlightClaimId(claimId);
+    const row = document.querySelector(`[data-claim-id="${claimId}"]`);
+    row?.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => setHighlightClaimId(""), 2400);
+  };
+
   const exportStory = async (format: "json" | "markdown" | "svg") => {
     if (!snapshotId) return;
     setBusy(true);
@@ -247,7 +304,8 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
       link.download = data.filename;
       link.click();
       URL.revokeObjectURL(url);
-      setNotice(isZh ? "导出完成，Manifest 已生成。" : "Export complete with a manifest.");
+      setNotice(isZh ? "导出完成，Manifest 已生成并计入历史。" : "Export complete; the manifest was recorded in history.");
+      await loadManifestHistory();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -334,13 +392,27 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
               return (
                 <div
                   key={claim.claim_id}
+                  data-testid="producer-claim-row"
+                  data-claim-id={claim.claim_id}
+                  data-gate-status={claim.gate_status}
+                  data-lifecycle-status={claim.lifecycle_status}
+                  data-editorial-status={claim.editorial_status}
                   style={{
                     display: "grid",
                     gap: 8,
                     padding: 12,
                     borderRadius: 8,
-                    border: checked ? "1px solid var(--turf-emerald)" : "0.5px solid var(--glass-border)",
-                    background: "color-mix(in srgb, var(--slate-1) 65%, transparent)",
+                    border:
+                      highlightClaimId === claim.claim_id
+                        ? "1px solid var(--text-gold)"
+                        : checked
+                          ? "1px solid var(--turf-emerald)"
+                          : "0.5px solid var(--glass-border)",
+                    background:
+                      highlightClaimId === claim.claim_id
+                        ? "color-mix(in srgb, var(--text-gold) 8%, transparent)"
+                        : "color-mix(in srgb, var(--slate-1) 65%, transparent)",
+                    transition: "border-color 0.3s, background 0.3s",
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
@@ -400,9 +472,60 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
           </div>
           {selected.length > 0 && (
             <div style={{ display: "grid", gap: 6 }}>
-              <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
-                {isZh ? "Rundown 顺序" : "Rundown order"}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                  {isZh ? "Rundown 顺序" : "Rundown order"}
+                </div>
+                <button
+                  type="button"
+                  data-testid="rundown-preview-toggle"
+                  onClick={() => setShowPreview((v) => !v)}
+                  style={{ minHeight: 26, fontSize: 12, padding: "0 8px" }}
+                >
+                  {showPreview ? (isZh ? "隐藏预览" : "Hide preview") : isZh ? "预览 Rundown" : "Preview rundown"}
+                </button>
               </div>
+              {showPreview && (
+                <div
+                  data-testid="rundown-preview"
+                  style={{
+                    display: "grid",
+                    gap: 6,
+                    padding: 10,
+                    borderRadius: 6,
+                    border: "0.5px dashed var(--glass-border)",
+                    background: "color-mix(in srgb, var(--slate-1) 55%, transparent)",
+                  }}
+                >
+                  <div style={{ fontSize: 11, color: "var(--text-gold)" }}>
+                    {isZh
+                      ? "预览仅基于当前队列投影，非服务器权威；以建立后的读时校验为准。"
+                      : "Preview is built from the queue projection and is not server-authoritative; the read-time validation after building decides."}
+                  </div>
+                  {selected.map((claimId, index) => {
+                    const claim = queue.find((c) => c.claim_id === claimId);
+                    const ready = claim && claim.gate_status === "approved" && claim.editorial_status === "approved" && claim.lifecycle_status === "current";
+                    return (
+                      <div key={claimId} style={{ display: "grid", gap: 2, fontSize: 12 }}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+                          <b style={{ fontFamily: "var(--font-mono)" }}>{index + 1}</b>
+                          <span style={{ color: "var(--text-primary)", fontWeight: 650 }}>
+                            {(claim?.assertion || claimId).replace(/_/g, " ")}
+                          </span>
+                          <span style={{ color: ready ? "var(--text-emerald)" : "var(--red-11)", marginLeft: "auto" }}>
+                            {ready ? (isZh ? "可播" : "broadcastable") : (isZh ? "尚不可播" : "not broadcastable")}
+                          </span>
+                        </div>
+                        {claim && (
+                          <span style={{ color: "var(--text-secondary)", lineHeight: 1.5, paddingLeft: 22 }}>
+                            {claim.statement}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               {selected.map((claimId, index) => {
                 const claim = queue.find((c) => c.claim_id === claimId);
                 return (
@@ -444,6 +567,15 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
                       >
                         ↓
                       </button>
+                      <button
+                        type="button"
+                        aria-label={isZh ? `移出 ${claimId}` : `Remove ${claimId}`}
+                        disabled={busy}
+                        onClick={() => removeFromSelection(claimId)}
+                        style={{ minHeight: 26, fontSize: 12, padding: "0 8px", color: "var(--red-11)" }}
+                      >
+                        ✕
+                      </button>
                     </span>
                   </div>
                 );
@@ -471,7 +603,17 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
                   </div>
                   <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>{item.statement}</div>
                   {item.reasons && item.reasons.length > 0 && (
-                    <div style={{ fontSize: 12, color: "var(--red-11)" }}>{item.reasons.join(", ")}</div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 12, color: "var(--red-11)" }}>{item.reasons.join(", ")}</span>
+                      <button
+                        type="button"
+                        data-testid={`rereview-${item.claim_id}`}
+                        onClick={() => reviewStaleClaim(item.claim_id)}
+                        style={{ minHeight: 24, fontSize: 11, padding: "0 8px" }}
+                      >
+                        {isZh ? "回审该结论" : "Re-review claim"}
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}
@@ -547,6 +689,46 @@ export const ProducerWorkspace: React.FC<ProducerWorkspaceProps> = ({ state, loc
                 </div>
               )}
             </div>
+          )}
+
+          {manifestHistory.length > 0 && (
+            <details style={{ borderTop: "0.5px solid var(--glass-border)", paddingTop: 8 }} data-testid="manifest-history">
+              <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>
+                {isZh ? `Manifest 历史（${manifestHistory.length}）` : `Manifest history (${manifestHistory.length})`}
+              </summary>
+              <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+                {manifestHistory.map((m) => (
+                  <div
+                    key={`${m.manifest_id}-${m.generated_at}`}
+                    style={{
+                      display: "grid",
+                      gap: 2,
+                      padding: 8,
+                      borderRadius: 6,
+                      border: "0.5px solid var(--glass-border)",
+                      fontSize: 12,
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                      <span style={{ fontFamily: "var(--font-mono)", overflowWrap: "anywhere" }}>{m.manifest_id}</span>
+                      <span style={{ color: m.valid ? "var(--text-emerald)" : "var(--red-11)" }}>
+                        {m.valid ? (isZh ? "有效" : "valid") : (isZh ? "无效" : "invalid")}
+                      </span>
+                    </div>
+                    <div style={{ color: "var(--text-tertiary)", display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      <span>{new Date(m.generated_at * 1000).toLocaleString()}</span>
+                      <span>{isZh ? "导出人" : "by"}: {m.generated_by || "—"}</span>
+                      <span>{(m.items || []).length} {isZh ? "项" : "items"}</span>
+                      {(m.stale_items || []).length > 0 && (
+                        <span style={{ color: "var(--text-gold)" }}>
+                          {isZh ? "失效" : "stale"}: {m.stale_items!.join(", ")}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
           )}
         </section>
       </div>

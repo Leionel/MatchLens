@@ -1,13 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type ChallengeType =
   | "challenge_causal_interpretation"
   | "check_counterevidence"
   | "check_sample_sufficiency"
   | "check_comparison_window"
-  | "examine_sequence";
+  | "examine_sequence"
+  | "withdraw_claim";
+
+type ChallengeableClaim = {
+  claim_id: string;
+  assertion: string;
+  gate_status: string;
+  claim_level: number;
+  lifecycle_status: string;
+  editorial_status: string;
+  statement: string;
+};
 
 type ChallengeModalProps = {
   claimId: string;
@@ -44,6 +55,11 @@ const challengeOptions: { type: ChallengeType; title: string; desc: string }[] =
     title: "5. Examine On-Ball Sequence Continuity",
     desc: "Audit the chain of events leading up to the action for ball possession continuity.",
   },
+  {
+    type: "withdraw_claim",
+    title: "6. Withdraw This Claim",
+    desc: "Retire the claim from publication. The original statement and evidence stay in the revision history.",
+  },
 ];
 
 export function ChallengeModal({
@@ -58,6 +74,40 @@ export function ChallengeModal({
   const [concern, setConcern] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [claims, setClaims] = useState<ChallengeableClaim[]>([]);
+  const [targetClaim, setTargetClaim] = useState(claimId);
+  const [loadingClaims, setLoadingClaims] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !snapshotId) return;
+    let active = true;
+    setLoadingClaims(true);
+    setError("");
+    fetch(`/api/challengeable-claims?snapshot_id=${encodeURIComponent(snapshotId)}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`Claim list failed (${res.status})`);
+        return res.json();
+      })
+      .then((data) => {
+        if (!active) return;
+        const list: ChallengeableClaim[] = data.claims || [];
+        setClaims(list);
+        // Prefer the claim the caller already holds; otherwise target the
+        // first registered one so the challenge is never sent against a
+        // placeholder the registry does not know.
+        const known = list.find((c) => c.claim_id === claimId);
+        setTargetClaim(known ? known.claim_id : list[0]?.claim_id || claimId);
+      })
+      .catch((e) => {
+        if (active) setError((e as Error).message);
+      })
+      .finally(() => {
+        if (active) setLoadingClaims(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isOpen, snapshotId, claimId]);
 
   if (!isOpen) return null;
 
@@ -70,7 +120,7 @@ export function ChallengeModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          claim_id: claimId || "claim-current",
+          claim_id: targetClaim,
           snapshot_id: snapshotId,
           challenge_type: selectedType,
           user_concern: concern || undefined,
@@ -125,6 +175,31 @@ export function ChallengeModal({
                 </div>
               </label>
             ))}
+          </div>
+
+          <div className="user-concern-group">
+            <label htmlFor="challenge-claim-select" className="concern-label">
+              Claim under review:
+            </label>
+            <select
+              id="challenge-claim-select"
+              className="challenge-claim-select"
+              value={targetClaim}
+              disabled={loadingClaims || claims.length === 0}
+              onChange={(e) => setTargetClaim(e.target.value)}
+            >
+              {claims.length === 0 && <option value={targetClaim}>{targetClaim}</option>}
+              {claims.map((c) => (
+                <option key={c.claim_id} value={c.claim_id}>
+                  {c.claim_id} — {c.assertion.replace(/_/g, " ")} ({c.gate_status})
+                </option>
+              ))}
+            </select>
+            {claims.length > 0 && (
+              <div className="challenge-claim-detail">
+                {claims.find((c) => c.claim_id === targetClaim)?.statement}
+              </div>
+            )}
           </div>
 
           <div className="user-concern-group">

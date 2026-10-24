@@ -63,6 +63,23 @@ TOOL_BUDGET = {
 }
 MAX_TOOL_CALLS = sum(TOOL_BUDGET.values())
 
+# Model-facing descriptions for dynamic tool selection. These describe what the
+# tool observes; they never promise unobserved data such as off-ball positions.
+TOOL_DESCRIPTIONS = {
+    "get_match_context": "Read the match identity, snapshot as-of second, coverage status and observed score.",
+    "query_metric": "Query one registered metric observation (possession, shots, entries, high_recoveries, transition_shots, goals, passes, progressive_passes, carries, recoveries, box_entries, xg, oaai) for a team and window (previous/current/match).",
+    "compare_windows": "Compare one metric's previous vs current window values and delta for a team.",
+    "search_events": "Search recorded on-ball events inside the snapshot by team, kind and time range.",
+    "get_possession_sequence": "Read one recorded possession sequence with its event list and progression.",
+    "get_player_actions": "Read a player's recorded on-ball actions, optionally inside a time window.",
+    "get_spatial_distribution": "Read recorded on-ball event distribution across pitch zones for a team.",
+    "get_attacking_channels": "Read left/center/right attacking channel distribution and territorial progression for a team.",
+    "explain_oaai_contributors": "Read the per-event OAAI contribution ledger at a match second (algebraic decomposition, not causality).",
+    "find_counterevidence": "Check a candidate assertion against contrary recorded observations.",
+    "compare_matches": "Compare up to three matches' coverage-aware summary for one metric.",
+    "check_data_sufficiency": "Check whether the selected window has enough recorded events and coverage for a match-level claim.",
+}
+
 
 def _sha(value: Any) -> str:
     return hashlib.sha256(
@@ -310,6 +327,7 @@ class FootballToolRegistry:
             raise ToolError("ledger_limit_out_of_bounds")
         data = self.context.snapshot.data
         target = float(at if at is not None else data.get("as_of", 0.0))
+        cached = self.context.metadata.get("oaai_timeline")
         return compute_oaai_contribution_ledger(
             self.context.state.get("events", []),
             at=target,
@@ -317,6 +335,7 @@ class FootballToolRegistry:
             dead_intervals=data.get("dead_intervals", []),
             xt_model=self.context.xt_model,
             limit=limit,
+            timeline=cached.get("timeline") if isinstance(cached, dict) else None,
         )
 
     def _tool_find_counterevidence(self, assertion: str = "", team: str | None = None) -> dict:

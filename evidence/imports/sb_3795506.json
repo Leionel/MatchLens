@@ -1,6 +1,6 @@
 {
   "version": "statsbomb-corpus-import-v2",
-  "imported_at": "2026-10-24T09:56:18Z",
+  "imported_at": "2026-10-24T12:53:58Z",
   "match_id": "sb_3795506",
   "provider": "statsbomb_open_data",
   "provider_match_id": 3795506,
@@ -19,7 +19,7 @@
   "lineups_file": "data\\raw\\statsbomb\\lineups_3795506.json",
   "lineups_sha256": "10877ca887a2c8b4ae0bfe809607e5159b4a42a13cb51e75719ebf05f13ff195",
   "target_file": "data\\datasets\\sb_3795506.json",
-  "target_sha256": "97d18d0b6b8ed017ac394420d6027d7a63ddca96cfd6f5b4bca490ba37deacbb",
+  "target_sha256": "b0c7aeecf0a26e9c4b0323e94494f757a2884643d65acb1913548b721798685a",
   "raw_event_count": 4796,
   "normalized_event_count": 4796,
   "observed_end_seconds": 8603.785,
@@ -184,7 +184,7 @@
       {
         "check": "period_event_density",
         "passed": true,
-        "detail": "minimum per period=max(8, nominal_period/120)"
+        "detail": "minimum per playing period=max(8, nominal_period/120); a shoot-out needs recorded kicks"
       },
       {
         "check": "period_span_coverage",

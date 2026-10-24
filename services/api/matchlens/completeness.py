@@ -115,9 +115,14 @@ def _contiguous_prefix(periods: Sequence[int]) -> list[int]:
 
     A provider that emitted period 3 without period 2 is reporting a corrupt
     payload rather than a match with a missing half, so the expected period
-    set is derived from the observed maximum and checked for gaps. A penalty
-    shoot-out is a separate phase that may follow the second half directly,
-    so it is added to the match period without requiring extra time.
+    set is derived from the observed maximum and checked for gaps.
+
+    A shoot-out does not imply extra time. Some competitions award it straight
+    after regular time - the 2024 Copa America quarter-finals were settled that
+    way - and the provider stamps every shoot-out kick at minute 120 whatever
+    was played before it. The provider's own period annotation is therefore
+    the evidence of record: a payload that annotated the extra time holds
+    periods 3 and 4, and one that did not holds a complete match.
     """
     if not periods:
         return [1, 2]
@@ -130,6 +135,20 @@ def _contiguous_prefix(periods: Sequence[int]) -> list[int]:
 
 def _nominal_total(periods: Sequence[int]) -> float:
     return sum(NOMINAL_PERIOD_SECONDS.get(int(p), 2700.0) for p in periods)
+
+
+def expected_match_periods(events: Sequence[Any]) -> list[int]:
+    """The periods a payload must hold, judged from its own period annotation.
+
+    The importer and the verifier must agree on the expected period set, so
+    both read it from here rather than deriving it twice.
+    """
+    return _contiguous_prefix([_event_period(event) for event in events])
+
+
+def nominal_match_seconds(periods: Sequence[int]) -> float:
+    """The nominal playing time of a match with the given periods."""
+    return _nominal_total(periods)
 
 
 def verify_dataset_completeness(
@@ -239,7 +258,9 @@ def verify_dataset_completeness(
             "event_count": period_events,
             "coverage": round(coverage, 3),
             "event_density_ok": enough,
-            "completeness_rule": "recorded_kicks" if is_shootout else "span_coverage",
+            "completeness_rule": (
+                "recorded_kicks" if is_shootout else "span_coverage"
+            ),
             "shootout_kicks_by_team": kicks_by_team,
             "shootout_kicks_ok": shootout_ok,
         })

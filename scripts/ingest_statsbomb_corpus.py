@@ -26,6 +26,8 @@ sys.path.insert(0, str(ROOT / "services" / "api"))
 from matchlens.adapters.statsbomb import StatsBombAdapter  # noqa: E402
 from matchlens.completeness import (  # noqa: E402
     NOMINAL_PERIOD_SECONDS,
+    expected_match_periods,
+    nominal_match_seconds,
     verify_dataset_completeness,
 )
 from matchlens.provider_terms import (  # noqa: E402
@@ -45,12 +47,6 @@ RECEIPT_DIR = ROOT / "evidence" / "imports"
 # that went to extra time is longer. The expected duration is therefore derived
 # from the periods the provider actually recorded.
 NOMINAL_REGULATION_SECONDS = NOMINAL_PERIOD_SECONDS[1] + NOMINAL_PERIOD_SECONDS[2]
-
-
-def _expected_duration(events) -> float:
-    """Nominal playing time implied by the periods present in the payload."""
-    periods = {int(e.period) for e in events}
-    return float(sum(NOMINAL_PERIOD_SECONDS.get(p, 2700.0) for p in periods))
 
 
 def _sha256(path: Path) -> str:
@@ -145,7 +141,8 @@ def import_match(entry: dict[str, Any], *, raw_dir: Path, dataset_dir: Path, dry
         raise ValueError(f"{match_id}: unmapped provider teams {unmapped}")
 
     observed_end = max((e.clock_seconds for e in events), default=0.0)
-    expected_duration = _expected_duration(events)
+    expected_periods = expected_match_periods(events)
+    expected_duration = nominal_match_seconds(expected_periods)
     report = verify_dataset_completeness(
         events,
         raw_event_count=len(raw_events),
@@ -155,6 +152,7 @@ def import_match(entry: dict[str, Any], *, raw_dir: Path, dataset_dir: Path, dry
         conversion_drop_count=max(0, len(raw_events) - len(events)),
         drop_reasons=(["adapter_dropped_or_unsupported_events"] if len(raw_events) > len(events) else []),
         team_ids=sorted(known),
+        expected_periods=expected_periods,
     )
 
     coverage = (
@@ -193,7 +191,6 @@ def import_match(entry: dict[str, Any], *, raw_dir: Path, dataset_dir: Path, dry
         "continuous_coverage": report.status == "COMPLETE_VERIFIED",
         "source_declared_complete": True,
         "completeness_status": report.status,
-        "completeness": report.model_dump(),
         "capabilities": ["schema_compatibility", "event_stream", "spatial_drilldown"],
         "official_score_note": (
             "Score read from the provider match index; penalties excluded from the "
@@ -337,7 +334,10 @@ def main() -> int:
             "dataset_path": row["dataset_path"],
             "dataset_sha256": row["dataset_sha256"],
             "stage": entry.get("stage"),
-            "completeness": row["metadata"]["completeness"],
+            # The completeness report lives here once. The catalog reads it back
+            # into the match metadata, so the committed file never carries two
+            # copies that could drift apart.
+            "completeness": row["receipt"]["completeness"],
             "source": {
                 "provider": "statsbomb_open_data",
                 "competition_id": entry["competition_id"],

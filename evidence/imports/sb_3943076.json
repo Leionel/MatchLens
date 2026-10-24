@@ -1,0 +1,174 @@
+{
+  "version": "statsbomb-corpus-import-v2",
+  "imported_at": "2026-10-24T12:53:48Z",
+  "match_id": "sb_3943076",
+  "provider": "statsbomb_open_data",
+  "provider_match_id": 3943076,
+  "competition": "Copa America",
+  "season": "2024",
+  "stage": "third_place",
+  "match_date": "2024-07-14",
+  "home_team": "Canada",
+  "away_team": "Uruguay",
+  "home_score": 2,
+  "away_score": 2,
+  "home_provider_team_id": "1833",
+  "away_provider_team_id": "783",
+  "source_file": "data\\raw\\statsbomb\\events_3943076.json",
+  "source_sha256": "e0429cc38678af4367f3ad31804bf21a3d80e9103aedaa7d95724784ced8a05e",
+  "lineups_file": "data\\raw\\statsbomb\\lineups_3943076.json",
+  "lineups_sha256": "645c49ab8516953ce9c77118de83cf5bfbabd02a9b6a5216172f4db912862119",
+  "target_file": "data\\datasets\\sb_3943076.json",
+  "target_sha256": "fa83fd15663a1abd30c234c81132e5fe26a9c19ac838cef70104beba7395244b",
+  "raw_event_count": 2862,
+  "normalized_event_count": 2862,
+  "observed_end_seconds": 7639.736,
+  "expected_duration_seconds": 6000.0,
+  "reordered_events": [],
+  "completeness_status": "COMPLETE_VERIFIED",
+  "completeness": {
+    "status": "COMPLETE_VERIFIED",
+    "synthetic": false,
+    "source_declaration": "statsbomb_open_data",
+    "raw_event_count": 2862,
+    "normalized_event_count": 2862,
+    "conversion_drop_count": 0,
+    "drop_reasons": [],
+    "observed_periods": [
+      1,
+      2,
+      5
+    ],
+    "expected_periods": [
+      1,
+      2,
+      5
+    ],
+    "coverage_by_period": [
+      {
+        "period": 1,
+        "expected_start": 0,
+        "expected_end": 2700.0,
+        "observed_start": 0.0,
+        "observed_end": 2843.16,
+        "event_count": 1491,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 2,
+        "expected_start": 2700.0,
+        "expected_end": 5400.0,
+        "observed_start": 2843.16,
+        "observed_end": 5845.68,
+        "event_count": 1348,
+        "coverage": 1.0,
+        "event_density_ok": true,
+        "completeness_rule": "span_coverage",
+        "shootout_kicks_by_team": {},
+        "shootout_kicks_ok": true
+      },
+      {
+        "period": 5,
+        "expected_start": 5400.0,
+        "expected_end": 6000.0,
+        "observed_start": 7200.0,
+        "observed_end": 7639.74,
+        "event_count": 23,
+        "coverage": 0.733,
+        "event_density_ok": true,
+        "completeness_rule": "recorded_kicks",
+        "shootout_kicks_by_team": {
+          "1833": 5,
+          "783": 4
+        },
+        "shootout_kicks_ok": true
+      }
+    ],
+    "expected_duration": 6000.0,
+    "observed_start": 0.0,
+    "observed_end": 7639.74,
+    "known_missing_segments": [],
+    "provider_consistency": true,
+    "integrity_checks": [
+      {
+        "check": "events_present",
+        "passed": true,
+        "detail": "2862 normalized events"
+      },
+      {
+        "check": "event_ids_present",
+        "passed": true,
+        "detail": "every event has an ID"
+      },
+      {
+        "check": "event_ids_unique",
+        "passed": true,
+        "detail": "duplicates=[]"
+      },
+      {
+        "check": "clock_in_bounds",
+        "passed": true,
+        "detail": "invalid=[]"
+      },
+      {
+        "check": "team_mapping_declared",
+        "passed": true,
+        "detail": "unmapped=[]"
+      },
+      {
+        "check": "periods_present",
+        "passed": true,
+        "detail": "observed=[1, 2, 5] expected=[1, 2, 5]"
+      },
+      {
+        "check": "conversion_accounted",
+        "passed": true,
+        "detail": "raw=2862 normalized=2862 drops=0"
+      },
+      {
+        "check": "period_event_density",
+        "passed": true,
+        "detail": "minimum per playing period=max(8, nominal_period/120); a shoot-out needs recorded kicks"
+      },
+      {
+        "check": "period_span_coverage",
+        "passed": true,
+        "detail": "minimum per-period span coverage=70%"
+      },
+      {
+        "check": "shootout_kicks_recorded",
+        "passed": true,
+        "detail": "minimum kicks per team=3"
+      },
+      {
+        "check": "clock_monotonic_by_period",
+        "passed": true,
+        "detail": "event order is chronological by period"
+      }
+    ],
+    "confidence": 1.0,
+    "verified": true,
+    "notes": []
+  },
+  "coverage_level": "C1",
+  "score_reconciliation": {
+    "provider_score": "2-2",
+    "recorded_goals": "2-2",
+    "provider_home_score": 2,
+    "provider_away_score": 2,
+    "recorded_home_goals": 2,
+    "recorded_away_goals": 2,
+    "shootout_goals": {
+      "home": 3,
+      "away": 4
+    },
+    "consistent": true,
+    "note": "Provider index score and event-recorded goals agree."
+  },
+  "license_ref": "StatsBomb Public Data User Agreement (Standard Terms, last updated 8 September 2023) - https://github.com/statsbomb/open-data/blob/master/LICENSE.pdf",
+  "attribution_text": "Data provided by StatsBomb. Publications of analysis derived from this data must state the data source as StatsBomb and display the StatsBomb logo from their Media Pack (https://statsbomb.com/media-pack/)."
+}
