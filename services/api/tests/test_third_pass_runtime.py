@@ -100,14 +100,26 @@ def test_story_endpoint_never_claims_broadcast_approval_without_editorial(client
     assert all("gate_status" in c for c in story["claims"])
 
 
-def test_fabricated_editorial_approval_is_rejected(client):
-    res = client.post("/api/story/editorial-approval", json={
+def test_fabricated_editorial_approval_is_rejected(client, monkeypatch):
+    monkeypatch.setenv("MATCHLENS_PRODUCER_TOKEN", "producer-test")
+    anonymous = client.post("/api/story/editorial-approval", json={
         "match_id": "sb_wc2022_final",
         "snapshot_id": "snap-does-not-exist",
         "claim_id": "claim-invented-claim",
-        "approver": "Nobody",
         "decision": "approved",
     })
+    assert anonymous.status_code == 403
+
+    res = client.post(
+        "/api/story/editorial-approval",
+        headers={"X-MatchLens-Token": "producer-test"},
+        json={
+            "match_id": "sb_wc2022_final",
+            "snapshot_id": "snap-does-not-exist",
+            "claim_id": "claim-invented-claim",
+            "decision": "approved",
+        },
+    )
     assert res.status_code == 404
     assert "claim_not_registered" in res.text
 

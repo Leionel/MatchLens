@@ -8,6 +8,7 @@ Shared data index connecting Data Adapters, Metadata, and UI Match Selector.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Optional
@@ -109,25 +110,103 @@ class MatchCatalog:
     # Alias for convenience
     get_match_meta = get_match
 
+    @staticmethod
+    def content_revision_from_events(
+        *,
+        match_id: str,
+        provider: str,
+        events: list[NormalizedEvent],
+        home_provider_team_id: str | None = None,
+        away_provider_team_id: str | None = None,
+        schema_version: str = "normalized-event-v2",
+        adapter_version: str = "statsbomb-adapter-v2",
+        metric_version: str = "football-v2",
+        model_version: str = "oaai-1.0.0",
+        coverage: str = "unknown",
+    ) -> tuple[str, str]:
+        """Content-addressed dataset identity.
+
+        Unlike mtime/size, this changes when an event's team, timestamp,
+        coordinates, action, outcome or possession identity changes while its
+        event ID stays the same.
+        """
+        canonical_events = []
+        for event in events:
+            canonical_events.append({
+                "event_id": event.event_id,
+                "period": event.period,
+                "clock": round(float(event.clock_seconds), 4),
+                "team": event.team_id,
+                "provider_team": event.provider_team_id,
+                "action": event.action_type.value if hasattr(event.action_type, "value") else str(event.action_type),
+                "outcome": event.outcome,
+                "player": event.player_id,
+                "possession": event.possession_id,
+                "x": event.x,
+                "y": event.y,
+                "end_x": event.end_x,
+                "end_y": event.end_y,
+                "own_goal": event.is_own_goal,
+                "shootout": event.is_shootout,
+            })
+        content_sha = hashlib.sha256(
+            json.dumps(canonical_events, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
+        revision = hashlib.sha256(json.dumps({
+            "match_id": match_id,
+            "provider": provider,
+            "content_sha256": content_sha,
+            "home_provider_team_id": home_provider_team_id,
+            "away_provider_team_id": away_provider_team_id,
+            "schema_version": schema_version,
+            "adapter_version": adapter_version,
+            "metric_version": metric_version,
+            "model_version": model_version,
+            "coverage": coverage,
+            "event_count": len(events),
+        }, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
+        return revision, content_sha
+
+    @classmethod
+    def dataset_revision(cls, match_id: str) -> dict[str, Any]:
+        meta = cls.get_match(match_id)
+        events = cls.load_normalized_events(match_id)
+        coverage = meta.coverage_level.value if meta else "unknown"
+        revision, content_sha = cls.content_revision_from_events(
+            match_id=match_id,
+            provider=meta.data_provider if meta else "unknown",
+            events=events,
+            home_provider_team_id=meta.home_provider_team_id if meta else None,
+            away_provider_team_id=meta.away_provider_team_id if meta else None,
+            adapter_version=(
+                "synthetic-adapter-v2" if match_id.startswith("syn_") else "statsbomb-adapter-v2"
+            ),
+            coverage=coverage,
+        )
+        return {
+            "match_id": match_id,
+            "revision": revision,
+            "content_sha256": content_sha,
+            "event_count": len(events),
+            "coverage": coverage,
+            "schema_version": "normalized-event-v2",
+            "adapter_version": "synthetic-adapter-v2" if match_id.startswith("syn_") else "statsbomb-adapter-v2",
+            "metric_version": "football-v2",
+            "model_version": "oaai-1.0.0",
+        }
+
     @classmethod
     def data_version(cls, match_id: str) -> str:
-        """Cheap fingerprint that changes when the underlying source changes."""
-        if match_id.startswith("syn_"):
-            return "synthetic-controlled-r02"
-        path = MATCHES_DIR / f"{match_id}.json"
-        try:
-            stat = path.stat()
-        except OSError:
-            return "missing"
-        import hashlib
-
-        return hashlib.sha256(f"{stat.st_mtime_ns}:{stat.st_size}".encode()).hexdigest()[:12]
+        """Content revision, not mtime/size. See content_revision_from_events."""
+        return str(cls.dataset_revision(match_id)["revision"])
 
     @classmethod
     def get_match_context(cls, match_id: str) -> MatchContext:
         meta = cls.get_match(match_id)
         if not meta:
             raise FileNotFoundError(f"Match not found: {match_id}")
+
+        revision_info = cls.dataset_revision(match_id)
 
         if match_id.startswith("syn_"):
             mode = "synthetic_replay"
@@ -190,11 +269,17 @@ class MatchCatalog:
             ),
             event_source=meta.license_ref,
             capabilities=meta.capabilities,
-            data_version=cls.data_version(match_id),
+            data_version=revision_info["revision"],
             partial_notice=partial_notice,
             competition=meta.competition,
             season=meta.season,
             label=meta.label,
+            dataset_revision=revision_info["revision"],
+            content_sha256=revision_info["content_sha256"],
+            schema_version="normalized-event-v2",
+            adapter_version="synthetic-adapter-v2" if match_id.startswith("syn_") else "statsbomb-adapter-v2",
+            metric_version="football-v2",
+            model_version="oaai-1.0.0",
             home_provider_team_id=home_provider,
             away_provider_team_id=away_provider,
             coordinate_frame=frame,
@@ -333,8 +418,9 @@ class MatchCatalog:
                 "competition": meta.competition if meta else None,
                 "home_team": meta.home_team if meta else None,
                 "away_team": meta.away_team if meta else None,
-                "home_team_id": ctx.home_team_id if ctx else None,
-                "away_team_id": ctx.away_team_id if ctx else None,
+                "home_team_id": (ctx.home_provider_team_id or ctx.home_team_id) if ctx else None,
+                "away_team_id": (ctx.away_provider_team_id or ctx.away_team_id) if ctx else None,
+                "provider": ctx.provider if ctx else None,
                 "coverage": coverage,
                 "continuous_coverage": continuous,
                 "sample_size_events": len(evs),
@@ -378,6 +464,9 @@ class MatchCatalog:
                     "per_90_available": [],
                 })
                 summary["matches"].append(mid)
+                summary.setdefault("team_ids", set()).add(
+                    p["home_team_id"] if side == "home_team" else p["away_team_id"]
+                )
                 summary["goals_total"] += p["home_goals"] if side == "home_team" else p["away_goals"]
                 if p["continuous_coverage"]:
                     summary["continuous_matches"] += 1
@@ -388,6 +477,9 @@ class MatchCatalog:
                     })
                 else:
                     summary["partial_matches"] += 1
+
+        for summary in team_summaries.values():
+            summary["team_ids"] = sorted(str(x) for x in summary.get("team_ids", set()) if x)
 
         trend = sorted(
             (

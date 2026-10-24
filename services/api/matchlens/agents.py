@@ -59,6 +59,9 @@ class WireReview(ClosedModel):
 class Run:
     id: str
     snapshot: Snapshot
+    match_id: str = ""
+    dataset_revision: str | None = None
+    epoch: int = 0
     audit: list[dict] = field(default_factory=list)
     role: str = ""
     requests: int = 0

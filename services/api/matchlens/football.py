@@ -842,6 +842,7 @@ def freeze(
     coordinate_frame: Literal["fixed", "team_relative"] | None = None,
     continuous_coverage: bool | None = None,
     official_score: dict[str, int] | None = None,
+    dataset_revision: str | None = None,
 ) -> Snapshot:
     is_syn = (match_id is None or match_id.startswith("syn_")) and scenario in SCENARIOS
     max_d = format_seconds if format_seconds else (720 if is_syn else 5400)
@@ -881,6 +882,7 @@ def freeze(
             "teams": TEAMS,
             "score": state["score"],
             "score_basis": state["score_basis"],
+            "dataset_revision": dataset_revision,
             "official_score": state["official_score"],
             "shootout_score": state["shootout_score"],
             "coverage": state["coverage"],
@@ -910,7 +912,8 @@ def freeze(
             "match_id": match_id,
             "scenario": scenario,
             "seed": seed,
-            "source_data_digest": source_digest,
+            "source_data_digest": dataset_revision or source_digest,
+            "dataset_revision": dataset_revision,
             "data_version": data_version,
             "match_clock_basis": clock_basis,
             "format_seconds": max_d,
@@ -918,6 +921,7 @@ def freeze(
             "teams": actual_teams,
             "score": state["score"],
             "score_basis": state["score_basis"],
+            "dataset_revision": dataset_revision,
             "official_score": state["official_score"],
             "shootout_score": state["shootout_score"],
             "coverage": state["coverage"],

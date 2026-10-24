@@ -20,6 +20,13 @@ def test_openapi_exposes_third_pass_endpoints():
         "/api/matches/compare",
         "/api/benchmark/abc",
         "/api/matches/{match_id}/validation",
+        "/api/metrics",
+        "/api/metrics/{metric_id}",
+        "/api/investigate",
+        "/api/claims/history",
+        "/api/broadcast/queue",
+        "/api/broadcast/rundown",
+        "/api/broadcast/export",
     ]
     for path in required:
         assert path in paths, path

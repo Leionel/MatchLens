@@ -153,6 +153,12 @@ class MatchContext(BaseModel):
     competition: Optional[str] = None
     season: Optional[str] = None
     label: Optional[str] = None
+    dataset_revision: Optional[str] = None
+    content_sha256: Optional[str] = None
+    schema_version: str = "normalized-event-v2"
+    adapter_version: str = "statsbomb-adapter-v2"
+    metric_version: str = "football-v2"
+    model_version: str = "oaai-1.0.0"
     # Explicit provider identity mapping. Never inferred from name substrings.
     home_provider_team_id: Optional[str] = None
     away_provider_team_id: Optional[str] = None

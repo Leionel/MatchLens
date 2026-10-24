@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
 
 from .agents import AgentRunner, Run, PROMPT_VERSION
@@ -182,6 +182,7 @@ def freeze_with_context(
         continuous_coverage=ctx.continuous_coverage,
         official_score=official,
         limitations=[ctx.partial_notice] if ctx.partial_notice else None,
+        dataset_revision=ctx.dataset_revision or ctx.data_version,
     )
 
 
@@ -192,6 +193,9 @@ class Engine:
         self.real_events: dict[str, list] = {}
         self.context_cache: dict[str, object] = {}
         self.exploration_cache: dict[tuple, dict] = {}
+        self.story_cache: dict[tuple, object] = {}
+        from .broadcast import BroadcastStore
+        self.broadcast = BroadcastStore(runtime / "broadcast.json")
         self.xt_model = ExpectedThreatModel.load_default("16x12")
         self.sessions: dict[str, Session] = {}
         self.rates = RateLimits()
@@ -213,7 +217,11 @@ class Engine:
                 snap_id = data.get("snapshot_id")
                 res = data.get("result")
                 if snap_id and res and res.get("status") == "completed" and res.get("accepted"):
-                    snap = freeze(self.events, data["evidence"]["as_of"])
+                    snap = freeze(
+                        self.events,
+                        data["evidence"]["as_of"],
+                        dataset_revision=data["evidence"].get("dataset_revision"),
+                    )
                     # A historical receipt must match this match prefix byte for
                     # byte and pass today's gate. Never relabel an old hash.
                     if snap.id != snap_id or snap.data != data["evidence"]:
@@ -553,8 +561,17 @@ class Engine:
             return False
         for key, cap in (("analyse:"+s.id, 3), ("analyse-ip:"+s.ip, 6), ("analyse:global", 12)):
             self.rates.check(key, cap)
-        run = Run("run-"+secrets.token_hex(8), snap)
-        run.audit.append({"type": "trigger", "source": trigger, "as_of": snap.data["as_of"]})
+        run = Run(
+            "run-"+secrets.token_hex(8),
+            snap,
+            match_id=s.match_id,
+            dataset_revision=str(snap.data.get("dataset_revision") or snap.data.get("data_version") or ""),
+            epoch=s.epoch,
+        )
+        run.audit.append({
+            "type": "trigger", "source": trigger, "as_of": snap.data["as_of"],
+            "match_id": run.match_id, "dataset_revision": run.dataset_revision, "epoch": run.epoch,
+        })
         s.attempted.add(snap.id)
         s.attempts[snap.id] = s.attempts.get(snap.id, 0) + 1
         s.analyses += 1
@@ -600,21 +617,41 @@ class Engine:
                 self.slots.release()
             result.update(run_id=run.id, snapshot_id=snapshot.id, as_of=snapshot.data["as_of"],
                           audit=run.audit, requests=run.requests)
-            for card in result.get("accepted", []):
-                self.registry.register_verified_claim(
-                    s.match_id,
-                    snapshot.id,
-                    card,
-                    source_run=run.id,
-                    gate_status="approved",
-                    gate_version="publication_gate-v1",
-                )
-            if epoch == s.epoch and snapshot.data["as_of"] <= s.at:
+            # A run is committed only under its frozen identity. The registry
+            # write must never read a match_id that the session changed while
+            # the model was running, and a stale run only leaves audit evidence.
+            snapshot_match = str(snapshot.data.get("match_id") or "")
+            legacy_default = run.match_id == "syn_default" and snapshot_match.startswith("harbor-northbridge-")
+            identity_ok = (
+                epoch == s.epoch
+                and run.match_id == s.match_id
+                and (snapshot_match == run.match_id or legacy_default)
+                and snapshot.data.get("as_of", 0) <= s.at
+            )
+            if identity_ok:
+                for card in result.get("accepted", []):
+                    self.registry.register_verified_claim(
+                        run.match_id,
+                        snapshot.id,
+                        card,
+                        source_run=run.id,
+                        gate_status="approved",
+                        gate_version="publication_gate-v1",
+                        dataset_revision=run.dataset_revision,
+                    )
                 s.cache[snapshot.id] = result
                 s.run_info = {"run_id": run.id, "status": result["status"], "as_of": result["as_of"], "epoch": epoch}
                 s.revision += 1
             else:
-                run.audit.append({"type": "superseded", "bound_epoch": epoch, "current_epoch": s.epoch})
+                run.audit.append({
+                    "type": "superseded",
+                    "bound_epoch": epoch,
+                    "current_epoch": s.epoch,
+                    "bound_match_id": run.match_id,
+                    "current_match_id": s.match_id,
+                    "snapshot_match_id": snapshot_match,
+                    "reason": "identity_or_clock_mismatch",
+                })
         except asyncio.CancelledError:
             run.audit.append({"type": "superseded", "bound_epoch": epoch, "current_epoch": s.epoch})
         except TimeoutError:
@@ -954,6 +991,17 @@ async def challenge(body: ChallengeRequest, request: Request):
     )
     result_payload = result.model_dump()
     result_payload["snapshot_as_of"] = snap.data["as_of"]
+    revision = eng.registry.apply_challenge_revision(
+        record,
+        outcome=result.outcome,
+        rationale=result.resolution_summary,
+        challenge_request_hash=request_hash,
+        actor="challenge_review",
+    ) if record else None
+    if revision is not None:
+        result_payload["revision_id"] = revision.revision_id
+        result_payload["revision_version"] = revision.version
+        result_payload["lifecycle_status"] = revision.status
     rev_entry = {
         "revision_id": f"rev-{len(s.revisions) + 1:03d}",
         "snapshot_id": snap.id,
@@ -1057,6 +1105,50 @@ async def list_matches(request: Request):
     return {"matches": [m.model_dump() for m in MatchCatalog.list_matches()]}
 
 
+@app.get("/api/metrics")
+async def list_metrics(request: Request):
+    from .metrics import MetricsService
+
+    public_rate(request, "metrics", 120)
+    return {"metric_version": "football-v2", "metrics": [m.model_dump() for m in MetricsService.definitions()]}
+
+
+@app.get("/api/metrics/{metric_id}")
+async def query_metric(
+    metric_id: str,
+    request: Request,
+    match_id: str = "syn_default",
+    at: int | None = None,
+    team: str = "H",
+    window: Literal["previous", "current", "match"] = "current",
+):
+    from .catalog import MatchCatalog
+    from .metrics import MetricsService
+
+    public_rate(request, "metrics", 120)
+    if team not in ("H", "N"):
+        raise HTTPException(400, "invalid_team")
+    try:
+        ctx = MatchCatalog.get_match_context(match_id)
+        events = MatchCatalog.load_normalized_events(match_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "match_not_found")
+    if at is not None and (at < 0 or at > ctx.duration):
+        raise HTTPException(422, "at_outside_match_context")
+    target = int(at) if at is not None else (
+        ctx.duration if match_id.startswith("syn_") else int(ctx.observed_end)
+    )
+    snap = freeze_with_context(
+        events, ctx, target, match_id=match_id,
+        scenario=match_id.replace("syn_", "", 1) if match_id.startswith("syn_") else "historical",
+    )
+    try:
+        metric = MetricsService.query(snap, metric_id, team=team, window=window, match_id=match_id)
+    except KeyError:
+        raise HTTPException(404, "metric_not_registered")
+    return metric.model_dump()
+
+
 @app.get("/api/matches/compare")
 async def compare_matches(
     request: Request,
@@ -1144,7 +1236,10 @@ async def get_xt_model_comparison(request: Request, resolution: str = "16x12", m
 async def get_exploration_recoveries(request: Request, window_seconds: float = 6.0):
     s, eng = session(request), engine(request)
     state = eng.reduce_state(s)
-    return analyze_quick_recoveries(state["events"], window_seconds=window_seconds, target_team=s.focus_team)
+    ctx = eng.match_context(s.match_id)
+    result = analyze_quick_recoveries(state["events"], window_seconds=window_seconds, target_team=s.focus_team)
+    result.update(match_id=s.match_id, epoch=s.epoch, at=s.at, dataset_revision=ctx.dataset_revision)
+    return result
 
 
 @app.get("/api/exploration/oaai")
@@ -1153,12 +1248,15 @@ async def get_exploration_oaai(request: Request, smoothing_mode: Literal["causal
     state = eng.reduce_state(s)
     # Only explicit dead-ball intervals may freeze decay; possession intervals
     # are controlled play and must never be passed here.
-    return compute_oaai(
+    ctx = eng.match_context(s.match_id)
+    result = compute_oaai(
         state["events"],
         smoothing_mode=smoothing_mode,
         dead_intervals=state.get("dead_intervals", []),
         xt_model=eng.xt_model,
     )
+    result.update(match_id=s.match_id, epoch=s.epoch, at=s.at, dataset_revision=ctx.dataset_revision)
+    return result
 
 
 @app.get("/api/matches/{match_id}/exploration")
@@ -1246,11 +1344,70 @@ async def get_xt_grid(resolution: Literal["16x12", "12x8"] = "16x12"):
     }
 
 
+class InvestigationBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    match_id: str
+    at: int | None = None
+    team: Literal["H", "N"] = "H"
+    focus_type: Literal["moment", "event", "metric", "sequence"] = "moment"
+    focus_id: str | None = None
+    question: str = Field(default="", max_length=500)
+
+
+@app.post("/api/investigate")
+async def investigate(body: InvestigationBody, request: Request):
+    from .catalog import MatchCatalog
+    from .investigation import InvestigationPlanner
+
+    public_rate(request, "investigate", 30)
+    try:
+        ctx = MatchCatalog.get_match_context(body.match_id)
+        events = MatchCatalog.load_normalized_events(body.match_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "match_not_found")
+    if body.at is not None and (body.at < 0 or body.at > ctx.duration):
+        raise HTTPException(422, "at_outside_match_context")
+    at = int(body.at) if body.at is not None else (
+        ctx.duration if body.match_id.startswith("syn_") else int(ctx.observed_end)
+    )
+    snap = freeze_with_context(
+        events, ctx, at, match_id=body.match_id,
+        scenario=body.match_id.replace("syn_", "", 1) if body.match_id.startswith("syn_") else "historical",
+    )
+    eng = engine(request)
+    eng.saved_snapshots[snap.id] = snap
+    state = reduce_match(
+        events,
+        at,
+        max_duration=ctx.duration,
+        is_synthetic=body.match_id.startswith("syn_"),
+        team_names={"H": ctx.home_team_name, "N": ctx.away_team_name},
+        team_map=(
+            {ctx.home_provider_team_id: "H", ctx.away_provider_team_id: "N"}
+            if ctx.home_provider_team_id and ctx.away_provider_team_id
+            else None
+        ),
+        coordinate_frame=ctx.coordinate_frame,
+        continuous_coverage=ctx.continuous_coverage,
+    )
+    return InvestigationPlanner.run(
+        match_id=body.match_id,
+        snapshot=snap,
+        state=state,
+        team=body.team,
+        focus_type=body.focus_type,
+        focus_id=body.focus_id,
+        question=body.question,
+    ).model_dump()
+
+
 @app.get("/api/matches/{match_id}/story")
 async def get_match_story(
     match_id: str,
     request: Request,
     perspective: Literal["coach", "media", "fan"] = "media",
+    as_of: int | None = None,
+    mode: Literal["live", "recap"] = "recap",
 ):
     from .catalog import MatchCatalog
     from .stories import MatchStoryEngine
@@ -1263,7 +1420,15 @@ async def get_match_story(
     except FileNotFoundError:
         raise HTTPException(404, "match_not_found")
 
-    at = ctx.duration if match_id.startswith("syn_") else min(ctx.duration, int(ctx.observed_end))
+    if as_of is not None and (as_of < 0 or as_of > ctx.duration):
+        raise HTTPException(422, "as_of_outside_match_context")
+    if mode == "live":
+        at = int(as_of) if as_of is not None else min(ctx.duration, int(ctx.observed_end))
+    else:
+        at = int(as_of) if as_of is not None else (
+            ctx.duration if match_id.startswith("syn_") else min(ctx.duration, int(ctx.observed_end))
+        )
+    at = max(0, min(at, ctx.duration))
     state = reduce_match(
         events,
         at,
@@ -1287,14 +1452,27 @@ async def get_match_story(
     )
     eng.saved_snapshots[snap.id] = snap
     eng.ensure_snapshot_claims(match_id, snap)
-    return MatchStoryEngine.generate_story(
+    records = eng.registry.records_for(match_id, snap.id)
+    approval_signature = hashlib.sha256(json.dumps([
+        (r.claim_id, r.gate_status, r.editorial_status, r.lifecycle_status, r.editorial_version, r.revision_count)
+        for r in sorted(records, key=lambda x: x.claim_id)
+    ], sort_keys=True).encode()).hexdigest()[:16]
+    cache_key = (match_id, snap.id, perspective, ctx.dataset_revision or ctx.data_version, approval_signature, mode)
+    if cache_key in eng.story_cache:
+        return eng.story_cache[cache_key]
+    story = MatchStoryEngine.generate_story(
         match_id,
         state["events"],
         eng.registry,
         snap.id,
         perspective,
         coverage=state["coverage"],
-    )
+    ).model_dump()
+    story.update(dataset_revision=ctx.dataset_revision or ctx.data_version, as_of=at, mode=mode)
+    if len(eng.story_cache) > 128:
+        eng.story_cache.clear()
+    eng.story_cache[cache_key] = story
+    return story
 
 
 class EditorialDecisionBody(BaseModel):
@@ -1302,20 +1480,23 @@ class EditorialDecisionBody(BaseModel):
     match_id: str
     snapshot_id: str
     claim_id: str
-    approver: str
-    decision: Literal["approved", "rejected"]
+    decision: Literal["approved", "rejected"] = "approved"
     note: str | None = None
 
 
 @app.post("/api/story/editorial-approval")
 async def editorial_approval(body: EditorialDecisionBody, request: Request):
+    from .auth import require_content_editor
+
+    principal = require_content_editor(request)
     eng = engine(request)
     try:
         record = eng.registry.editorial_decision(
             body.match_id,
             body.snapshot_id,
             body.claim_id,
-            approver=body.approver,
+            approver=principal.subject,
+            role=principal.role,
             decision=body.decision,
             note=body.note,
         )
@@ -1324,6 +1505,124 @@ async def editorial_approval(body: EditorialDecisionBody, request: Request):
     except ValueError as exc:
         raise HTTPException(409, str(exc))
     return record.model_dump()
+
+
+@app.get("/api/claims/history")
+async def claim_history(
+    request: Request,
+    match_id: str,
+    snapshot_id: str,
+    claim_id: str,
+):
+    from .auth import require_content_editor
+
+    require_content_editor(request)
+    eng = engine(request)
+    record = eng.registry.get(match_id, snapshot_id, claim_id)
+    if record is None:
+        raise HTTPException(404, "claim_not_registered")
+    return {
+        "claim": record.model_dump(),
+        "revisions": [r.model_dump() for r in eng.registry.revision_history(match_id, snapshot_id, claim_id)],
+        "editorial_history": record.editorial_history,
+    }
+
+
+class RundownBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    match_id: str
+    snapshot_id: str
+    claim_ids: list[str] = Field(min_length=1, max_length=20)
+
+
+class ExportBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    match_id: str
+    snapshot_id: str
+    perspective: Literal["coach", "media", "fan"] = "media"
+    export_format: Literal["json", "svg", "markdown"] = "json"
+
+
+@app.get("/api/broadcast/queue")
+async def broadcast_queue(request: Request, match_id: str, snapshot_id: str):
+    public_rate(request, "broadcast", 60)
+    eng = engine(request)
+    records = eng.registry.records_for(match_id, snapshot_id)
+    return {
+        "match_id": match_id,
+        "snapshot_id": snapshot_id,
+        "records": [r.model_dump() for r in sorted(records, key=lambda r: (r.as_of, r.claim_id))],
+        "broadcastable_count": sum(1 for r in records if r.broadcastable),
+    }
+
+
+@app.post("/api/broadcast/rundown")
+async def broadcast_rundown(body: RundownBody, request: Request):
+    from .auth import require_content_editor
+
+    principal = require_content_editor(request)
+    eng = engine(request)
+    snap = eng.saved_snapshots.get(body.snapshot_id)
+    if snap is None:
+        raise HTTPException(404, "snapshot_not_found")
+    ctx = eng.match_context(body.match_id)
+    records = eng.registry.records_for(body.match_id, body.snapshot_id)
+    try:
+        rundown = eng.broadcast.build(
+            match_id=body.match_id,
+            snapshot_id=body.snapshot_id,
+            claims=records,
+            claim_ids=body.claim_ids,
+            dataset_revision=ctx.dataset_revision or ctx.data_version,
+            actor=principal.subject,
+        )
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+    return rundown.model_dump()
+
+
+@app.get("/api/broadcast/rundown")
+async def get_broadcast_rundown(request: Request, match_id: str, snapshot_id: str):
+    eng = engine(request)
+    rundown = eng.broadcast.get(match_id, snapshot_id)
+    if rundown is None:
+        raise HTTPException(404, "rundown_not_found")
+    return rundown.model_dump()
+
+
+@app.post("/api/broadcast/export")
+async def broadcast_export(body: ExportBody, request: Request):
+    from .auth import require_content_editor
+    from .stories import MatchStoryEngine, StoryExportEngine
+
+    principal = require_content_editor(request)
+    eng = engine(request)
+    snap = eng.saved_snapshots.get(body.snapshot_id)
+    if snap is None:
+        raise HTTPException(404, "snapshot_not_found")
+    records = eng.registry.records_for(body.match_id, body.snapshot_id)
+    approved = [r for r in records if r.broadcastable]
+    if not approved:
+        raise HTTPException(409, "no_broadcastable_claims")
+    story = MatchStoryEngine.generate_story(
+        body.match_id,
+        snap.data.get("events", []),
+        eng.registry,
+        body.snapshot_id,
+        body.perspective,
+        coverage=snap.data.get("coverage", {}),
+    )
+    if story.approval_status != "approved_for_broadcast":
+        raise HTTPException(409, "story_not_broadcastable")
+    package = StoryExportEngine.export_story_package(story, body.export_format)
+    return {
+        **package.model_dump(),
+        "match_id": body.match_id,
+        "snapshot_id": body.snapshot_id,
+        "dataset_revision": snap.data.get("dataset_revision") or snap.data.get("data_version"),
+        "approved_by": sorted({r.editorial_approver for r in approved if r.editorial_approver}),
+        "claim_ids": sorted(r.claim_id for r in approved),
+    }
 
 
 @app.get("/api/matches/{match_id}/perspectives")

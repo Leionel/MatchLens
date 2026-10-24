@@ -51,7 +51,11 @@ def _write_reusable_run(tmp_path: Path) -> tuple[str, object]:
     """Create a run receipt from the current reducer, without a live model."""
     from matchlens.contracts import ClaimDraft, VerifierDecision, publication_gate
 
-    snap = freeze(generate_match(), 720)
+    from matchlens.catalog import MatchCatalog
+    from matchlens.main import freeze_with_context
+
+    ctx = MatchCatalog.get_match_context("syn_default")
+    snap = freeze_with_context(generate_match(), ctx, 720, seed=17, scenario="default", match_id=None)
     draft = ClaimDraft.model_validate({
         "snapshot_id": snap.id,
         "claims": [{

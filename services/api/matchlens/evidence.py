@@ -31,7 +31,7 @@ def build_evidence_graph(
     data = snapshot.data
     receipts = data.get("receipts", {})
     events = data.get("events", [])
-    data_version = getattr(match_context, "data_version", "unknown")
+    data_version = getattr(match_context, "dataset_revision", None) or getattr(match_context, "data_version", "unknown")
     coverage = data.get("coverage", {})
 
     nodes: list[dict] = []

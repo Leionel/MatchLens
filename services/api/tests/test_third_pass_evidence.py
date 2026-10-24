@@ -96,19 +96,23 @@ def test_missing_receipt_becomes_evidence_gap_not_zero():
     )
 
 
-def test_editorial_approval_marks_claim_published_and_challenge_links_revision(client):
+def test_editorial_approval_marks_claim_published_and_challenge_links_revision(client, monkeypatch):
+    monkeypatch.setenv("MATCHLENS_PRODUCER_TOKEN", "producer-test")
     story = client.get("/api/matches/syn_default/story").json()
     snapshot_id = story["snapshot_id"]
     approved_claim = next(c for c in story["claims"] if c["gate_status"] == "approved")
 
-    res = client.post("/api/story/editorial-approval", json={
-        "match_id": "syn_default",
-        "snapshot_id": snapshot_id,
-        "claim_id": approved_claim["claim_id"],
-        "approver": "Editor A",
-        "decision": "approved",
-        "note": "Reviewed against receipts.",
-    })
+    res = client.post(
+        "/api/story/editorial-approval",
+        headers={"X-MatchLens-Token": "producer-test"},
+        json={
+            "match_id": "syn_default",
+            "snapshot_id": snapshot_id,
+            "claim_id": approved_claim["claim_id"],
+            "decision": "approved",
+            "note": "Reviewed against receipts.",
+        },
+    )
     assert res.status_code == 200, res.text
 
     challenge = client.post("/api/challenge", json={

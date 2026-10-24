@@ -51,10 +51,51 @@ class ClaimRecord(BaseModel):
     editorial_approver: Optional[str] = None
     editorial_note: Optional[str] = None
     editorial_at: Optional[float] = None
+    editorial_role: Optional[str] = None
+    editorial_version: int = 0
+    editorial_history: list[dict[str, Any]] = Field(default_factory=list)
+    dataset_revision: Optional[str] = None
+    lifecycle_status: Literal["current", "qualified", "disputed", "withdrawn", "superseded"] = "current"
+    current_revision_id: Optional[str] = None
+    revision_count: int = 0
 
     @property
     def broadcastable(self) -> bool:
-        return self.gate_status == "approved" and self.editorial_status == "approved"
+        return (
+            self.gate_status == "approved"
+            and self.editorial_status == "approved"
+            and self.lifecycle_status == "current"
+        )
+
+
+class ClaimRevision(BaseModel):
+    """Immutable snapshot of a claim's conclusion state.
+
+    Revisions are append-only. A revision never rewrites the original statement
+    or evidence scope; later review creates a new revision and supersedes the
+    previous `current` one.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    revision_id: str
+    claim_record_id: str
+    claim_id: str
+    match_id: str
+    snapshot_id: str
+    version: int
+    parent_revision_id: Optional[str] = None
+    status: Literal["current", "qualified", "disputed", "withdrawn", "superseded"]
+    outcome: Literal["maintained", "narrowed", "withdrawn", "inconclusive", "rejected", "editorial"]
+    statement: str
+    evidence_scope: dict[str, Any]
+    evidence_hash: str
+    gate_status: str
+    editorial_status: str
+    dataset_revision: Optional[str] = None
+    challenge_request_hash: Optional[str] = None
+    rationale: str = ""
+    created_by: str = "system"
+    created_at: float = Field(default_factory=time.time)
 
 
 class ChallengeRecord(BaseModel):
@@ -81,6 +122,7 @@ class ClaimRegistry:
         self.path = Path(path) if path else None
         self.records: dict[str, ClaimRecord] = {}
         self.challenges: dict[str, ChallengeRecord] = {}
+        self.revisions: dict[str, list[ClaimRevision]] = {}
         self._load()
 
     # ---------------------------------------------------------------- persistence
@@ -95,10 +137,18 @@ class ClaimRegistry:
             for raw in data.get("challenges", []):
                 record = ChallengeRecord.model_validate(raw)
                 self.challenges[record.request_hash] = record
+            for raw in data.get("revisions", []):
+                revision = ClaimRevision.model_validate(raw)
+                self.revisions.setdefault(revision.claim_record_id, []).append(revision)
+            for record in self.records.values():
+                if record.revision_count and record.current_revision_id is None:
+                    history = self.revisions.get(record.record_id, [])
+                    record.current_revision_id = history[-1].revision_id if history else None
         except Exception:
             # A corrupt registry is not silently replaced with approvals.
             self.records = {}
             self.challenges = {}
+            self.revisions = {}
 
     def _save(self) -> None:
         if not self.path:
@@ -109,6 +159,7 @@ class ClaimRegistry:
             "saved_at": time.time(),
             "claims": [r.model_dump() for r in self.records.values()],
             "challenges": [r.model_dump() for r in self.challenges.values()],
+            "revisions": [r.model_dump() for rs in self.revisions.values() for r in rs],
         }
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -127,6 +178,90 @@ class ClaimRegistry:
             r for r in self.records.values()
             if r.match_id == match_id and r.snapshot_id == snapshot_id
         ]
+
+    def revision_history(self, match_id: str, snapshot_id: str, claim_id: str) -> list[ClaimRevision]:
+        record = self.get(match_id, snapshot_id, claim_id)
+        return list(self.revisions.get(record.record_id, [])) if record else []
+
+    def _append_revision(
+        self,
+        record: ClaimRecord,
+        *,
+        status: Literal["current", "qualified", "disputed", "withdrawn", "superseded"],
+        outcome: Literal["maintained", "narrowed", "withdrawn", "inconclusive", "rejected", "editorial"],
+        rationale: str = "",
+        created_by: str = "system",
+        challenge_request_hash: str | None = None,
+    ) -> ClaimRevision:
+        history = self.revisions.setdefault(record.record_id, [])
+        if history:
+            history[-1].status = "superseded"
+        version = len(history) + 1
+        revision = ClaimRevision(
+            revision_id=_canonical_hash({
+                "record_id": record.record_id,
+                "version": version,
+                "evidence_hash": record.evidence_hash,
+                "statement": record.statement,
+                "status": status,
+                "outcome": outcome,
+            })[:20],
+            claim_record_id=record.record_id,
+            claim_id=record.claim_id,
+            match_id=record.match_id,
+            snapshot_id=record.snapshot_id,
+            version=version,
+            parent_revision_id=history[-1].revision_id if history else None,
+            status=status,
+            outcome=outcome,
+            statement=record.statement,
+            evidence_scope=dict(record.evidence_scope),
+            evidence_hash=record.evidence_hash,
+            gate_status=record.gate_status,
+            editorial_status=record.editorial_status,
+            dataset_revision=record.dataset_revision,
+            challenge_request_hash=challenge_request_hash,
+            rationale=rationale,
+            created_by=created_by,
+        )
+        history.append(revision)
+        record.current_revision_id = revision.revision_id
+        record.revision_count = version
+        record.lifecycle_status = status
+        return revision
+
+    def apply_challenge_revision(
+        self,
+        record: ClaimRecord,
+        *,
+        outcome: str,
+        rationale: str,
+        challenge_request_hash: str,
+        actor: str = "challenge",
+    ) -> ClaimRevision:
+        status_by_outcome = {
+            "maintained": "current",
+            "narrowed": "qualified",
+            "withdrawn": "withdrawn",
+            "inconclusive": "disputed",
+            "rejected": "disputed",
+        }
+        status = status_by_outcome.get(outcome, "disputed")
+        if outcome != "maintained":
+            record.editorial_status = "pending"
+            record.editorial_note = "Editorial approval reset by a later challenge revision."
+            record.editorial_at = None
+            record.editorial_approver = None
+        revision = self._append_revision(
+            record,
+            status=status,  # type: ignore[arg-type]
+            outcome=outcome if outcome in ("maintained", "narrowed", "withdrawn", "inconclusive", "rejected") else "inconclusive",
+            rationale=rationale,
+            created_by=actor,
+            challenge_request_hash=challenge_request_hash,
+        )
+        self._save()
+        return revision
 
     def verify_and_register(
         self,
@@ -205,6 +340,7 @@ class ClaimRegistry:
             gate_status=verdict.status,
             gate_violations=list(verdict.rule_violations),
             source_run=source_run,
+            dataset_revision=snapshot.data.get("dataset_revision") or snapshot.data.get("data_version"),
         )
         existing = self.records.get(record.record_id)
         if (
@@ -216,6 +352,13 @@ class ClaimRegistry:
             # editorial decision already recorded against that evidence.
             return existing
         self.records[record.record_id] = record
+        self._append_revision(
+            record,
+            status="current" if record.gate_status == "approved" else "disputed",
+            outcome="maintained" if record.gate_status == "approved" else "rejected",
+            rationale=f"Gate {record.gate_version}: {record.gate_status}",
+            created_by="gate",
+        )
         self._save()
         return record
 
@@ -229,6 +372,7 @@ class ClaimRegistry:
         gate_status: str,
         gate_violations: list[str] | None = None,
         gate_version: str = "publication_gate",
+        dataset_revision: str | None = None,
     ) -> ClaimRecord:
         """Persist a claim that already passed the online publication gate."""
         refs = list(claim.get("refs") or claim.get("evidence_scope", {}).get("metric_ids", []))
@@ -259,8 +403,19 @@ class ClaimRegistry:
             gate_status="approved" if gate_status == "approved" else "rejected",
             gate_violations=gate_violations or [],
             source_run=source_run,
+            dataset_revision=dataset_revision,
         )
+        existing = self.records.get(record.record_id)
+        if existing and existing.evidence_hash == record.evidence_hash:
+            return existing
         self.records[record.record_id] = record
+        self._append_revision(
+            record,
+            status="current" if record.gate_status == "approved" else "disputed",
+            outcome="maintained" if record.gate_status == "approved" else "rejected",
+            rationale=f"Online gate {record.gate_version}: {record.gate_status}",
+            created_by="online_gate",
+        )
         self._save()
         return record
 
@@ -271,7 +426,8 @@ class ClaimRegistry:
         claim_id: str,
         *,
         approver: str,
-        decision: Literal["approved", "rejected"],
+        role: str = "producer",
+        decision: Literal["approved", "rejected"] = "approved",
         note: str | None = None,
     ) -> ClaimRecord:
         record = self.get(match_id, snapshot_id, claim_id)
@@ -279,14 +435,44 @@ class ClaimRegistry:
             raise KeyError("claim_not_registered")
         if record.gate_status != "approved":
             raise ValueError("gate_not_approved")
-        if not approver.strip():
+        if record.lifecycle_status != "current":
+            raise ValueError("claim_not_current")
+        if role not in ("producer", "admin", "local-producer"):
+            raise ValueError("editorial_role_required")
+        if not approver.strip() or approver.strip() == "anonymous":
             raise ValueError("approver_required")
+        if record.editorial_status == decision:
+            return record
+        previous = record.editorial_status
         record.editorial_status = decision
         record.editorial_approver = approver.strip()
+        record.editorial_role = role
         record.editorial_note = note
         record.editorial_at = time.time()
+        record.editorial_version += 1
+        record.editorial_history.append({
+            "version": record.editorial_version,
+            "decision": decision,
+            "previous_status": previous,
+            "approver": record.editorial_approver,
+            "role": role,
+            "note": note,
+            "at": record.editorial_at,
+            "dataset_revision": record.dataset_revision,
+        })
+        self._append_revision(
+            record,
+            status=record.lifecycle_status,
+            outcome="editorial",
+            rationale=f"Editorial {decision} by {record.editorial_approver} ({role})",
+            created_by=record.editorial_approver,
+        )
         self._save()
         return record
+
+    def editorial_history(self, match_id: str, snapshot_id: str, claim_id: str) -> list[dict[str, Any]]:
+        record = self.get(match_id, snapshot_id, claim_id)
+        return list(record.editorial_history) if record else []
 
     # ------------------------------------------------------------------ challenges
     def remember_challenge(

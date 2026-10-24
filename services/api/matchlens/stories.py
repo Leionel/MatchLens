@@ -137,9 +137,15 @@ class MatchStoryEngine:
         if registry is None or not snapshot_id:
             raise ValueError("trusted_claim_registry_required")
         records = registry.records_for(match_id, snapshot_id)
-        gate_approved = [r for r in records if r.gate_status == "approved"]
+        gate_approved = [
+            r for r in records
+            if r.gate_status == "approved" and r.lifecycle_status == "current"
+        ]
         editorial_approved = [r for r in records if r.broadcastable]
-        rejected_editorially = [r for r in records if r.editorial_status == "rejected"]
+        rejected_editorially = [
+            r for r in records
+            if r.editorial_status == "rejected" or r.lifecycle_status == "withdrawn"
+        ]
 
         coverage = coverage or {}
         duration = float(coverage.get("format_seconds") or 5400.0)
@@ -308,6 +314,9 @@ class MatchStoryEngine:
                     "evidence_hash": r.evidence_hash,
                     "source_run": r.source_run,
                     "as_of": r.as_of,
+                    "dataset_revision": r.dataset_revision,
+                    "lifecycle_status": r.lifecycle_status,
+                    "revision_count": r.revision_count,
                     "evidence_scope": r.evidence_scope,
                 }
                 for r in records
