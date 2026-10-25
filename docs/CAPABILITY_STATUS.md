@@ -26,7 +26,11 @@ skipped locally** against the served static export (the skip is the
 catalogued-but-not-installed case, which the minimum-corpus CI job executes), with
 axe-core WCAG AA clean in light and dark themes. The real-match CI job also runs
 `scripts/benchmark_real_match.py` (cold snapshot <8s, warm seek <1s, OAAI cold
-<5s) and the provider publication boundary tests.
+<5s) and the provider publication boundary tests. The manual full-corpus CI run
+`40158510985` verified **80/80 analysis-ready matches, 302,638 events, all
+COMPLETE_VERIFIED**, with 29 corpus tests passed; all five jobs were green.
+Measured on that Linux runner: snapshot cold 252ms / warm 4ms, seek cold 111ms /
+warm 4ms, OAAI cold 142ms / warm 2ms, Match Detail 621ms.
 
 ---
 

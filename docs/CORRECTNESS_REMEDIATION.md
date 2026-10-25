@@ -41,7 +41,15 @@
 - 新增独立比分核验 `score.verify_score` 与 `/api/matches/{id}/score`；修复乌龙球在指标中未计入导致比分与指标不一致的问题（成对 provider 记录只计一次）。
 - Lineup 行携带基于换人/出场记录的分钟数；per-90 明确 5400s 归一化与含补时/加时的分钟分母；跨场与画像输出加入精选样本偏差说明。
 
-### 2.1.6 仍未完成的外部依赖
+### 2.1.6 验收结果（实际执行）
+
+- GitHub Actions `40158510985`：Backend、Frontend、Playwright、最小真实赛事、手动全量 80 场五个 job 全部成功；干净 Checkout 后端 311 passed / 32 skipped（32 项为本地 provider 数据相关，最小真实任务单独执行），浏览器 23/23 通过，Playwright 工件 226,817 bytes 已上传。
+- 最小真实赛事任务：22 项真实赛事/许可/语义测试通过；4691 条事件、补时尾部可回放、比分 2–1、OAAI 3601 采样点。
+- 全量语料任务：80/80 `ANALYSIS_READY`、302,638 条事件、全部 `COMPLETE_VERIFIED`，29 项语料测试通过；`--verify-all` 验证 80 个内容哈希。
+- Linux CI 性能：snapshot cold 252ms / warm 4ms；seek cold 111ms / warm 4ms；OAAI cold 142ms / warm 2ms；Match Detail 621ms。改造前 OAAI 约 15s。
+- 性能门槛与数值一致性由 `scripts/benchmark_real_match.py` 在 CI 强制执行。
+
+### 2.1.7 仍未完成的外部依赖
 
 - 账户体系/SSO：当前为匿名单会话隔离 + operator token，不是多租户账号系统。
 - StatsBomb 许可的法律复核与 logo 资产发布：代码保留许可/署名与发布边界，最终公开部署仍需权利方确认。
