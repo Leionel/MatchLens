@@ -21,12 +21,12 @@ plan, a passing schema test alone, or an API returning 200 is not completion.
 
 Last executed verification at this baseline (2026-10-25): **backend suite 343
 passed** (`services/api/.venv/Scripts/python.exe -m pytest services/api/tests/ -q`);
-**web typecheck and production build 0 errors**; **Playwright 29 passed / 1
-skipped locally** against the served static export in the R6 shell (the skip is
-the catalogued-but-not-installed case, which the minimum-corpus CI job executes),
-with axe-core WCAG AA clean in light and dark themes on Match Detail, Tactical
+**web typecheck and production build 0 errors**; **Playwright 30 passed / 1
+skipped locally** (the skip is the catalogued-but-not-installed case) and
+**31/31 passed in CI** against the served static export in the R6 shell, with
+axe-core WCAG AA clean in light and dark themes on Match Detail, Tactical
 Explorer and Intelligence Studio. R6 screenshots are captured at 1440, 1024,
-768, 390 and 360 px and uploaded with the Playwright artifacts. The real-match CI job also runs
+768, 412, 390 and 360 px and uploaded with the Playwright artifacts. The real-match CI job also runs
 `scripts/benchmark_real_match.py` (cold snapshot <8s, warm seek <1s, OAAI cold
 <5s) and the provider publication boundary tests. The manual full-corpus CI run
 `40158510985` verified **80/80 analysis-ready matches, 302,638 events, all
