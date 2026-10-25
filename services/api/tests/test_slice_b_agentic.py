@@ -13,8 +13,9 @@ import pathlib
 import pytest
 from fastapi.testclient import TestClient
 
+from matchlens.agents import AgentRunner, Run
 from matchlens.football import freeze, generate_match, reduce_match
-from matchlens.investigation import AgentInvestigationError, run_maf_investigation
+from matchlens.investigation import AgentInvestigationError, InvestigationCancelled, run_maf_investigation
 from matchlens.main import InvestigationBody, app, run_investigation_plan
 from matchlens.runstore import AgentRunStore, InvalidAgentRunTransition, TERMINAL_STATES
 from matchlens.tools import (
@@ -282,6 +283,80 @@ def test_maf_agent_mode_unknown_intent_never_dispatches(client):
         assert engine.ledger.summary()["requests_reserved"] == 0
     finally:
         engine.runner.key = None
+
+
+def test_maf_cancellation_closes_run_before_model_dispatch(client):
+    engine = client.app.state.engine
+    engine.runner.key = "fault-injection-not-a-live-key"
+    dispatched: list[str] = []
+
+    async def stage(*args, **kwargs):
+        dispatched.append(kwargs.get("role", "unexpected"))
+        raise AssertionError("a cancelled investigation must not dispatch a model")
+
+    engine.runner.stage_with_registry = stage
+    cancel_event = asyncio.Event()
+    cancel_event.set()
+    try:
+        snap, state = _snap_and_state(540)
+        with pytest.raises(InvestigationCancelled):
+            asyncio.run(run_maf_investigation(
+                runner=engine.runner,
+                run_store=engine.agent_runs,
+                match_id="syn_default",
+                snapshot=snap,
+                state=state,
+                team="H",
+                focus_type="moment",
+                question="Why did the attacking activity change?",
+                owner_session_id="test-owner",
+                cancel_event=cancel_event,
+            ))
+        assert dispatched == []
+        runs = [r for r in engine.agent_runs.runs.values() if r.trigger == "investigation"]
+        assert runs and runs[-1].state == "CANCELLED"
+        assert any(entry["state"] == "CANCELLED" for entry in runs[-1].state_history)
+        assert engine.ledger.summary()["requests_reserved"] == 0
+    finally:
+        engine.runner.key = None
+
+
+def test_cancel_event_aborts_an_in_flight_provider_call():
+    async def scenario():
+        snap, _state = _snap_and_state(540)
+        cancel_event = asyncio.Event()
+        run = Run("arun-in-flight", snap, cancel_event=cancel_event)
+
+        async def never_returns():
+            await asyncio.Event().wait()
+
+        pending = asyncio.create_task(AgentRunner._await_with_cancel(run, never_returns()))
+        await asyncio.sleep(0)
+        cancel_event.set()
+        with pytest.raises(InvestigationCancelled):
+            await pending
+
+    asyncio.run(scenario())
+
+
+def test_cancel_endpoint_remembers_a_pre_registration_cancel(client):
+    # A cancel that wins the race against POST /api/investigate is remembered
+    # and the request returns a server-confirmed cancellation, not a plan.
+    res = client.post("/api/investigation-requests/phone-cancel-key/cancel")
+    assert res.status_code == 200
+    payload = res.json()
+    assert payload["state"] == "cancel_requested"
+    assert payload["active"] is False
+
+    res = client.post("/api/investigate", json={
+        "match_id": "syn_default", "at": 540, "team": "H",
+        "focus_type": "moment", "question": "Why did the attacking activity change?",
+        "request_key": "phone-cancel-key",
+    })
+    assert res.status_code == 409
+    cancelled = res.json()
+    assert cancelled["cancelled"] is True
+    assert cancelled["state"] == "CANCELLED"
 
 
 # ---------------------------------------------------------------------------

@@ -17,10 +17,11 @@ from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Literal
+from typing import Callable, Literal
 
 from .agents import AgentRunner, Run, PROMPT_VERSION
 from .auth import Principal, SESSION_COOKIE, optional_principal
@@ -322,6 +323,14 @@ class Engine:
         }
         self.saved_runs: dict[str, dict] = {}
         self.saved_snapshots: dict[str, Snapshot] = {}
+        # Live investigation requests, keyed by owner + client request key. The
+        # event is checked before each model dispatch and races the in-flight
+        # provider call, so a cancel cannot start the next paid stage.
+        self.investigation_requests: dict[str, asyncio.Event] = {}
+        self.investigation_request_runs: dict[str, str] = {}
+        # A cancel can arrive a few milliseconds before the POST registers its
+        # request. Keep a short-lived tombstone so the run starts cancelled.
+        self.investigation_cancel_tombstones: dict[str, float] = {}
         for p in sorted((runtime / "runs").glob("*.json")):
             try:
                 data = json.loads(p.read_text(encoding="utf-8"))
@@ -377,6 +386,42 @@ class Engine:
                         pass
             except Exception:
                 pass
+
+    @staticmethod
+    def _investigation_request_key(owner_id: str, request_key: str) -> str:
+        return f"{owner_id}:{request_key}"
+
+    def begin_investigation_request(self, owner_id: str, request_key: str) -> asyncio.Event:
+        key = self._investigation_request_key(owner_id, request_key)
+        event = self.investigation_requests.get(key)
+        if event is None:
+            event = asyncio.Event()
+            self.investigation_requests[key] = event
+        if self.investigation_cancel_tombstones.pop(key, None) is not None:
+            event.set()
+        return event
+
+    def bind_investigation_run(self, owner_id: str, request_key: str, run_id: str) -> None:
+        self.investigation_request_runs[self._investigation_request_key(owner_id, request_key)] = run_id
+
+    def cancel_investigation_request(self, owner_id: str, request_key: str) -> dict[str, object]:
+        key = self._investigation_request_key(owner_id, request_key)
+        event = self.investigation_requests.get(key)
+        active = event is not None
+        if event is not None:
+            event.set()
+        else:
+            self.investigation_cancel_tombstones[key] = time.monotonic()
+        now = time.monotonic()
+        expired = [k for k, ts in self.investigation_cancel_tombstones.items() if now - ts > 120]
+        for expired_key in expired:
+            self.investigation_cancel_tombstones.pop(expired_key, None)
+        return {"active": active, "run_id": self.investigation_request_runs.get(key)}
+
+    def end_investigation_request(self, owner_id: str, request_key: str) -> None:
+        key = self._investigation_request_key(owner_id, request_key)
+        self.investigation_requests.pop(key, None)
+        self.investigation_request_runs.pop(key, None)
 
     def events_for(self, s: Session):
         if not s.match_id.startswith("syn_"):
@@ -2599,6 +2644,9 @@ class InvestigationBody(BaseModel):
     # frozen budget; any failure degrades to the deterministic planner and is
     # reported honestly through agent_status/agent_error.
     execution_mode: Literal["deterministic_planner", "maf_agent"] = "deterministic_planner"
+    # Client-scoped handle for live cancellation. It is scoped to the server
+    # session and carries no capability on its own.
+    request_key: str | None = Field(default=None, min_length=8, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
 
 
 async def run_investigation_plan(
@@ -2607,6 +2655,9 @@ async def run_investigation_plan(
     snap: Snapshot,
     state: dict,
     owner_session_id: str,
+    *,
+    cancel_event: asyncio.Event | None = None,
+    on_run_created: Callable[[str], None] | None = None,
 ):
     """Produce an InvestigationPlan in the requested execution mode.
 
@@ -2614,7 +2665,15 @@ async def run_investigation_plan(
     any agent failure — the deterministic planner produces the structurally
     identical plan and the degradation is recorded on it.
     """
-    from .investigation import AgentInvestigationError, InvestigationPlanner, run_maf_investigation
+    from .investigation import (
+        AgentInvestigationError,
+        InvestigationCancelled,
+        InvestigationPlanner,
+        run_maf_investigation,
+    )
+
+    if cancel_event is not None and cancel_event.is_set():
+        raise InvestigationCancelled(None)
 
     def deterministic() -> "object":
         return InvestigationPlanner.run(
@@ -2662,6 +2721,8 @@ async def run_investigation_plan(
             compare_match_ids=body.compare_match_ids,
             xt_model=eng.xt_model,
             owner_session_id=owner_session_id,
+            cancel_event=cancel_event,
+            on_run_created=on_run_created,
         )
     except asyncio.CancelledError:
         raise
@@ -2773,10 +2834,66 @@ async def investigate(body: InvestigationBody, request: Request):
         # A real agent run dispatches paid model requests; rate it separately
         # from deterministic reads, on top of the durable budget ledger.
         public_rate(request, "investigate-agent", 6)
-    plan = await run_investigation_plan(eng, body, snap, state, owner.id)
-    plan.owner_session_id = owner.id
-    eng.investigations.save(plan)
-    return private_plan_payload(plan)
+    from .investigation import InvestigationCancelled
+
+    request_key = body.request_key
+    cancel_event = eng.begin_investigation_request(owner.id, request_key) if request_key else None
+    try:
+        plan = await run_investigation_plan(
+            eng,
+            body,
+            snap,
+            state,
+            owner.id,
+            cancel_event=cancel_event,
+            on_run_created=(
+                (lambda run_id: eng.bind_investigation_run(owner.id, request_key, run_id))
+                if request_key
+                else None
+            ),
+        )
+        plan.owner_session_id = owner.id
+        eng.investigations.save(plan)
+        return private_plan_payload(plan)
+    except InvestigationCancelled as exc:
+        record = eng.agent_runs.get(exc.run_id) if exc.run_id else None
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": "investigation_cancelled",
+                "cancelled": True,
+                "request_key": request_key,
+                "run_id": exc.run_id,
+                "state": record.state if record is not None else "CANCELLED",
+                "state_history": record.state_history if record is not None else [],
+            },
+        )
+    finally:
+        if request_key:
+            eng.end_investigation_request(owner.id, request_key)
+
+
+@app.post("/api/investigation-requests/{request_key}/cancel")
+async def cancel_live_investigation(request_key: str, request: Request):
+    """Cancel a live investigation request owned by this server session.
+
+    The request key is client-generated and only meaningful inside the session;
+    it grants no access by itself. Cancellation is cooperative on the server:
+    the model dispatch races the cancel event and the run record closes as
+    CANCELLED. A cancel that arrives just before registration is remembered.
+    """
+    public_rate(request, "investigate-cancel", 60)
+    if not (8 <= len(request_key) <= 64) or not request_key.replace("-", "").replace("_", "").isalnum():
+        raise HTTPException(422, "invalid_request_key")
+    owner = session(request)
+    eng = engine(request)
+    result = eng.cancel_investigation_request(owner.id, request_key)
+    return {
+        "request_key": request_key,
+        "state": "cancel_requested",
+        "active": result["active"],
+        "run_id": result["run_id"],
+    }
 
 
 @app.get("/api/investigations")

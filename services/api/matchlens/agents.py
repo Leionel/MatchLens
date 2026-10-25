@@ -6,7 +6,7 @@ import hashlib
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Awaitable, Callable
+from typing import Any, Awaitable, Callable
 
 import httpx
 from agent_framework import Agent, Executor, WorkflowBuilder, WorkflowContext, handler
@@ -69,6 +69,9 @@ class Run:
     review: dict | None = None
     raw_outputs: list[dict] = field(default_factory=list)
     focus_team: str = "H"
+    #: Set by the investigation route; the model call races it so a server-side
+    #: cancel aborts the in-flight provider request instead of waiting for it.
+    cancel_event: Any | None = None
 
 
 def instructions(role: str, focus_team: str = "H", tool_menu: str | None = None) -> str:
@@ -185,6 +188,33 @@ class AgentRunner:
 
         return before, after
 
+    @staticmethod
+    async def _await_with_cancel(run: Run, awaitable: Any) -> Any:
+        """Await a provider call unless the request was cancelled on the server."""
+        cancel_event = getattr(run, "cancel_event", None)
+        if cancel_event is None:
+            return await awaitable
+        from .investigation import InvestigationCancelled
+
+        if cancel_event.is_set():
+            close = getattr(awaitable, "close", None)
+            if close is not None:
+                close()
+            raise InvestigationCancelled(run.id)
+        task = asyncio.ensure_future(awaitable)
+        waiter = asyncio.ensure_future(cancel_event.wait())
+        try:
+            await asyncio.wait({task, waiter}, return_when=asyncio.FIRST_COMPLETED)
+            if waiter.done() and not task.done():
+                raise InvestigationCancelled(run.id)
+            return task.result()
+        finally:
+            if not waiter.done():
+                waiter.cancel()
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, waiter, return_exceptions=True)
+
     async def _run_model(self, run: Run, role: str, tools: list, prompt: str, instructions_text: str,
                          *, max_iterations: int, max_function_calls: int) -> str:
         before, after = self._transport_hooks(run, role)
@@ -198,7 +228,7 @@ class AgentRunner:
                     tools=tools, default_options={"response_format": {"type": "json_object"},
                     "extra_body": {"thinking": {"type": "disabled"}, "max_tokens": MAX_OUTPUT_TOKENS}})
                 session = agent.create_session()
-                response = await agent.run(prompt, session=session)
+                response = await self._await_with_cancel(run, agent.run(prompt, session=session))
                 raw = response.text
                 run.raw_outputs.append({"role": role, "attempt": "initial", "text": raw})
                 try:
@@ -209,12 +239,13 @@ class AgentRunner:
                     feedback = str(exc)[:900]
                     run.audit.append({"type": "schema_correction", "role": role, "validation": feedback})
                     t_slot = "N" if run.focus_team == "N" else "H"
-                    response = await agent.run("Your JSON failed local validation: "+feedback+
+                    response = await self._await_with_cancel(run, agent.run(
+                        "Your JSON failed local validation: "+feedback+
                         ". Return a corrected complete JSON object using the evidence already retrieved. "
                         "Do not call tools again. Follow the flat output schema, without extra fields or nested claim objects. "
                         f"Slots are exactly {{{{{t_slot}.possession.current}}}}, not .value; percentage slots already include %. "
                         "No literal digits in public prose, including reasons/limitations. Change only invalid fields; preserve other text. "
-                        "Never change claim_id, assertion or scope. Keep review reason below 400 characters.", session=session)
+                        "Never change claim_id, assertion or scope. Keep review reason below 400 characters.", session=session))
                     raw = response.text
                     run.raw_outputs.append({"role": role, "attempt": "format_correction", "text": raw})
                     try:

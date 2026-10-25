@@ -7,12 +7,13 @@ claim; promotion is an explicit user action followed by the real registry gate.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
 import time
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -1021,6 +1022,19 @@ class AgentInvestigationError(Exception):
         self.code = code
 
 
+class InvestigationCancelled(asyncio.CancelledError):
+    """The user cancelled this request on the server.
+
+    It subclasses ``CancelledError`` so every transport and workflow layer
+    treats it as cancellation, while the route can still name the run that was
+    closed as CANCELLED.
+    """
+
+    def __init__(self, run_id: str | None = None):
+        super().__init__("investigation_cancelled")
+        self.run_id = run_id
+
+
 async def run_maf_investigation(
     *,
     runner: Any,
@@ -1036,6 +1050,8 @@ async def run_maf_investigation(
     xt_model: Any = None,
     deadline: float = 45.0,
     owner_session_id: str | None = None,
+    cancel_event: asyncio.Event | None = None,
+    on_run_created: Callable[[str], None] | None = None,
 ) -> InvestigationPlan:
     """Real MAF agentic investigation (roadmap C-06).
 
@@ -1098,7 +1114,8 @@ async def run_maf_investigation(
 
     run_id = "arun-" + secrets.token_hex(8)
     maf_run = Run(run_id, snapshot, match_id=match_id,
-                  dataset_revision=str(dataset_revision or ""), focus_team=team)
+                  dataset_revision=str(dataset_revision or ""), focus_team=team,
+                  cancel_event=cancel_event)
     maf_run.audit.append({
         "type": "trigger", "source": "investigation", "investigation_id": investigation_id,
         "as_of": as_of, "intent": intent, "match_id": match_id,
@@ -1116,6 +1133,12 @@ async def run_maf_investigation(
         audit=maf_run.audit,
         owner_session_id=owner_session_id,
     )
+    if on_run_created is not None:
+        on_run_created(run_id)
+
+    def ensure_not_cancelled() -> None:
+        if cancel_event is not None and cancel_event.is_set():
+            raise InvestigationCancelled(run_id)
 
     def agent_summary() -> dict[str, Any]:
         fresh = run_store.get(run_id)
@@ -1138,6 +1161,9 @@ async def run_maf_investigation(
 
     try:
         async with asyncio.timeout(deadline):
+            # Cancellation is checked before every paid dispatch, so a cancel
+            # that lands between stages never starts another model request.
+            ensure_not_cancelled()
             run_store.transition(run_id, "ANALYSING", "analyst stage with dynamic tool selection")
 
             # Scope resolution stays deterministic (planner contract): the typed
@@ -1208,7 +1234,9 @@ async def run_maf_investigation(
                 ToolContext(match_id=match_id, snapshot=snapshot, state=state, team=team, xt_model=xt_model),
                 max_calls=12,
             )
+            ensure_not_cancelled()
             raw = await runner.stage_with_registry(maf_run, "Analyst", analyst_registry, analyst_prompt, max_function_calls=6)
+            ensure_not_cancelled()
             draft = WireDraft.model_validate_json(raw).canonical()
             validate_draft(draft, snapshot)
             maf_run.draft = draft.model_dump()
@@ -1230,13 +1258,21 @@ async def run_maf_investigation(
                 ToolContext(match_id=match_id, snapshot=snapshot, state=state, team=team, xt_model=xt_model),
                 max_calls=6,
             )
+            ensure_not_cancelled()
             raw_review = await runner.stage_with_registry(maf_run, "Verifier", verifier_registry, verifier_prompt, max_function_calls=4)
+            ensure_not_cancelled()
             review = WireReview.model_validate_json(raw_review).canonical()
             maf_run.review = review.model_dump()
             gated = publication_gate(ClaimDraft.model_validate(maf_run.draft), review, snapshot, maf_run.audit)
-    except asyncio.CancelledError:
+    except asyncio.CancelledError as exc:
         run_store.attach(run_id, maf_run.audit, maf_run.requests)
-        run_store.transition(run_id, "CANCELLED", "investigation cancelled")
+        record = run_store.get(run_id)
+        if record is not None and record.state not in (
+            "GATED", "PUBLISHED", "WITHHELD", "FAILED", "CANCELLED",
+        ):
+            run_store.transition(run_id, "CANCELLED", "investigation cancelled")
+        if isinstance(exc, InvestigationCancelled) and not exc.run_id:
+            exc.run_id = run_id
         raise
     except TimeoutError:
         run_store.finish(run_id, state="FAILED", reason="analysis_timeout", error="analysis_timeout",
