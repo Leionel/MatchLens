@@ -1,7 +1,7 @@
 # MatchLens Capability Status (single current matrix)
 
-**Updated**: 2026-10-24
-**Code baseline**: `3746fee` (backend), `ee388ed` (web), `.gitignore` `91b6fee`
+**Updated**: 2026-10-25 (Prompt 2.1 remediation)
+**Code baseline**: `1af5fc6` + Prompt 2.1 remediation
 **Planning authority**: `PRODUCT_UPGRADE_ROADMAP.md` (work items `A-01`…`F-08`)
 **Architecture contract**: `NEXT_GENERATION_ARCHITECTURE.md`
 **Rule**: code + an executed test/receipt is the status source. A checked box in a
@@ -19,17 +19,14 @@ plan, a passing schema test alone, or an API returning 200 is not completion.
 | **External Dependency** | Blocked on licensed data, account provider, budget or deployment decision. |
 | **Not Run** | Harness/code exists but no execution receipt exists. |
 
-Last executed verification at this baseline: **backend suite 311 passed**
-(`services/api/.venv/Scripts/python.exe -m pytest services/api/tests/ -q`; two
-failures were Windows `os.replace` permission flakes on temp files that both pass
-in isolation); **web typecheck and production build 0 errors**; **Playwright browser
-suite 19 passed in 1.4 minutes** (desktop 13, Pixel 7 3, iPad Mini 3, serial by
-design) against the served static export, with axe-core WCAG AA clean in light and
-dark themes. In-app browser acceptance
-ran the full journey (chart peak → ledger → investigation → gate → claim →
-challenge → revision) and the producer path (queue → approve → order → validate →
-export → manifest) against the served build, and refused export with
-`409 rundown_contains_stale_claims` after a withdrawal.
+Last executed verification at this baseline (2026-10-25): **backend suite 343
+passed** (`services/api/.venv/Scripts/python.exe -m pytest services/api/tests/ -q`);
+**web typecheck and production build 0 errors**; **Playwright 22 passed / 1
+skipped locally** against the served static export (the skip is the
+catalogued-but-not-installed case, which the minimum-corpus CI job executes), with
+axe-core WCAG AA clean in light and dark themes. The real-match CI job also runs
+`scripts/benchmark_real_match.py` (cold snapshot <8s, warm seek <1s, OAAI cold
+<5s) and the provider publication boundary tests.
 
 ---
 
@@ -41,11 +38,11 @@ roadmap; it is not a phase claim.
 | ID | Capability | Track | Status | Backend / entry | Frontend | Evidence | Current gap / next |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | CAP-01 | Possession state machine | B | Implemented & Verified | `football.reduce_match` | Match Center | 15 semantics tests | none for on-ball events |
-| CAP-02 | Historical clock, periods, extra time, shootout | B | Implemented & Verified | reducer + StatsBomb adapter | header/scoreboard | semantics/runtime tests | full real file absent |
+| CAP-02 | Historical clock, periods, extra time, shootout | B | Implemented & Verified | `clock.build_match_clock` + reducer + API bounds | header/scoreboard/detail | `test_clock_semantics.py` + real-match integration | nominal/observed/replayable are distinct; 516 events after 7200s are replayable on `sb_3795221` |
 | CAP-03 | As-of score vs official final | B | Implemented & Verified | reducer/state | Evidence Rail | runtime tests | none |
 | CAP-04 | Coverage as Unknown, not zero | B | Implemented & Verified | `completeness.py` + coverage object | Evidence Rail/hub/story | fifth-pass tests | none |
 | CAP-05 | Content-addressed DatasetRevision | A | Implemented & Verified | `catalog.content_revision_from_events` | rail version | revision tests | migrate pre-revision runs |
-| CAP-06 | Licensed StatsBomb import | B | Implemented & Verified | `ingest.py` + completeness verifier + receipt | hub label | `test_statsbomb_corpus.py` (corpus, licence, manifest, receipt layers) | provider payloads stay git-ignored; no redistribution |
+| CAP-06 | Licensed StatsBomb import | B | Implemented & Verified | `ingest.py` + completeness verifier + receipt + manifest merge | hub label | `test_data_contract.py`, `test_statsbomb_corpus.py` | payloads stay git-ignored; partial import preserves the catalog; paths are POSIX and hashes verified |
 | CAP-07 | Real 2022 final full analysis | B | Implemented & Verified | `sb_3869685` in the ingested corpus | hub + match centre | `test_imported_match_reproduces_the_declared_score` | metrics are heuristic (CAP-09/CAP-10 still open) |
 | CAP-08 | Metrics Registry | A | Implemented & Verified | `metrics.py` team×window receipts | charts, Ask, Investigation, Story | fifth-pass metric tests | story phase chapters still count events directly (`B-04`) |
 | CAP-09 | Calibrated xG model | B | Research Required | `models/xg.py` heuristic | reports `not_calibrated` | metric tests | calibration remains outstanding |
@@ -60,17 +57,17 @@ roadmap; it is not a phase claim.
 | CAP-18 | Server-side editorial identity | A | Implemented & Verified | `auth.py` | producer token field | auth tests | token roles only; no accounts/SSO |
 | CAP-19 | Broadcast queue/rundown/export | E | Implemented & Verified | `broadcast.py` + API + manifest | Producer workspace | fifth-pass rundown/export tests + 409 acceptance | re-review lifecycle (`E-06`) not built |
 | CAP-20 | Story as-of / live vs recap | E | Implemented & Verified | story endpoint + cache | Story tab | story boundary test | live pacing is pause-based |
-| CAP-21 | Evidence Graph | A | Implemented & Verified | `evidence.py` | inspector/evidence | graph tests | event node cap 400 |
+| CAP-21 | Evidence Graph | A | Implemented & Verified | `evidence.py` | inspector/evidence | graph tests + publication boundary tests | event node cap 400; anonymous provider nodes omit pitch coordinates |
 | CAP-22 | Cross-match coverage comparison | B | Implemented but Partial | `catalog.get_batch_summary` | Validation Lab | crossmatch tests | stable player/team ID registry incomplete |
 | CAP-23 | Explain any chart | D | Implemented & Verified | `explain.py` + ledger | chart click → investigation | fifth-pass ledger tests | none for the OAAI path |
 | CAP-24 | What-if sandbox | B | Implemented but Partial | `whatif.py` | Validation Lab | existing tests | research identification not implemented |
 | CAP-25 | Stale-run isolation | A | Implemented & Verified | `Run` identity + epoch | — | fourth-pass test | — |
 | CAP-26 | Async UI response guards | D | Implemented & Verified | exploration responses | page handlers | Playwright suite in CI (`browser-e2e` job) | — |
-| CAP-27 | Match library / discover / search | D | Implemented & Verified | `/api/matches` | `MatchLibraryWorkspace` (competition + season filters, foldable rounds, provenance badge, detail panel) | Playwright: provenance separation, competition and season narrowing with "N of M" count, detail coverage/source tabs | no date-range or head-to-head filter yet |
+| CAP-27 | Match library / discover / search | D | Implemented & Verified | `/api/matches` + availability contract | `MatchLibraryWorkspace` filters, provenance, availability badge and disabled analysis action | Playwright library tests (data-derived corpus, no hardcoded season) | no head-to-head filter yet |
 | CAP-28 | URL deep links / refresh restore | D | Implemented & Verified | — | `page.tsx` URL state | in-app restore + back/forward | investigation id not yet in the URL |
-| CAP-29 | Multi-user drafts/isolation | E | External Dependency | token roles only | — | product gap | account provider decision |
+| CAP-29 | Multi-user drafts/isolation | E | Implemented & Verified (anonymous sessions); accounts External Dependency | session-owned investigations/runs + producer role | — | `test_authorization.py` + Playwright security spec | no SSO/account provider; legacy ownerless records are producer-only |
 | CAP-30 | Live multi-agent ablation | F | Not Run | deterministic harness only | — | provenance audit | paid budget + frozen samples required |
-| CAP-31 | Real browser/screenshot QA | F | Implemented but Partial | served static export | Playwright + axe-core | CI `browser-e2e` job with failure screenshot/trace artifacts | no committed screenshot baselines (visual diff) |
+| CAP-31 | Real browser/screenshot QA | F | Implemented but Partial | served static export | Playwright + axe-core | CI `browser-e2e` job uploads traces, screenshots and HTML report on every outcome | no committed visual-diff baselines |
 | CAP-32 | Mobile/tablet device QA | D | Implemented but Partial | — | Pixel 7 + iPad Mini Playwright projects | 3 mobile + 3 tablet specs green | real device, screen reader, touch feel |
 | CAP-33 | Dataset Completeness Verification | A | Implemented & Verified | `completeness.py` (5 states) | ingest receipt, hub, rail, investigation | fifth-pass completeness tests | provider-side declarations trusted only when supplied |
 | CAP-34 | Public/Producer broadcast projections | E | Implemented & Verified | `public_claim_projection` / `producer_claim_projection` | Producer workspace | projection test | producer UI is token-based, not account-based |
@@ -82,9 +79,14 @@ roadmap; it is not a phase claim.
 | CAP-39 | OAAI contribution ledger | B | Implemented & Verified | `compute_oaai_contribution_ledger` | investigation + `/api/oaai/ledger` | reconciliation test | top-N list plus explicit unlisted remainder |
 | CAP-40 | Investigation state machine | C | Implemented & Verified | bounded transitions + persisted store + cancel | state chip/history | fifth-pass state tests | no retry backoff on tool failure |
 | CAP-41 | Agent run lifecycle persistence | C | Implemented but Partial | `agents.py` Run identity/audit | — | stale-run tests | no persisted state machine; roadmap `C-09` |
-| CAP-43 | Provider corpus curation | B | Implemented & Verified | `data/corpus_statsbomb.json` + `scripts/select_statsbomb_corpus.py` (rule) + `scripts/refresh_statsbomb_corpus.py` (index reader) | library competition and season filters | 80 matches / 15 competition-seasons / 3 confederations / 2010-2024, all `COMPLETE_VERIFIED` | selection is judgement, not a statistical sample; no weighting rule yet |
-| CAP-44 | Score and identity cross-verification | B | Implemented but Partial | provider season index ↔ corpus ↔ event goal tally | hub score | `test_curated_metadata_matches_the_provider_season_index` + `test_imported_match_reproduces_the_declared_score` | second source is the provider's own index; no independent results oracle |
-| CAP-45 | Full-match momentum chart | D | Implemented & Verified | `chart_oaai_payload` peak-preserving sampling + `_DeadTimeIndex` dead-time freeze | `OAAITimeline` period bands, change points, rug marks | Playwright journey on `sb_3795221` (4 periods); measured chart payload 225.8s → 6.8s on a 4 691-event match | nominal clock clamps the seek at `expected_duration`, so the stoppage tail past 120:00 is recorded but not reachable |
+| CAP-43 | Provider corpus curation | B | Implemented & Verified | corpus + selection/refresh scripts + `scripts/verify_corpus.py` | library filters + sample-bias note | 80 matches, all analysis-ready and content-verified | curated functional-acceptance sample; never presented as an unbiased football population |
+| CAP-44 | Score and identity cross-verification | B | Implemented & Verified | `/api/matches/{id}/score` (`score.verify_score`) + provider index | detail score verification | real-match test (2-1, own goal counted once) | second source is still the provider index; no independent results oracle |
+| CAP-45 | Full-match momentum chart | D | Implemented & Verified | OAAI effective-time recurrence + peak-preserving chart payload | `OAAITimeline` period bands, change points, rug marks | exact oracle test; real match 15s → ~0.3s cold / <10ms warm; Playwright stoppage seek | heuristic activity index, not momentum/causality |
+
+| CAP-46 | Data availability contract | A | Implemented & Verified | `availability.py` + catalog | availability badge, disabled action, install hint | `test_data_contract.py` (catalogued/materialized/tampered) | content hash is re-checked on load; listing uses the import receipt |
+| CAP-47 | Provider publication boundary | A | Implemented & Verified | `provider_projection.py` + token-gated full events | public window / protected raw | `test_provider_publication.py` + Playwright security spec | producer token is an operator credential, not an account system |
+| CAP-48 | Session-owned private drafts | A | Implemented & Verified | `InvestigationPlan.owner_session_id`, `AgentRunStore` scoping | owner-only lists/actions | `test_authorization.py` (cross-session 404, legacy fail-closed) | anonymous demo isolation only |
+| CAP-49 | Real-match performance gate | B | Implemented & Verified | OAAI recurrence + bounded snapshot/OAAI LRUs | loading states | `scripts/benchmark_real_match.py` in CI; numeric invariants | single-worker in-memory caches, no distributed cache |
 
 ---
 

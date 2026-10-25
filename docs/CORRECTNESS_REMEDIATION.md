@@ -1,8 +1,52 @@
 # MatchLens AI — 科研可信度与事实约束整改报告 (Correctness & Integrity Remediation)
 
-**执行阶段**：Phase 1 — Scientific Credibility & Mathematical Rigor  
-**整改时间**：2026-10-22  
+**执行阶段**：Phase 1 — Scientific Credibility & Mathematical Rigor；Phase 2.1 — Correctness, Performance & Release Reliability
+**整改时间**：2026-10-22（Phase 1）；2026-10-25（Phase 2.1）
 **依据文档**：`docs/FULL_SYSTEM_AUDIT.md`, `docs/IMPLEMENTATION_ROADMAP_NEXT.md`
+
+---
+
+## Phase 2.1 — 发布可靠性整改（2026-10-25）
+
+### 2.1.1 数据目录与 CI 可复现性
+
+- 新增 `availability.py` 三态契约：`CATALOGUED → MATERIALIZED → ANALYSIS_READY`。目录展示元数据，分析入口对未安装/未验证数据如实关闭；不静默替换为合成数据。
+- `MatchCatalog.get_match` 改为单场解析，清单/路径/目录索引使用内容键缓存；80 场目录热读约 45ms。
+- `ingest_statsbomb_corpus.py --match` 改为按 match id 合并，保留未导入场次；重复导入保留 `generated_at` 且内容不变时不改写；`--verify` 校验每个路径与 SHA。Manifest 路径统一为仓库相对 POSIX，Linux 可读取 Windows 生成的清单。
+- CI 分为：干净 Checkout 后端/前端、最小真实赛事集成（抓取并导入 `sb_3795221` + 性能门槛）、手动全量 80 场任务。Playwright HTML 报告移出测试结果目录，失败 Trace/截图/报告始终上传。
+
+### 2.1.2 调查与 Agent Run 所有权
+
+- `InvestigationPlan` 与 `AgentRunRecord` 记录服务端 session owner；读取、列表、取消、Promote 与 run 查询全部做归属校验；非 owner 返回 404，避免 ID 探测。Producer/admin 通过独立 token 校验。
+- 旧的无 owner 记录 fail-closed：仅 producer 可读；不会因为升级变成公开数据。
+- owner 会话凭据不再出现在 API 响应中；匹配详情的私人调查按 owner 投影。
+- 匿名 Demo 会话使用 HttpOnly + SameSite=Strict + 服务端生成 ID；写请求增加 Origin 与 Sec-Fetch-Site 双重校验；重启后旧 cookie 返回 401，必须重新建立会话。
+
+### 2.1.3 Provider 发布边界
+
+- `/api/matches/{id}/events` 匿名只返回聚合 + 有界结构证据样本；`limit`/`offset` 不能分页导出完整流。完整 normalized stream 需要 producer token。
+- `/api/state` 与 `/api/evidence/{snapshot}` 对 provider 只返回有界回放窗口；序列保留聚合与事件引用，公开序列步骤不含球场坐标；Evidence Graph 匿名节点不含坐标。
+- 图表、指标、调查与 Claim 证据链保持可用；所有公开分析保留 StatsBomb 许可与署名。回归测试覆盖跨端点绕过。
+
+### 2.1.4 完整比赛时钟
+
+- 新增 `clock.build_match_clock`：`nominal_duration`、`observed_end`、`replayable_end`、`as_of`、分 Period 观测/补时、`shootout_clock` 分离。
+- Session、Reducer、Snapshot、Metrics、OAAI、Story、Replay、Profiles 与全部 `at` 边界改用 replayable clock。`sb_3795221` 的 516 条 7200s 后事件现可回放；点球大战按脚数报告，不计入名义比赛时间。
+- 名义时钟内的旧 Snapshot 规范化内容保持不变；stoppage 快照显式携带 replayable clock。合成赛事与历史 Claim 路径未改义。
+
+### 2.1.5 性能与数据质量
+
+- OAAI 时间线改为有效比赛时间递推（O(events+samples)），保留逐样本 clamps 语义；`test_oaai_recurrence.py` 以旧算法为 oracle 逐样本比对。真实 4691 事件比赛：约 15s → 0.3s 冷 / <10ms 热。
+- Snapshot/OAAI 使用有界 LRU，键含 dataset revision、clock version、metric version、as-of 与 dead-time 签名；热 Seek 约 10–15ms。`scripts/benchmark_real_match.py` 在 CI 设数值与延迟门槛。
+- 新增独立比分核验 `score.verify_score` 与 `/api/matches/{id}/score`；修复乌龙球在指标中未计入导致比分与指标不一致的问题（成对 provider 记录只计一次）。
+- Lineup 行携带基于换人/出场记录的分钟数；per-90 明确 5400s 归一化与含补时/加时的分钟分母；跨场与画像输出加入精选样本偏差说明。
+
+### 2.1.6 仍未完成的外部依赖
+
+- 账户体系/SSO：当前为匿名单会话隔离 + operator token，不是多租户账号系统。
+- StatsBomb 许可的法律复核与 logo 资产发布：代码保留许可/署名与发布边界，最终公开部署仍需权利方确认。
+- 真实 MAF Agent 消融、xG/xT 校准：保持 **Not Run**，本轮未执行付费模型实验。
+- 提交级视觉基线：已有截图/Trace 产物与 axe 检查，尚无 committed visual-diff 基线。
 
 ---
 
