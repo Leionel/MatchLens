@@ -770,7 +770,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Match Hub page.
 
 #### D-02 — Match Detail information architecture (P1)
-- **Current Status**: Implemented & Verified at `ee388ed` — hub → match detail with shared selection across workspaces.
+- **Current Status**: Implemented & Verified (R6) — Match Detail is a core page with replay dock, score, key metrics, OAAI, AI insight rail, pitch/events and team-aware recap.
 - **Goal**: Overview, statistics, timeline, lineups, shots/spatial, tactical, AI
   insights and story.
 - **User Value**: The score and key events are understandable without opening a
@@ -787,7 +787,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Match Detail page.
 
 #### D-03 — URL, deep-link and back state (P1)
-- **Current Status**: Implemented & Verified at `ee388ed` — workspace/match/at/event/sequence round-trip through the URL, refresh and back.
+- **Current Status**: Implemented & Verified (R6) — workspace/match/at/event/sequence round-trip; popstate applies without pushing; zero clock and search query round-trip.
 - **Goal**: Encode workspace, match, snapshot, team, event, sequence, player, zone,
   investigation and claim in the URL.
 - **User Value**: Refresh, back/forward and shared links restore the same analysis.

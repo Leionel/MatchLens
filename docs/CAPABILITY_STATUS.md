@@ -21,10 +21,12 @@ plan, a passing schema test alone, or an API returning 200 is not completion.
 
 Last executed verification at this baseline (2026-10-25): **backend suite 343
 passed** (`services/api/.venv/Scripts/python.exe -m pytest services/api/tests/ -q`);
-**web typecheck and production build 0 errors**; **Playwright 22 passed / 1
-skipped locally** against the served static export (the skip is the
-catalogued-but-not-installed case, which the minimum-corpus CI job executes), with
-axe-core WCAG AA clean in light and dark themes. The real-match CI job also runs
+**web typecheck and production build 0 errors**; **Playwright 29 passed / 1
+skipped locally** against the served static export in the R6 shell (the skip is
+the catalogued-but-not-installed case, which the minimum-corpus CI job executes),
+with axe-core WCAG AA clean in light and dark themes on Match Detail, Tactical
+Explorer and Intelligence Studio. R6 screenshots are captured at 1440, 1024,
+768, 390 and 360 px and uploaded with the Playwright artifacts. The real-match CI job also runs
 `scripts/benchmark_real_match.py` (cold snapshot <8s, warm seek <1s, OAAI cold
 <5s) and the provider publication boundary tests. The manual full-corpus CI run
 `40158510985` verified **80/80 analysis-ready matches, 302,638 events, all
@@ -67,12 +69,12 @@ roadmap; it is not a phase claim.
 | CAP-24 | What-if sandbox | B | Implemented but Partial | `whatif.py` | Validation Lab | existing tests | research identification not implemented |
 | CAP-25 | Stale-run isolation | A | Implemented & Verified | `Run` identity + epoch | — | fourth-pass test | — |
 | CAP-26 | Async UI response guards | D | Implemented & Verified | exploration responses | page handlers | Playwright suite in CI (`browser-e2e` job) | — |
-| CAP-27 | Match library / discover / search | D | Implemented & Verified | `/api/matches` + availability contract | `MatchLibraryWorkspace` filters, provenance, availability badge and disabled analysis action | Playwright library tests (data-derived corpus, no hardcoded season) | no head-to-head filter yet |
-| CAP-28 | URL deep links / refresh restore | D | Implemented & Verified | — | `page.tsx` URL state | in-app restore + back/forward | investigation id not yet in the URL |
+| CAP-27 | Match Hub / discover / search | D | Implemented & Verified (R6) | `/api/matches` + availability contract | Hub intro, global search, filters, provenance/availability and disabled analysis | Playwright library tests + R6 screenshots | no head-to-head filter yet |
+| CAP-28 | URL deep links / refresh restore | D | Implemented & Verified (R6) | — | `page.tsx` URL state | deep-link, popstate-without-push, seek and zero-clock tests | investigation id not yet in the URL |
 | CAP-29 | Multi-user drafts/isolation | E | Implemented & Verified (anonymous sessions); accounts External Dependency | session-owned investigations/runs + producer role | — | `test_authorization.py` + Playwright security spec | no SSO/account provider; legacy ownerless records are producer-only |
 | CAP-30 | Live multi-agent ablation | F | Not Run | deterministic harness only | — | provenance audit | paid budget + frozen samples required |
-| CAP-31 | Real browser/screenshot QA | F | Implemented but Partial | served static export | Playwright + axe-core | CI `browser-e2e` job uploads traces, screenshots and HTML report on every outcome | no committed visual-diff baselines |
-| CAP-32 | Mobile/tablet device QA | D | Implemented but Partial | — | Pixel 7 + iPad Mini Playwright projects | 3 mobile + 3 tablet specs green | real device, screen reader, touch feel |
+| CAP-31 | Real browser/screenshot QA | F | Implemented but Partial (R6) | served static export | Playwright + axe-core | 29 passed / 1 skipped locally; screenshots at 1440/1024/768/390/360; CI uploads traces and report | no committed visual-diff baselines |
+| CAP-32 | Mobile/tablet device QA | D | Implemented but Partial (R6) | — | Pixel 7 + iPad Mini + 360/390 viewport captures | responsive overflow/axe checks on detail, tactical and studio | real device and screen reader |
 | CAP-33 | Dataset Completeness Verification | A | Implemented & Verified | `completeness.py` (5 states) | ingest receipt, hub, rail, investigation | fifth-pass completeness tests | provider-side declarations trusted only when supplied |
 | CAP-34 | Public/Producer broadcast projections | E | Implemented & Verified | `public_claim_projection` / `producer_claim_projection` | Producer workspace | projection test | producer UI is token-based, not account-based |
 | CAP-35 | Read-time rundown validity | A | Implemented & Verified | GET rundown revalidation + export 409 | Producer workspace notice | stale-rundown test + live withdrawal acceptance | — |
@@ -91,6 +93,9 @@ roadmap; it is not a phase claim.
 | CAP-47 | Provider publication boundary | A | Implemented & Verified | `provider_projection.py` + token-gated full events | public window / protected raw | `test_provider_publication.py` + Playwright security spec | producer token is an operator credential, not an account system |
 | CAP-48 | Session-owned private drafts | A | Implemented & Verified | `InvestigationPlan.owner_session_id`, `AgentRunStore` scoping | owner-only lists/actions | `test_authorization.py` (cross-session 404, legacy fail-closed) | anonymous demo isolation only |
 | CAP-49 | Real-match performance gate | B | Implemented & Verified | OAAI recurrence + bounded snapshot/OAAI LRUs | loading states | `scripts/benchmark_real_match.py` in CI; numeric invariants | single-worker in-memory caches, no distributed cache |
+
+| CAP-50 | R6 product information architecture | D | Implemented & Verified | static export + existing APIs | Match Hub, Match Detail, Tactical Explorer, Intelligence Studio; Professional tools menu; contextual replay/evidence | `r6.spec.ts`, responsive/a11y, screenshots | producer/research remain token-based tools |
+| CAP-51 | Interaction correctness (Space/history/seek/clock) | D | Implemented & Verified | page state layer | replay draft-on-release, one-seek guard, popstate without push, zero-clock guard, match-scoped async results | R6 Playwright interaction suite | no distributed session store |
 
 ---
 

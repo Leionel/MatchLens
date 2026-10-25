@@ -40,6 +40,25 @@ One FastAPI process, one Uvicorn worker/replica owns sessions, clocks, evidence,
 
 This replaces a broad empty-folder plan. Add abstractions only for a demonstrated consumer.
 
+
+## R6 product shell
+
+The public product is now organised as Match Hub → Match Detail → Tactical
+Explorer → Intelligence Studio. Producer and Research Lab sit behind a separate
+Professional tools entry; they are not peers of the match journey.
+
+The global header carries only the brand, search, current match, theme/language
+and evidence utilities. Replay controls live inside Match Detail and Tactical
+Explorer: the slider is a local draft until release, then one seek is sent and a
+late response for another match/clock is discarded. Evidence and coverage move
+into contextual disclosures on the pages that consume them.
+
+Match Detail leads with the score, key metrics and the strongest recorded OAAI
+change, then exposes the pitch, highlights and event stream. Every AI insight
+states its metric level, top recorded contributor, coverage and model status, and
+opens a pre-seeded investigation. Intelligence Studio asks the question first;
+focus IDs, engine choice, snapshots and tool records are advanced/result detail.
+
 ## Collaboration and publication
 
 Analyst chooses interpretation and audience wording; Verifier independently checks meaning, scope, counterevidence and uncertainty. Arithmetic, detection, freezing, gates and rendering are ordinary code. Each run/role has fresh context. `WorkflowBuilder` connects two executors; parsed/ref-checked Analyst output crosses an explicit hashed handoff. Verifier must retrieve original evidence independently.
