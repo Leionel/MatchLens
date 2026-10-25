@@ -435,3 +435,10 @@
    Chromium; remove it from layout until opened. */
 body .inspector-drawer { display: none; transform: none; }
 body .inspector-drawer.open { display: flex; transform: none; }
+@media (max-width: 560px) {
+  .qr-kpi-grid { grid-template-columns: 1fr 1fr !important; }
+  .qr-kpi-grid > * { min-width: 0; }
+  .qr-kpi-grid > :nth-child(3) { grid-column: 1 / -1; }
+  .qr-spatial-grid { grid-template-columns: 1fr !important; }
+  .qr-spatial-grid > * { min-width: 0; }
+}

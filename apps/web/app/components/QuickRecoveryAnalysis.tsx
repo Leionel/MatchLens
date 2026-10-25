@@ -188,7 +188,7 @@ export const QuickRecoveryAnalysis: React.FC<QuickRecoveryAnalysisProps> = ({
       ) : null}
 
       {/* KPI Cards Row */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 10 }}>
+      <div className="qr-kpi-grid" style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 10 }}>
         {/* Card 1: Recovery Rate */}
         <div
           style={{
@@ -270,7 +270,7 @@ export const QuickRecoveryAnalysis: React.FC<QuickRecoveryAnalysisProps> = ({
       </div>
 
       {/* Spatial Distributions Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div className="qr-spatial-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         {/* Thirds Distribution */}
         <div
           style={{
