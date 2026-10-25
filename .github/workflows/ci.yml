@@ -214,5 +214,8 @@ jobs:
           path: |
             apps/web/e2e/.artifacts
             apps/web/e2e/.playwright-report
+          # Playwright's artifact/report folders start with a dot; v4 skips
+          # hidden files unless this is enabled.
+          include-hidden-files: true
           retention-days: 7
           if-no-files-found: warn
