@@ -268,20 +268,26 @@ class MatchStoryEngine:
         ]
 
         coverage = coverage or {}
-        duration = float(coverage.get("format_seconds") or 5400.0)
-        start_clock = float(coverage.get("observed_start") or 0.0)
+        nominal = float(coverage.get("format_seconds") or 5400.0)
         end_clock = float(coverage.get("observed_end") or max((_event_time(e) for e in events), default=0.0))
-        if end_clock <= 900.0 and duration <= 900.0:
+        # The last chapter must include recorded stoppage time. Otherwise the
+        # narrative would end at the nominal whistle while the replay can still
+        # reach later events.
+        replayable = max(nominal, float(coverage.get("replayable_end") or end_clock))
+        extra = "+" if replayable > nominal + 1 else ""
+        if nominal <= 900.0:
             phase_boundaries = [
-                (0.0, duration / 3.0, "0'–4'"),
-                (duration / 3.0, duration * 2.0 / 3.0, "4'–8'"),
-                (duration * 2.0 / 3.0, duration, "8'–12'"),
+                (0.0, nominal / 3.0, "0'–4'"),
+                (nominal / 3.0, nominal * 2.0 / 3.0, "4'–8'"),
+                (nominal * 2.0 / 3.0, replayable, f"8'–12'{extra}"),
             ]
         else:
+            first = nominal / 3.0
+            second = nominal * 2.0 / 3.0
             phase_boundaries = [
-                (0.0, duration / 3.0, "0'–30'"),
-                (duration / 3.0, duration * 2.0 / 3.0, "30'–60'"),
-                (duration * 2.0 / 3.0, duration, "60'–90'+"),
+                (0.0, first, f"0'–{round(first / 60)}'"),
+                (first, second, f"{round(first / 60)}'–{round(second / 60)}'"),
+                (second, replayable, f"{round(second / 60)}'–{round(nominal / 60)}'{extra}"),
             ]
 
         # Every number quoted below is observed through the metric registry.
@@ -452,10 +458,18 @@ class MatchStoryEngine:
         else:
             approval_status = "draft_pending_gate"
 
-        observed_note = (
-            f"Observed event coverage ends at {end_clock:.0f}s of {duration:.0f}s."
-            if end_clock and end_clock < duration - 1 else "Full continuous coverage."
-        )
+        if end_clock and end_clock < nominal - 1:
+            observed_note = (
+                f"Observed event coverage ends at {end_clock:.0f}s of a nominal "
+                f"{nominal:.0f}s match."
+            )
+        elif replayable > nominal + 1:
+            observed_note = (
+                f"Played through the nominal {nominal:.0f}s and recorded stoppage time; "
+                f"the replay reaches {replayable:.0f}s."
+            )
+        else:
+            observed_note = "Full continuous coverage."
         if approval_status == "approved_for_broadcast":
             summary_verdict = (
                 f"{len(editorial_approved)} claim(s) passed Gate 2.0 and carry an attributed editorial approval. "

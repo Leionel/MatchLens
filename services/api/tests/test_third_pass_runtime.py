@@ -23,7 +23,10 @@ def _switch(client, match_id: str) -> dict:
 
 def test_historical_match_uses_its_own_clock_and_never_projects_final_score(client):
     state = _switch(client, "sb_wc2022_final")
-    assert state["format_seconds"] == 5400
+    context = state["match_context"]
+    assert context["duration"] == 5400
+    assert state["format_seconds"] == 5363
+    assert context["replayable_end"] == pytest.approx(5363, abs=1)
     assert state["score"] == {"H": 0, "N": 0}
     assert state["official_score"] == {"H": 3, "N": 3}
     assert state["match_context"]["observed_end"] < 5400
@@ -45,7 +48,8 @@ def test_seek_clamps_to_match_context_duration(client):
     _switch(client, "sb_wc2022_final")
     res = client.post("/api/control", json={"action": "seek", "at": 99999})
     assert res.status_code == 200, res.text
-    assert res.json()["at"] == 5400
+    assert res.json()["at"] == 5363
+    assert res.json()["match_context"]["duration"] == 5400
 
 
 def test_partial_coverage_reports_unknown_not_zero(client):

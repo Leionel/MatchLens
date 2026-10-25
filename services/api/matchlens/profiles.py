@@ -98,6 +98,9 @@ class ProfileMatchRow(BaseModel):
     dataset_revision: Optional[str] = None
     included_in_rates: bool
     clock_bounded_at_duration: bool = False
+    nominal_duration: float = 0.0
+    replayable_end: float = 0.0
+    stoppage_seconds: float = 0.0
     metrics: dict[str, ProfileMatchMetricValue] = Field(default_factory=dict)
     window_metrics: dict[str, ProfileMatchMetricValue] = Field(default_factory=dict)
     delta_xt_heuristic: Optional[float] = None
@@ -714,6 +717,9 @@ def build_team_profile(
             dataset_revision=row.get("dataset_revision"),
             included_in_rates=True,
             clock_bounded_at_duration=bool(row.get("clock_bounded")),
+            nominal_duration=float(row.get("nominal_duration") or 0.0),
+            replayable_end=float(row.get("replayable_end") or 0.0),
+            stoppage_seconds=float(row.get("stoppage_seconds") or 0.0),
             metrics=metrics,
             window_metrics=window_metrics,
             delta_xt_heuristic=delta_xt,
@@ -743,13 +749,12 @@ def build_team_profile(
     ]
     if excluded:
         limitations.append(f"{len(excluded)} requested matches were excluded from the profile (see scope.excluded).")
-    bounded = sum(1 for r in match_rows if r.clock_bounded_at_duration)
-    if bounded:
+    stoppage_matches = sum(1 for r in match_rows if r.stoppage_seconds > 0)
+    if stoppage_matches:
         limitations.append(
-            f"{bounded} match(es) ran beyond the nominal {int(match_rows[0].minutes_basis_seconds if match_rows else 0)}s "
-            "duration bound (second-half stoppage and extra time). Snapshots freeze at the nominal duration "
-            "(platform-wide snapshot semantics), so observed events beyond it are excluded and the per-90 "
-            "denominator uses the bounded clock."
+            f"{stoppage_matches} match(es) include recorded stoppage/extra time. The minutes denominator "
+            "is the observed replayable clock; per-90 normalization always divides by 5400 seconds, "
+            "so a 120-minute match is not silently treated as 90 minutes of play."
         )
 
     return TeamProfileResponse(
@@ -765,6 +770,11 @@ def build_team_profile(
             "profile_version": PROFILE_VERSION,
             "computation_version": COMPUTE_VERSION,
             "row_metrics_cache": dict(_ROW_METRICS_CACHE_STATS),
+            "selection_note": (
+                "Matches come from a curated functional-acceptance corpus, not an unbiased "
+                "football population; competition/season selection bias applies."
+            ),
+            "minutes_basis": "recorded replayable clock; per-90 normalization divides by 5400s",
         },
         provenance_kinds=dict(provenance),
         matches=match_rows,
@@ -930,6 +940,9 @@ def build_player_profile(
             dataset_revision=row.get("dataset_revision"),
             included_in_rates=minutes_seconds > 0,
             clock_bounded_at_duration=bool(row.get("clock_bounded")),
+            nominal_duration=float(row.get("nominal_duration") or 0.0),
+            replayable_end=float(row.get("replayable_end") or 0.0),
+            stoppage_seconds=float(row.get("stoppage_seconds") or 0.0),
             metrics=metrics,
             window_metrics=window_metrics,
         ))
@@ -988,6 +1001,11 @@ def build_player_profile(
             "profile_version": PROFILE_VERSION,
             "computation_version": COMPUTE_VERSION,
             "row_metrics_cache": dict(_ROW_METRICS_CACHE_STATS),
+            "selection_note": (
+                "Matches come from a curated functional-acceptance corpus, not an unbiased "
+                "football population; competition/season selection bias applies."
+            ),
+            "minutes_basis": "recorded replayable clock; per-90 normalization divides by 5400s",
         },
         provenance_kinds=dict(provenance),
         matches=match_rows,

@@ -56,6 +56,22 @@ class _DeadTimeIndex:
     def __bool__(self) -> bool:
         return bool(self._starts)
 
+    def dead_before(self, t: float) -> float:
+        """Dead seconds in [0, t]. Used to map wall clock to effective play time."""
+        if t <= 0 or not self._starts:
+            return 0.0
+        index = bisect.bisect_right(self._starts, t) - 1
+        if index < 0:
+            return 0.0
+        total = self._prefix[index]
+        if t > self._starts[index]:
+            total += min(t, self._ends[index]) - self._starts[index]
+        return total
+
+    def effective_time(self, t: float) -> float:
+        """Wall clock minus dead time: the clock the decay kernel runs on."""
+        return max(0.0, float(t) - self.dead_before(float(t)))
+
     def seconds_between(self, start: float, end: float) -> float:
         """Dead seconds inside (start, end]."""
         if end <= start or not self._starts:
@@ -388,89 +404,62 @@ def aggregate_oaai_timeline(
     event_ptr = 0
     n_events = len(contributions)
 
-    if not (cfg.freeze_dead_time and dead_intervals):
-        # No frozen intervals: every contribution decays by the same factor
-        # between samples, so the timeline is computed in O(events + steps)
-        # instead of rescanning the causal prefix at every step.
-        home_intensity = 0.0
-        away_intensity = 0.0
-        net_differential = 0.0
-        previous_t = 0.0
-        for step_idx in range(total_steps):
-            t = round(step_idx * step, 2)
-            factor = math.exp(-decay_lambda * (t - previous_t))
-            home_intensity *= factor
-            away_intensity *= factor
-            net_differential *= factor
-            while event_ptr < n_events and contributions[event_ptr]["t"] <= t:
-                item = contributions[event_ptr]
-                weight = math.exp(-decay_lambda * max(0.0, t - item["t"]))
-                net_differential += item["signed_c"] * weight
-                if item["is_home"]:
-                    if item["signed_c"] > 0:
-                        home_intensity += item["mag"] * weight
-                    else:
-                        home_intensity = max(0.0, home_intensity - item["mag"] * weight)
-                else:
-                    if item["signed_c"] < 0:
-                        away_intensity += item["mag"] * weight
-                    else:
-                        away_intensity = max(0.0, away_intensity - item["mag"] * weight)
-                event_ptr += 1
-            previous_t = t
-            timeline.append({
-                "t": t,
-                "home_intensity": round(home_intensity, 4),
-                "away_intensity": round(away_intensity, 4),
-                "oaai_raw": round(net_differential, 4),
-                "causal_event_count": event_ptr,
-            })
-        return timeline
+    # Dead time freezes the decay kernel. Mapping wall clock to effective play
+    # time (t - dead(t)) turns the per-sample causal prefix scan into a
+    # recurrence: decay the running state to each event, fold the event with
+    # its clamp, then decay to the sample. O(events + samples), not O(n*steps).
+    dead_index = _DeadTimeIndex(dead_intervals) if (cfg.freeze_dead_time and dead_intervals) else None
 
-    dead_index = _DeadTimeIndex(dead_intervals)
+    def effective(t: float) -> float:
+        return dead_index.effective_time(t) if dead_index is not None else float(t)
+
+    home_intensity = 0.0
+    away_intensity = 0.0
+    net_differential = 0.0
+    state_eff = 0.0
 
     for step_idx in range(total_steps):
         t = round(step_idx * step, 2)
+        eff_t = effective(t)
 
-        # Advance pointer to include ONLY events with t_k <= t (Causal boundary)
+        # Fold every event up to the causal boundary at its own effective
+        # time. The clamp is applied at the event boundary, which is equivalent
+        # to the per-sample fold because all contributions then decay by the
+        # same factor until the next event.
         while event_ptr < n_events and contributions[event_ptr]["t"] <= t:
-            event_ptr += 1
+            item = contributions[event_ptr]
+            eff_event = effective(item["t"])
+            factor = math.exp(-decay_lambda * max(0.0, eff_event - state_eff))
+            home_intensity *= factor
+            away_intensity *= factor
+            net_differential *= factor
+            state_eff = max(state_eff, eff_event)
 
-        # Causal subset: strictly events up to event_ptr - 1
-        causal_events = contributions[:event_ptr]
-
-        home_intensity = 0.0
-        away_intensity = 0.0
-        net_differential = 0.0
-
-        for item in causal_events:
-            dt = t - item["t"]
-            if dt < 0:
-                continue  # Invariant guard against negative dt
-
-            # Handle dead-time freeze if requested
-            dead_seconds = dead_index.seconds_between(item["t"], t)
-            dt = max(0.0, dt - dead_seconds)
-
-            weight = math.exp(-decay_lambda * dt)
-            net_differential += item["signed_c"] * weight
+            net_differential += item["signed_c"]
             if item["is_home"]:
                 if item["signed_c"] > 0:
-                    home_intensity += item["mag"] * weight
+                    home_intensity += item["mag"]
                 else:
-                    home_intensity = max(0.0, home_intensity - item["mag"] * weight)
+                    home_intensity = max(0.0, home_intensity - item["mag"])
             else:
                 if item["signed_c"] < 0:
-                    away_intensity += item["mag"] * weight
+                    away_intensity += item["mag"]
                 else:
-                    away_intensity = max(0.0, away_intensity - item["mag"] * weight)
+                    away_intensity = max(0.0, away_intensity - item["mag"])
+            event_ptr += 1
+
+        factor = math.exp(-decay_lambda * max(0.0, eff_t - state_eff))
+        home_intensity *= factor
+        away_intensity *= factor
+        net_differential *= factor
+        state_eff = max(state_eff, eff_t)
 
         timeline.append({
             "t": t,
             "home_intensity": round(home_intensity, 4),
             "away_intensity": round(away_intensity, 4),
             "oaai_raw": round(net_differential, 4),
-            "causal_event_count": len(causal_events),
+            "causal_event_count": event_ptr,
         })
 
     return timeline

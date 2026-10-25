@@ -3,11 +3,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
+import hmac
 import json
+import math
 import os
 import secrets
 import time
-from collections import defaultdict, deque
+from collections import OrderedDict, defaultdict, deque
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -21,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
 
 from .agents import AgentRunner, Run, PROMPT_VERSION
+from .auth import Principal, SESSION_COOKIE, optional_principal
 from .budget import BudgetLedger
 from .runstore import TERMINAL_STATES
 from .contracts import (
@@ -57,6 +60,14 @@ from .metrics import (
     registry_recoveries_comparison,
 )
 from .models.xt import ExpectedThreatModel
+from .score import verify_score
+from .provider_projection import (
+    bounded_state_events,
+    is_protected_provider,
+    public_event_summary,
+    publication_notice,
+    strip_sequence_event_detail,
+)
 from .exploration import (
     analyze_quick_recoveries,
     analyze_action_density_differential,
@@ -67,7 +78,7 @@ from .exploration import (
 
 ROOT = Path(__file__).resolve().parents[3]
 load_dotenv(ROOT / ".env")
-COOKIE = "matchlens_session"
+COOKIE = SESSION_COOKIE
 
 
 class RateLimits:
@@ -97,7 +108,10 @@ class Session:
     epoch: int = 0
     revision: int = 0
     focus: str | None = None
+    #: Last replayable clock (includes recorded stoppage time).
     format_seconds: int = 720
+    #: Nominal playing time; never used to clamp a replay.
+    nominal_seconds: int = 720
     match_id: str = "syn_default"
     touched: float = field(default_factory=time.monotonic)
     anchor_time: float = field(default_factory=time.monotonic)
@@ -165,7 +179,7 @@ def freeze_with_context(
     match_id: str | None = None,
 ):
     """Single entry point for snapshot creation, bound to MatchContext."""
-    bounded = max(0, min(int(at), int(ctx.duration)))
+    bounded = max(0, min(int(at), int(math.ceil(ctx.replayable_end))))
     is_syn = ctx.mode == "synthetic_replay"
     official = (
         {"H": int(ctx.official_home_score), "N": int(ctx.official_away_score)}
@@ -194,15 +208,25 @@ def freeze_with_context(
         limitations=[ctx.partial_notice] if ctx.partial_notice else None,
         dataset_revision=ctx.dataset_revision or ctx.data_version,
         completeness=ctx.completeness,
+        replayable_end=ctx.replayable_end,
     )
 
 
 def freeze_match_snapshot(eng: "Engine", match_id: str, at: int) -> tuple[Snapshot, dict]:
-    """Freeze a match API request with the same event identity as a session."""
+    """Freeze a match API request with the same event identity as a session.
+
+    Delegates to the engine's bounded LRU. The cache key is content-addressed
+    (dataset revision + clock/metric versions), so a changed payload or clock
+    model can never serve a stale snapshot.
+    """
+    return eng.frozen(match_id, at)
+
+
+def _freeze_match_snapshot_uncached(eng: "Engine", match_id: str, at: int) -> tuple[Snapshot, dict]:
     from .catalog import MatchCatalog
 
     ctx = eng.match_context(match_id)
-    bounded = max(0, min(int(at), int(ctx.duration)))
+    bounded = max(0, min(int(at), int(math.ceil(ctx.replayable_end))))
     if match_id.startswith("syn_"):
         scenario = match_id.replace("syn_", "", 1)
         events = eng.events_for_match(match_id, scenario=scenario)
@@ -222,6 +246,7 @@ def freeze_match_snapshot(eng: "Engine", match_id: str, at: int) -> tuple[Snapsh
             continuous_coverage=ctx.continuous_coverage,
             dataset_revision=ctx.dataset_revision or ctx.data_version,
             completeness=ctx.completeness,
+            replayable_end=ctx.replayable_end,
         )
     else:
         events = eng.events_for_match(match_id)
@@ -229,7 +254,8 @@ def freeze_match_snapshot(eng: "Engine", match_id: str, at: int) -> tuple[Snapsh
     state = reduce_match(
         events,
         bounded,
-        max_duration=ctx.duration,
+        max_duration=int(math.ceil(ctx.replayable_end)),
+        nominal_duration=ctx.duration,
         is_synthetic=match_id.startswith("syn_"),
         team_names={"H": ctx.home_team_name, "N": ctx.away_team_name},
         team_map=(
@@ -277,6 +303,23 @@ class Engine:
         self.slots = asyncio.Semaphore(2)
         self.runtime = runtime
         (runtime / "runs").mkdir(parents=True, exist_ok=True)
+        # Bounded caches. Keys always include the dataset revision and the
+        # clock/metric versions; a bounded LRU is the only eviction policy, so
+        # a changed payload cannot be served from a warm entry.
+        self.snapshot_cache: OrderedDict[tuple, tuple[Snapshot, dict]] = OrderedDict()
+        self.snapshot_cache_max_entries = 6
+        self.snapshot_cache_max_bytes = 64 * 1024 * 1024
+        self.snapshot_cache_bytes = 0
+        self.oaai_cache: OrderedDict[tuple, dict] = OrderedDict()
+        self.oaai_cache_max_entries = 32
+        self.cache_stats = {
+            "snapshot_hits": 0,
+            "snapshot_misses": 0,
+            "snapshot_evictions": 0,
+            "oaai_hits": 0,
+            "oaai_misses": 0,
+            "oaai_evictions": 0,
+        }
         self.saved_runs: dict[str, dict] = {}
         self.saved_snapshots: dict[str, Snapshot] = {}
         for p in sorted((runtime / "runs").glob("*.json")):
@@ -368,12 +411,94 @@ class Engine:
             self.context_cache[key] = MatchCatalog.get_match_context(match_id)
         return self.context_cache[key]
 
+    def _snapshot_key(self, match_id: str, at: int) -> tuple:
+        ctx = self.match_context(match_id)
+        return (
+            match_id,
+            ctx.dataset_revision or ctx.data_version,
+            ctx.clock_version,
+            ctx.metric_version,
+            int(at),
+        )
+
+    def frozen(self, match_id: str, at: int) -> tuple[Snapshot, dict]:
+        ctx = self.match_context(match_id)
+        bounded = max(0, min(int(at), int(math.ceil(ctx.replayable_end))))
+        key = self._snapshot_key(match_id, bounded)
+        cached = self.snapshot_cache.get(key)
+        if cached is not None:
+            self.snapshot_cache.move_to_end(key)
+            self.cache_stats["snapshot_hits"] += 1
+            return cached
+        self.cache_stats["snapshot_misses"] += 1
+        result = _freeze_match_snapshot_uncached(self, match_id, bounded)
+        snap, state = result
+        estimate = max(1, len(snap.canonical)) * 3
+        while self.snapshot_cache and (
+            len(self.snapshot_cache) >= self.snapshot_cache_max_entries
+            or self.snapshot_cache_bytes + estimate > self.snapshot_cache_max_bytes
+        ):
+            _, (old_snap, _old_state) = self.snapshot_cache.popitem(last=False)
+            self.snapshot_cache_bytes -= max(1, len(old_snap.canonical)) * 3
+            self.cache_stats["snapshot_evictions"] += 1
+        self.snapshot_cache[key] = result
+        self.snapshot_cache_bytes += estimate
+        return result
+
+    def oaai_for(
+        self,
+        match_id: str,
+        events: list,
+        at: float,
+        *,
+        smoothing_mode: Literal["causal", "bilateral"] = "causal",
+        xt_model: Any = None,
+        dead_intervals: list[dict] | None = None,
+        include_raw: bool = False,
+    ) -> dict:
+        ctx = self.match_context(match_id)
+        dead_intervals = dead_intervals or []
+        dead_signature = hashlib.sha256(
+            json.dumps(dead_intervals, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()[:16]
+        key = (
+            match_id,
+            ctx.dataset_revision or ctx.data_version,
+            ctx.clock_version,
+            round(float(at), 3),
+            smoothing_mode,
+            len(events),
+            dead_signature,
+            include_raw,
+            getattr(xt_model, "model_version", "none") if xt_model is not None else "none",
+        )
+        cached = self.oaai_cache.get(key)
+        if cached is not None:
+            self.oaai_cache.move_to_end(key)
+            self.cache_stats["oaai_hits"] += 1
+            return dict(cached)
+        self.cache_stats["oaai_misses"] += 1
+        result = compute_oaai(
+            events,
+            smoothing_mode=smoothing_mode,
+            t_end=int(at),
+            dead_intervals=dead_intervals,
+            xt_model=xt_model,
+            include_raw=include_raw,
+        )
+        while len(self.oaai_cache) >= self.oaai_cache_max_entries:
+            self.oaai_cache.popitem(last=False)
+            self.cache_stats["oaai_evictions"] += 1
+        self.oaai_cache[key] = result
+        return dict(result)
+
     def reduce_state(self, s: Session, at: int | None = None):
         ctx = self.match_context(s.match_id)
         target = s.at if at is None else at
         key = (
             s.match_id,
             ctx.data_version,
+            ctx.clock_version,
             int(target),
             s.scenario,
             s.seed,
@@ -384,7 +509,8 @@ class Engine:
         state = reduce_match(
             self.events_for(s),
             target,
-            max_duration=ctx.duration,
+            max_duration=int(math.ceil(ctx.replayable_end)),
+            nominal_duration=ctx.duration,
             is_synthetic=ctx.mode == "synthetic_replay",
             team_names={"H": ctx.home_team_name, "N": ctx.away_team_name},
             team_map=(
@@ -495,7 +621,7 @@ class Engine:
             if not snapshot:
                 snapshot = self.snapshot_for(s, s.at)
                 s.snapshots[snapshot.id] = snapshot
-        elif s.run_info and s.run_info.get("as_of", match_ctx.duration + 1) <= s.at:
+        elif s.run_info and s.run_info.get("as_of", int(math.ceil(match_ctx.replayable_end)) + 1) <= s.at:
             snapshot = next((snap for snap in s.snapshots.values() if snap.data["as_of"] == s.run_info["as_of"]), None)
         elif s.paused and any(snap.data["as_of"] == s.at for snap in s.snapshots.values()):
             snapshot = next(snap for snap in s.snapshots.values() if snap.data["as_of"] == s.at)
@@ -574,10 +700,11 @@ class Engine:
             # the registry peak is read from that very timeline.
             chart_snapshot = self.snapshot_at(s, s.at)
             chart_data = chart_snapshot.data
-            oaai_data = compute_oaai(
+            oaai_data = self.oaai_for(
+                s.match_id,
                 state["events"],
+                int(chart_data.get("as_of", s.at)),
                 smoothing_mode="causal",
-                t_end=int(chart_data.get("as_of", s.at)),
                 dead_intervals=state.get("dead_intervals", []),
                 xt_model=canonical_xt_model(),
             )
@@ -623,6 +750,25 @@ class Engine:
                 self.exploration_cache.clear()
             self.exploration_cache[cache_key] = exp_data
 
+        # Provider payloads are protected data. The public cockpit receives a
+        # bounded replay window and coordinate-free sequence steps, while the
+        # charts, metrics and evidence references remain complete. The full
+        # machine-readable event stream stays behind the producer boundary.
+        public_events = state["events"]
+        public_sequences = exp_data["sequences"]
+        provider_boundary = None
+        if is_protected_provider(match_ctx.provenance_kind):
+            public_events, window = bounded_state_events(
+                state["events"], at=s.at, total_events=len(active_events)
+            )
+            public_sequences = strip_sequence_event_detail(exp_data["sequences"], at=s.at)
+            provider_boundary = {
+                **publication_notice(match_id=s.match_id, tier="public_analysis_projection"),
+                "state_window": window,
+                "full_event_endpoint": f"/api/matches/{s.match_id}/events",
+                "full_event_access": "producer_or_internal_data_access",
+            }
+
         return {
             "revision": s.revision, "epoch": s.epoch, "at": s.at, "paused": s.paused, "speed": s.speed,
             "scenario": s.scenario, "scenarios": list(SCENARIOS.values()), "focus_team": s.focus_team,
@@ -633,13 +779,14 @@ class Engine:
             ),
             "coverage": state["coverage"],
             "owner": state["owner"], "ball": state["ball"],
-            "events": state["events"], "players": players, "receipts": both_team_receipts(state),
+            "events": public_events, "players": players, "receipts": both_team_receipts(state),
             "teams": teams, "match_context": match_ctx.model_dump(),
-            "sequences": exp_data["sequences"], "tactical": exp_data["tactical"],
+            "sequences": public_sequences, "tactical": exp_data["tactical"],
             "player_spotlight": exp_data["player_spotlight"],
             "oaai": exp_data["oaai"], "quick_recoveries": exp_data["quick_recoveries"],
             "density_differential": exp_data["density_differential"], "attacking_channels": exp_data["attacking_channels"],
             "spatial_drilldown": exp_data["spatial_drilldown"], "highlights": exp_data["highlights"],
+            "provider_data_boundary": provider_boundary,
             "chapters": CHAPTERS, "moments": moments, "active_moment": active,
             "moments_scan_truncated": s.moments_scan_truncated,
             "snapshot_id": snapshot.id if snapshot else None,
@@ -650,7 +797,10 @@ class Engine:
             "hypotheses_matrix": evaluate_hypotheses(snapshot, s.focus_team).model_dump() if snapshot else None,
             "model_configured": bool(self.runner.key), "session_analyses_remaining": max(0, 8-s.analyses),
             "auto_status": "disabled" if not self.auto_enabled else "model_unavailable" if not self.runner.key else "budget_limited" if not self.can_admit() else "session_limited" if s.auto_started >= self.auto_limit else "enabled",
-            "format_seconds": s.format_seconds, "match_id": s.match_id, "ended": state["ended"]
+            "format_seconds": s.format_seconds,
+            "nominal_duration": s.nominal_seconds,
+            "match_id": s.match_id,
+            "ended": state["ended"],
         }
 
     def ensure_snapshot_claims(self, match_id: str, snap: Snapshot) -> None:
@@ -723,6 +873,7 @@ class Engine:
                 dataset_revision=run.dataset_revision,
                 epoch=s.epoch,
                 audit=run.audit,
+                owner_session_id=s.id,
             )
         s.task = asyncio.create_task(self.execute(s, snap, s.epoch, run))
 
@@ -911,15 +1062,22 @@ async def boundaries(request: Request, call_next):
     if request.url.path.startswith("/api/"):
         if int(request.headers.get("content-length", "0")) > 4096:
             return Response("Request too large", status_code=413)
-        if request.method == "POST":
+        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
             origin = request.headers.get("origin")
             if origin and urlparse(origin).netloc != request.headers.get("host"):
                 return Response("Origin rejected", status_code=403)
+            # SameSite=Strict already blocks the cookie, but a non-browser
+            # client can present a forged Origin. Reject the browser's own
+            # cross-site signal as a second, independent check.
+            if request.headers.get("sec-fetch-site") == "cross-site":
+                return Response("Cross-site request rejected", status_code=403)
+    started = time.perf_counter()
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "same-origin"
     if request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
+        response.headers["Server-Timing"] = f"app;dur={(time.perf_counter() - started) * 1000:.1f}"
     return response
 
 
@@ -944,15 +1102,74 @@ def session(request: Request) -> Session:
     return s
 
 
+def optional_session(request: Request) -> Session | None:
+    """A live server-side session, or None. Never trusts an arbitrary cookie."""
+    eng = engine(request)
+    eng.cleanup()
+    s = eng.sessions.get(request.cookies.get(COOKIE, ""))
+    if s:
+        s.touched = time.monotonic()
+    return s
+
+
+def private_access(
+    request: Request,
+    owner_session_id: str | None,
+    *,
+    allowed_by_producer: bool = True,
+) -> Principal | None:
+    """Authorise a private draft/run by server-side owner, not by ID alone.
+
+    Producers/admins are a separate, independently verified role. A record
+    without an owner is legacy data from before ownership tracking and is
+    fail-closed: only an editorial principal may read it.
+
+    Non-owners receive 404 rather than 403 so an ID probe cannot distinguish
+    "exists but is private" from "does not exist".
+    """
+    principal = optional_principal(request)
+    if principal is not None and principal.can_edit_content and allowed_by_producer:
+        return principal
+    live = optional_session(request)
+    if (
+        live is not None
+        and owner_session_id
+        and hmac.compare_digest(str(live.id), str(owner_session_id))
+    ):
+        return principal
+    raise HTTPException(404, "record_not_found")
+
+
+def is_producer(request: Request) -> bool:
+    principal = optional_principal(request)
+    return bool(principal and principal.can_edit_content)
+
+
+def private_plan_payload(plan) -> dict:
+    """Never return the server session credential used as the owner key."""
+    return plan.model_dump(exclude={"owner_session_id"})
+
+
+def private_run_payload(record) -> dict:
+    return record.model_dump(exclude={"owner_session_id"})
+
+
 @app.get("/api/health")
 async def health(request: Request):
     from .catalog import MatchCatalog
 
+    eng = engine(request)
     return {
         "ok": True,
-        "model_configured": bool(engine(request).runner.key),
+        "model_configured": bool(eng.runner.key),
         "format": "12-minute synthetic match",
         "manifest_rejections": MatchCatalog.manifest_rejections(),
+        "cache": {
+            **eng.cache_stats,
+            "snapshot_entries": len(eng.snapshot_cache),
+            "snapshot_bytes_estimate": eng.snapshot_cache_bytes,
+            "oaai_entries": len(eng.oaai_cache),
+        },
     }
 
 
@@ -971,7 +1188,15 @@ async def create_session(request: Request, response: Response):
         raise HTTPException(503, "session_capacity")
     s = Session(id=secrets.token_urlsafe(24), ip=ip)
     eng.sessions[s.id] = s
-    response.set_cookie(COOKIE, s.id, httponly=True, secure=request.url.scheme == "https", samesite="strict", max_age=1800)
+    response.set_cookie(
+        COOKIE,
+        s.id,
+        httponly=True,
+        secure=request.url.scheme == "https",
+        samesite="strict",
+        path="/",
+        max_age=1800,
+    )
     return eng.view(s)
 
 
@@ -1022,6 +1247,23 @@ async def control(command: Control, request: Request):
         meta = MatchCatalog.get_match(command.match_id)
         if not meta:
             raise HTTPException(404, f"match_not_found: {command.match_id}")
+        if not meta.analysis_ready:
+            raise HTTPException(
+                409,
+                {
+                    "code": "match_not_analysis_ready",
+                    "match_id": command.match_id,
+                    "status": meta.availability_status,
+                    "reason": meta.availability_reason,
+                    "install_hint": meta.install_hint,
+                },
+            )
+        ready, reason = MatchCatalog.verify_analysis_ready(command.match_id)
+        if not ready:
+            raise HTTPException(
+                409,
+                {"code": "match_not_analysis_ready", "match_id": command.match_id, "reason": reason},
+            )
         s.invalidate()
         s.match_id = command.match_id
         if command.match_id.startswith("syn_"):
@@ -1029,7 +1271,8 @@ async def control(command: Control, request: Request):
             if sc_key in SCENARIOS:
                 s.scenario = sc_key
         match_ctx = MatchCatalog.get_match_context(s.match_id)
-        s.format_seconds = match_ctx.duration
+        s.format_seconds = int(math.ceil(match_ctx.replayable_end))
+        s.nominal_seconds = match_ctx.duration
         s.focus, s.at, s.paused = None, 0, True
         s.cache.clear()
         s.revisions.clear()
@@ -1056,6 +1299,7 @@ async def control(command: Control, request: Request):
         s.scenario = command.scenario
         s.match_id = f"syn_{command.scenario}"
         s.format_seconds = 720
+        s.nominal_seconds = 720
         s.focus, s.at, s.paused = None, 0, True
         s.cache.clear()
         s.revisions.clear()
@@ -1100,9 +1344,33 @@ async def analyse(request: Request):
 
 @app.get("/api/evidence/{snapshot_id}")
 async def evidence(snapshot_id: str, request: Request):
-    snap = session(request).snapshots.get(snapshot_id)
+    s = session(request)
+    snap = s.snapshots.get(snapshot_id)
     if not snap:
         raise HTTPException(404, "snapshot_not_in_session")
+    eng = engine(request)
+    ctx = eng.match_context(s.match_id)
+    if is_protected_provider(ctx.provenance_kind):
+        principal = optional_principal(request)
+        if not (principal and principal.can_edit_content):
+            data = snap.data
+            public_events, window = bounded_state_events(
+                data.get("events", []),
+                at=int(data.get("as_of", 0)),
+                total_events=len(data.get("events", [])),
+            )
+            return {
+                **data,
+                "snapshot_id": snap.id,
+                "events": public_events,
+                "total_event_count": len(data.get("events", [])),
+                "provider_data_boundary": {
+                    **publication_notice(
+                        match_id=s.match_id, tier="public_analysis_projection"
+                    ),
+                    "state_window": window,
+                },
+            }
     return {"snapshot_id": snap.id, **snap.data}
 
 
@@ -1421,7 +1689,7 @@ class ExplainQuery(BaseModel):
 def _match_target(eng: "Engine", match_id: str) -> int:
     """Full-match freeze target: same rule the metric endpoints use."""
     ctx = eng.match_context(match_id)
-    return int(ctx.duration) if match_id.startswith("syn_") else int(ctx.observed_end)
+    return int(ctx.duration) if match_id.startswith("syn_") else int(math.ceil(ctx.replayable_end))
 
 
 @app.post("/api/explain")
@@ -1498,10 +1766,10 @@ async def query_metric(
         ctx = MatchCatalog.get_match_context(match_id)
     except FileNotFoundError:
         raise HTTPException(404, "match_not_found")
-    if at is not None and (at < 0 or at > ctx.duration):
+    if at is not None and (at < 0 or at > int(math.ceil(ctx.replayable_end))):
         raise HTTPException(422, "at_outside_match_context")
     target = int(at) if at is not None else (
-        ctx.duration if match_id.startswith("syn_") else int(ctx.observed_end)
+        ctx.duration if match_id.startswith("syn_") else int(math.ceil(ctx.replayable_end))
     )
     snap, _state = freeze_match_snapshot(engine(request), match_id, target)
     try:
@@ -1530,10 +1798,10 @@ async def get_oaai_ledger(
         ctx = MatchCatalog.get_match_context(match_id)
     except FileNotFoundError:
         raise HTTPException(404, "match_not_found")
-    if at is not None and (at < 0 or at > ctx.duration):
+    if at is not None and (at < 0 or at > int(math.ceil(ctx.replayable_end))):
         raise HTTPException(422, "at_outside_match_context")
     target = int(at) if at is not None else (
-        ctx.duration if match_id.startswith("syn_") else int(ctx.observed_end)
+        ctx.duration if match_id.startswith("syn_") else int(math.ceil(ctx.replayable_end))
     )
     eng = engine(request)
     _snap, state = freeze_match_snapshot(eng, match_id, target)
@@ -1649,7 +1917,7 @@ def _resolve_profile_snapshot(eng: "Engine", match_id: str, ctx) -> tuple[Snapsh
     revision, so a small LRU keeps repeat profile requests from re-running the
     full reduction. The cache is keyed by (match, target, dataset revision).
     """
-    target = int(ctx.duration) if match_id.startswith("syn_") else int(ctx.observed_end)
+    target = int(ctx.duration) if match_id.startswith("syn_") else int(math.ceil(ctx.replayable_end))
     key = (match_id, target, ctx.dataset_revision or ctx.data_version)
     cached = _PROFILE_SNAPSHOT_CACHE.get(key)
     if cached is not None:
@@ -1720,7 +1988,10 @@ async def profile_team(
             "dataset_revision": ctx.dataset_revision or ctx.data_version,
             "snapshot": snap,
             "state": state,
-            "clock_bounded": float(ctx.observed_end) > float(ctx.duration),
+            "clock_bounded": False,
+            "nominal_duration": ctx.duration,
+            "replayable_end": ctx.replayable_end,
+            "stoppage_seconds": ctx.stoppage_time,
         })
         snap_events.append((mid, snap.data.get("events", [])))
 
@@ -1747,7 +2018,8 @@ def _discover_team_ids(team: str) -> list[str]:
     discovery = discover_team_matches(team)
     return [
         m["match_id"] for m in discovery["matches"]
-        if m["provenance_kind"] == "provider_payload" and m["dataset_imported"]
+        if m["provenance_kind"] == "provider_payload"
+        and m.get("analysis_ready", m.get("dataset_imported", False))
     ]
 
 
@@ -1771,8 +2043,7 @@ async def profile_player_index(
 
         ids = [
             m.match_id for m in MatchCatalog.list_matches()
-            if m.provenance_kind == "provider_payload"
-            and m.completeness_status not in (None, "DATASET_NOT_IMPORTED")
+            if m.provenance_kind == "provider_payload" and m.analysis_ready
         ]
     return discover_players(ids, limit=limit, team=team, q=q)
 
@@ -1832,7 +2103,10 @@ async def profile_player(
             "snapshot": snap,
             "state": state,
             "minutes": minutes,
-            "clock_bounded": float(ctx.observed_end) > float(ctx.duration),
+            "clock_bounded": False,
+            "nominal_duration": ctx.duration,
+            "replayable_end": ctx.replayable_end,
+            "stoppage_seconds": ctx.stoppage_time,
         })
         snap_events.append((mid, snap.data.get("events", [])))
 
@@ -1864,12 +2138,35 @@ async def get_match_detail(match_id: str, request: Request):
 @app.get("/api/matches/{match_id}/detail")
 async def get_match_full_detail(match_id: str, request: Request):
     """Complete Match Detail: overview, lineups, shots, stats, tactics, insights."""
+    from .catalog import MatchCatalog
     from .matchdetail import build_match_detail
 
     public_rate(request, "match_detail", 20)
+    meta = MatchCatalog.get_match(match_id)
+    if meta is None:
+        raise HTTPException(404, "match_not_found")
+    if not meta.analysis_ready:
+        raise HTTPException(
+            409,
+            {
+                "code": "match_not_analysis_ready",
+                "match_id": match_id,
+                "status": meta.availability_status,
+                "reason": meta.availability_reason,
+                "install_hint": meta.install_hint,
+            },
+        )
     eng = engine(request)
+    live = optional_session(request)
+    principal = optional_principal(request)
     try:
-        return build_match_detail(eng, match_id, _resolve_profile_snapshot)
+        return build_match_detail(
+            eng,
+            match_id,
+            _resolve_profile_snapshot,
+            owner_session_id=live.id if live else None,
+            include_all_investigations=bool(principal and principal.can_edit_content),
+        )
     except FileNotFoundError:
         raise HTTPException(404, "match_not_found")
     except ValueError as exc:
@@ -1895,16 +2192,79 @@ async def get_match_completeness(match_id: str, request: Request):
     }
 
 
+@app.get("/api/matches/{match_id}/score")
+async def get_match_score(match_id: str, request: Request):
+    """Independent provider-vs-event score verification (aggregate only)."""
+    from .catalog import MatchCatalog
+
+    public_rate(request, "score", 120)
+    meta = MatchCatalog.get_match(match_id)
+    if meta is None:
+        raise HTTPException(404, "match_not_found")
+    if not meta.analysis_ready:
+        raise HTTPException(
+            409,
+            {
+                "code": "match_not_analysis_ready",
+                "match_id": match_id,
+                "status": meta.availability_status,
+                "reason": meta.availability_reason,
+            },
+        )
+    try:
+        events = MatchCatalog.load_normalized_events(match_id)
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(409, f"dataset_unavailable: {exc}")
+    result = verify_score(events, meta)
+    result["coverage"] = {
+        "completeness_status": meta.completeness_status,
+        "continuous_coverage": meta.continuous_coverage,
+        "dataset_revision": MatchCatalog.data_version(match_id),
+    }
+    return result
+
+
 @app.get("/api/matches/{match_id}/events")
 async def get_match_events(match_id: str, request: Request):
+    """Public analytics projection; full provider stream needs internal access.
+
+    The anonymous response is aggregate plus a bounded structural evidence
+    sample. It intentionally ignores ``limit``/``offset`` so pagination cannot
+    turn this endpoint into a full payload export. Producer/admin credentials
+    are checked independently and receive the complete normalized stream.
+    """
     from .catalog import MatchCatalog
+
+    meta = MatchCatalog.get_match(match_id)
+    if meta is None:
+        raise HTTPException(404, "match_not_found")
     try:
         events = MatchCatalog.load_normalized_events(match_id)
     except FileNotFoundError:
         raise HTTPException(404, "match_not_found")
+
+    principal = optional_principal(request)
+    internal_access = bool(principal and principal.can_edit_content)
+    if is_protected_provider(meta.provenance_kind) and not internal_access:
+        public_rate(request, "match_events_public", 30)
+        return public_event_summary(
+            [event.model_dump(mode="json") for event in events],
+            match_id=match_id,
+        )
+
+    tier = (
+        "internal_event_access"
+        if is_protected_provider(meta.provenance_kind)
+        else "authored_excerpt"
+        if meta.provenance_kind == "provider_schema_excerpt"
+        else "owned_synthetic"
+    )
     return {
         "match_id": match_id,
         "count": len(events),
+        "access_tier": tier,
+        "license_ref": meta.license_ref,
+        "attribution_text": meta.attribution_text,
         "events": [e.model_dump() for e in events],
     }
 
@@ -2073,10 +2433,11 @@ async def get_exploration_oaai(request: Request, smoothing_mode: Literal["causal
     chart_snapshot = eng.snapshot_at(s, s.at)
     chart_data = chart_snapshot.data
     as_of = int(chart_data.get("as_of", s.at))
-    result = compute_oaai(
+    result = eng.oaai_for(
+        s.match_id,
         state["events"],
+        as_of,
         smoothing_mode=smoothing_mode,
-        t_end=as_of,
         dead_intervals=state.get("dead_intervals", []),
         xt_model=canonical_xt_model(),
         include_raw=True,
@@ -2108,9 +2469,23 @@ async def get_exploration_oaai(request: Request, smoothing_mode: Literal["causal
 
 
 @app.get("/api/matches/{match_id}/exploration")
-async def get_match_exploration(request: Request, match_id: str, smoothing_mode: Literal["causal", "bilateral"] = "causal", window_seconds: float = 6.0):
+async def get_match_exploration(
+    request: Request,
+    match_id: str,
+    smoothing_mode: Literal["causal", "bilateral"] = "causal",
+    window_seconds: float = 6.0,
+    include_event_detail: bool = False,
+):
     public_rate(request, "exploration", 30)
     from .catalog import MatchCatalog
+
+    meta = MatchCatalog.get_match(match_id)
+    if meta is None:
+        raise HTTPException(404, "match_not_found")
+    principal = optional_principal(request)
+    internal_access = bool(principal and principal.can_edit_content)
+    if include_event_detail and is_protected_provider(meta.provenance_kind) and not internal_access:
+        raise HTTPException(403, "provider_event_detail_requires_data_access")
     try:
         events = MatchCatalog.load_normalized_events(match_id)
     except FileNotFoundError:
@@ -2133,7 +2508,7 @@ async def get_match_exploration(request: Request, match_id: str, smoothing_mode:
 
     # Extract rich sequences, tactical zones, drilldown, and highlights for both synthetic and real matches
     meta = MatchCatalog.get_match_meta(match_id)
-    at = ctx.duration if match_id.startswith("syn_") else min(ctx.duration, int(ctx.observed_end))
+    at = int(ctx.duration) if match_id.startswith("syn_") else int(math.ceil(ctx.replayable_end))
     raw_events = (
         generate_match(scenario=match_id.replace("syn_", "", 1))
         if match_id.startswith("syn_")
@@ -2142,7 +2517,8 @@ async def get_match_exploration(request: Request, match_id: str, smoothing_mode:
     state = reduce_match(
         raw_events,
         at=at,
-        max_duration=ctx.duration,
+        max_duration=int(math.ceil(ctx.replayable_end)),
+        nominal_duration=ctx.duration,
         is_synthetic=match_id.startswith("syn_"),
         team_names={"H": ctx.home_team_name, "N": ctx.away_team_name},
         team_map=(
@@ -2169,6 +2545,12 @@ async def get_match_exploration(request: Request, match_id: str, smoothing_mode:
         team_names={"H": ctx.home_team_name, "N": ctx.away_team_name},
     )
 
+    protected = is_protected_provider(meta.provenance_kind) and not internal_access
+    if protected:
+        sequences = strip_sequence_event_detail(
+            sequences,
+            at=float(ctx.observed_end or 0.0),
+        )
     return {
         "match_id": match_id,
         "oaai": oaai_res,
@@ -2178,6 +2560,11 @@ async def get_match_exploration(request: Request, match_id: str, smoothing_mode:
         "sequences": sequences,
         "spatial_drilldown": drilldown,
         "highlights": highlights,
+        "provider_data_boundary": (
+            publication_notice(match_id=match_id, tier="public_analysis_projection")
+            if protected
+            else None
+        ),
     }
 
 
@@ -2214,7 +2601,13 @@ class InvestigationBody(BaseModel):
     execution_mode: Literal["deterministic_planner", "maf_agent"] = "deterministic_planner"
 
 
-async def run_investigation_plan(eng: "Engine", body: InvestigationBody, snap: Snapshot, state: dict):
+async def run_investigation_plan(
+    eng: "Engine",
+    body: InvestigationBody,
+    snap: Snapshot,
+    state: dict,
+    owner_session_id: str,
+):
     """Produce an InvestigationPlan in the requested execution mode.
 
     maf_agent requires a configured model and budget runway; otherwise — and on
@@ -2234,6 +2627,7 @@ async def run_investigation_plan(eng: "Engine", body: InvestigationBody, snap: S
             question=body.question,
             compare_match_ids=body.compare_match_ids,
             xt_model=eng.xt_model,
+            owner_session_id=owner_session_id,
         )
 
     if body.execution_mode != "maf_agent":
@@ -2267,6 +2661,7 @@ async def run_investigation_plan(eng: "Engine", body: InvestigationBody, snap: S
             question=body.question,
             compare_match_ids=body.compare_match_ids,
             xt_model=eng.xt_model,
+            owner_session_id=owner_session_id,
         )
     except asyncio.CancelledError:
         raise
@@ -2300,16 +2695,18 @@ async def investigate(body: InvestigationBody, request: Request):
     from .catalog import MatchCatalog
 
     public_rate(request, "investigate", 30)
+    # The owner is the server-side session, never a client-supplied field.
+    owner = session(request)
     try:
         ctx = MatchCatalog.get_match_context(body.match_id)
     except FileNotFoundError:
         raise HTTPException(404, "match_not_found")
     eng = engine(request)
     events = eng.events_for_match(body.match_id)
-    if body.at is not None and (body.at < 0 or body.at > ctx.duration):
+    if body.at is not None and (body.at < 0 or body.at > int(math.ceil(ctx.replayable_end))):
         raise HTTPException(422, "at_outside_match_context")
     at = int(body.at) if body.at is not None else (
-        ctx.duration if body.match_id.startswith("syn_") else int(ctx.observed_end)
+        ctx.duration if body.match_id.startswith("syn_") else int(math.ceil(ctx.replayable_end))
     )
 
     # Freeze the investigation at the selected football moment, not merely at
@@ -2318,7 +2715,8 @@ async def investigate(body: InvestigationBody, request: Request):
         pre_state = reduce_match(
             events,
             at,
-            max_duration=ctx.duration,
+            max_duration=int(math.ceil(ctx.replayable_end)),
+            nominal_duration=ctx.duration,
             is_synthetic=body.match_id.startswith("syn_"),
             team_names={"H": ctx.home_team_name, "N": ctx.away_team_name},
             team_map=(
@@ -2375,22 +2773,39 @@ async def investigate(body: InvestigationBody, request: Request):
         # A real agent run dispatches paid model requests; rate it separately
         # from deterministic reads, on top of the durable budget ledger.
         public_rate(request, "investigate-agent", 6)
-    plan = await run_investigation_plan(eng, body, snap, state)
+    plan = await run_investigation_plan(eng, body, snap, state, owner.id)
+    plan.owner_session_id = owner.id
     eng.investigations.save(plan)
-    return plan.model_dump()
+    return private_plan_payload(plan)
 
 
 @app.get("/api/investigations")
 async def list_investigations(request: Request, match_id: str | None = None, limit: int = 50):
-    """Saved investigation summaries (Slice C-4 Match Detail list)."""
+    """Saved investigation summaries, scoped to the server-side owner.
+
+    A producer token is a separate role and may list the full store; an
+    anonymous browser only ever sees its own session's records. Legacy records
+    have no owner and are visible only to that producer role.
+    """
     public_rate(request, "investigations", 60)
     if limit < 1 or limit > 200:
         raise HTTPException(422, "limit_out_of_bounds")
     eng = engine(request)
-    plans = eng.investigations.list(match_id=match_id, limit=limit)
+    live = optional_session(request)
+    principal = optional_principal(request)
+    allow_all = bool(principal and principal.can_edit_content)
+    if live is None and not allow_all:
+        raise HTTPException(401, "session_expired")
+    plans = eng.investigations.list_for(
+        owner_session_id=live.id if live else None,
+        allow_all=allow_all,
+        match_id=match_id,
+        limit=limit,
+    )
     return {
         "match_id": match_id,
         "count": len(plans),
+        "scope": "producer_all" if allow_all else "session_owner",
         "investigations": [
             {
                 "investigation_id": p.investigation_id,
@@ -2409,6 +2824,7 @@ async def list_investigations(request: Request, match_id: str | None = None, lim
                 "gate_assertion": p.gate_preview.assertion,
                 "finding_count": len(p.findings),
                 "dataset_revision": p.dataset_revision,
+                "legacy_unowned": p.owner_session_id is None,
             }
             for p in plans
         ],
@@ -2421,19 +2837,24 @@ async def get_investigation(investigation_id: str, request: Request):
     plan = eng.investigations.get(investigation_id)
     if plan is None:
         raise HTTPException(404, "investigation_not_found")
-    return plan.model_dump()
+    private_access(request, plan.owner_session_id)
+    return private_plan_payload(plan)
 
 
 @app.post("/api/investigations/{investigation_id}/cancel")
 async def cancel_investigation(investigation_id: str, request: Request):
     eng = engine(request)
+    plan = eng.investigations.get(investigation_id)
+    if plan is None:
+        raise HTTPException(404, "investigation_not_found")
+    private_access(request, plan.owner_session_id)
     try:
         plan = eng.investigations.cancel(investigation_id)
     except KeyError:
         raise HTTPException(404, "investigation_not_found")
     except ValueError as exc:
         raise HTTPException(409, str(exc))
-    return plan.model_dump()
+    return private_plan_payload(plan)
 
 
 @app.post("/api/investigations/{investigation_id}/promote")
@@ -2444,6 +2865,9 @@ async def promote_investigation(investigation_id: str, request: Request):
     plan = eng.investigations.get(investigation_id)
     if plan is None:
         raise HTTPException(404, "investigation_not_found")
+    # Promotion writes a public claim; it still requires ownership of the
+    # private draft (or the independent producer role).
+    private_access(request, plan.owner_session_id)
     if plan.gate_preview.assertion == "none" or plan.gate_preview.status != "approved":
         raise HTTPException(409, "investigation_not_gate_approved")
     if plan.state not in ("APPROVED", "QUALIFIED"):
@@ -2482,12 +2906,31 @@ async def promote_investigation(investigation_id: str, request: Request):
 
 @app.get("/api/agent-runs")
 async def list_agent_runs(request: Request, limit: int = 50, state: str | None = None):
-    """Persisted agent-run lifecycle records (roadmap C-09), newest first."""
+    """Persisted agent-run lifecycle records, scoped to the owner.
+
+    The budget summary is deployment-wide operational information, so it is
+    returned only to a producer/admin; an anonymous session receives its own
+    runs and no global spend figure.
+    """
     eng = engine(request)
-    records = eng.agent_runs.list(limit=min(max(limit, 1), 200))
-    if state:
-        records = [record for record in records if record.state == state]
-    return {"runs": [record.model_dump() for record in records], "budget": eng.ledger.summary()}
+    live = optional_session(request)
+    principal = optional_principal(request)
+    allow_all = bool(principal and principal.can_edit_content)
+    if live is None and not allow_all:
+        raise HTTPException(401, "session_expired")
+    records = eng.agent_runs.list_for(
+        live.id if live else None,
+        allow_all=allow_all,
+        limit=min(max(limit, 1), 200),
+        state=state,
+    )
+    payload: dict[str, object] = {
+        "runs": [private_run_payload(record) for record in records],
+        "scope": "producer_all" if allow_all else "session_owner",
+    }
+    if allow_all:
+        payload["budget"] = eng.ledger.summary()
+    return payload
 
 
 @app.get("/api/agent-runs/{run_id}")
@@ -2495,7 +2938,8 @@ async def get_agent_run(run_id: str, request: Request):
     record = engine(request).agent_runs.get(run_id)
     if record is None:
         raise HTTPException(404, "agent_run_not_found")
-    return record.model_dump()
+    private_access(request, record.owner_session_id)
+    return private_run_payload(record)
 
 
 @app.post("/api/agent-runs/{run_id}/cancel")
@@ -2507,13 +2951,17 @@ async def cancel_agent_run(run_id: str, request: Request):
     non-terminal by a restart or a lost dispatch so no run stays ambiguous.
     """
     eng = engine(request)
+    record = eng.agent_runs.get(run_id)
+    if record is None:
+        raise HTTPException(404, "agent_run_not_found")
+    private_access(request, record.owner_session_id)
     try:
         record = eng.agent_runs.cancel(run_id)
     except KeyError:
         raise HTTPException(404, "agent_run_not_found")
     except ValueError as exc:
         raise HTTPException(409, str(exc))
-    return record.model_dump()
+    return private_run_payload(record)
 
 
 @app.get("/api/matches/{match_id}/story")
@@ -2534,15 +2982,15 @@ async def get_match_story(
     except FileNotFoundError:
         raise HTTPException(404, "match_not_found")
 
-    if as_of is not None and (as_of < 0 or as_of > ctx.duration):
+    if as_of is not None and (as_of < 0 or as_of > int(math.ceil(ctx.replayable_end))):
         raise HTTPException(422, "as_of_outside_match_context")
     if mode == "live":
-        at = int(as_of) if as_of is not None else min(ctx.duration, int(ctx.observed_end))
+        at = int(as_of) if as_of is not None else int(math.ceil(ctx.replayable_end))
     else:
         at = int(as_of) if as_of is not None else (
-            ctx.duration if match_id.startswith("syn_") else min(ctx.duration, int(ctx.observed_end))
+            ctx.duration if match_id.startswith("syn_") else int(math.ceil(ctx.replayable_end))
         )
-    at = max(0, min(at, ctx.duration))
+    at = max(0, min(at, int(math.ceil(ctx.replayable_end))))
     snap, state = freeze_match_snapshot(eng, match_id, at)
     eng.saved_snapshots[snap.id] = snap
     eng.ensure_snapshot_claims(match_id, snap)
@@ -2600,7 +3048,7 @@ async def editorial_approval(body: EditorialDecisionBody, request: Request):
         raise HTTPException(404, "claim_not_registered")
     except ValueError as exc:
         raise HTTPException(409, str(exc))
-    return record.model_dump()
+    return private_run_payload(record)
 
 
 @app.get("/api/claims/history")
@@ -2727,7 +3175,7 @@ async def get_broadcast_rundown(request: Request, match_id: str, snapshot_id: st
 
         try:
             ctx = MatchCatalog.get_match_context(match_id)
-            target = rundown.as_of if rundown.as_of is not None else int(ctx.observed_end)
+            target = rundown.as_of if rundown.as_of is not None else int(math.ceil(ctx.replayable_end))
             snap, _state = freeze_match_snapshot(eng, match_id, target)
             eng.saved_snapshots[snap.id] = snap
         except (FileNotFoundError, ValueError):
@@ -3073,21 +3521,29 @@ async def get_match_evidence_graph(
     except FileNotFoundError:
         raise HTTPException(404, "match_not_found")
 
-    if at is not None and (at < 0 or at > ctx.duration):
+    if at is not None and (at < 0 or at > int(math.ceil(ctx.replayable_end))):
         raise HTTPException(422, "at_outside_match_context")
     at_time = int(
         at if at is not None
-        else (ctx.duration if match_id.startswith("syn_") else min(ctx.duration, int(ctx.observed_end)))
+        else (ctx.duration if match_id.startswith("syn_") else int(math.ceil(ctx.replayable_end)))
     )
     snap, _state = freeze_match_snapshot(eng, match_id, at_time)
     eng.saved_snapshots[snap.id] = snap
     eng.ensure_snapshot_claims(match_id, snap)
+    meta = MatchCatalog.get_match(match_id)
+    principal = optional_principal(request)
+    include_coordinates = not (
+        meta is not None
+        and is_protected_provider(meta.provenance_kind)
+        and not (principal and principal.can_edit_content)
+    )
     return build_evidence_graph(
         match_id=match_id,
         match_context=ctx,
         snapshot=snap,
         registry=eng.registry,
         team=team,
+        include_coordinates=include_coordinates,
     )
 
 

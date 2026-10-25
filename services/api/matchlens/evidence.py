@@ -27,6 +27,7 @@ def build_evidence_graph(
     registry: ClaimRegistry,
     team: str = "H",
     max_event_nodes: int = 400,
+    include_coordinates: bool = True,
 ) -> dict:
     data = snapshot.data
     receipts = data.get("receipts", {})
@@ -109,9 +110,15 @@ def build_evidence_graph(
             team=ev.get("team"),
             action=ev.get("kind"),
             actor=ev.get("actor_name") or ev.get("actor"),
-            start=ev.get("start"),
-            end=ev.get("end"),
-            located=ev.get("located", ev.get("start") is not None),
+            **(
+                {
+                    "start": ev.get("start"),
+                    "end": ev.get("end"),
+                    "located": ev.get("located", ev.get("start") is not None),
+                }
+                if include_coordinates
+                else {}
+            ),
             possession_id=ev.get("possession_id"),
             is_shootout=ev.get("is_shootout", False),
         )

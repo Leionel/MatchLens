@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import random
 from dataclasses import dataclass
 from typing import Literal
@@ -296,6 +297,7 @@ def reduce_match(
     continuous_coverage: bool | None = None,
     max_gap_seconds: float = 15.0,
     official_score: dict[str, int] | None = None,
+    nominal_duration: int | None = None,
 ) -> dict:
     """Reduce events to an observable as-of match state.
 
@@ -306,6 +308,7 @@ def reduce_match(
     """
     if not 0 <= at <= max(720, max_duration):
         raise ValueError("clock_out_of_bounds")
+    nominal = max(1, int(nominal_duration or max_duration))
     frame: Literal["fixed", "team_relative"] = coordinate_frame or (
         "fixed" if is_synthetic else "team_relative"
     )
@@ -651,7 +654,7 @@ def reduce_match(
 
     controlled = sum(i["end"] - i["start"] for i in intervals)
     dead = [g for g in unobserved if g["reason"] in ("dead_ball", "period_break")]
-    duration = max(1, max_duration)
+    duration = max(1, nominal)
     first_t = float(enriched[0]["t"]) if enriched else 0.0
     observed_span = max(0.0, last_t - first_t) if enriched else 0.0
     if continuous:
@@ -674,7 +677,18 @@ def reduce_match(
         "unobserved_intervals": unobserved,
         "dead_intervals": dead,
         "coverage": {
-            "format_seconds": max_duration,
+            # format_seconds stays the nominal playing time so historical
+            # snapshots keep their identity. The replayable end is added only
+            # once a request actually addresses recorded stoppage time.
+            "format_seconds": nominal,
+            **(
+                {
+                    "nominal_duration": nominal,
+                    "replayable_end": max_duration,
+                }
+                if at > nominal
+                else {}
+            ),
             "observed_start": first_t if enriched else None,
             "observed_end": last_t if enriched else None,
             "observed_span_seconds": round(observed_span, 2),
@@ -726,6 +740,7 @@ def _window_assets(state: dict) -> dict:
     entries, transition, gains = [], [], {}
     goal_chains_by_team: dict[str, list[list[str]]] = {"H": [], "N": []}
     goal_events_by_team: dict[str, list[dict]] = {"H": [], "N": []}
+    own_goal_assets: dict[tuple[int, float, str], dict] = {}
     seen_entries: set[tuple[str, int]] = set()
     for idx, e in enumerate(events):
         if e["kind"] == "recovery":
@@ -738,20 +753,29 @@ def _window_assets(state: dict) -> dict:
                 if key not in seen_entries:
                     entries.append(e)
                     seen_entries.add(key)
+        outcome = str(e.get("outcome") or "")
+        if outcome in ("own_goal", "own_goal_for"):
+            # The provider records one own goal twice: once against the
+            # conceding side and once for the beneficiary. It is one credited
+            # goal, and both event ids stay on its evidence chain.
+            credited = e["team"] if outcome == "own_goal_for" else other(e["team"])
+            key = (int(e.get("period") or 1), round(float(e["t"]), 3), credited)
+            existing = own_goal_assets.get(key)
+            if existing is not None:
+                if e["id"] not in existing["chain"]:
+                    existing["chain"].append(e["id"])
+                continue
+            item = {"event": e, "chain": [e["id"]]}
+            own_goal_assets[key] = item
+            goal_events_by_team[credited].append(item)
+            goal_chains_by_team[credited].append(item["chain"])
+            continue
+
         if e["kind"] == "shot":
             gain = gains.get((e["team"], e["possession_id"]))
             if gain and 0 <= e["t"]-gain["t"] <= 10:
                 transition.append({"shot": e, "gain": gain, "seconds": e["t"]-gain["t"]})
-            if e["outcome"] in ("goal", "own_goal", "own_goal_for"):
-                is_og = e["outcome"].startswith("own_goal")
-                credited = e["team"] if e["outcome"] == "own_goal_for" else (
-                    other(e["team"]) if is_og else e["team"]
-                )
-                if is_og:
-                    chain = [e["id"]]
-                    goal_chains_by_team[credited].append(chain)
-                    goal_events_by_team[credited].append({"event": e, "chain": chain})
-                    continue
+            if outcome == "goal":
                 chain = []
                 for before in reversed(events[:idx+1]):
                     if before["team"] != e["team"] or before["kind"] == "shot" and before is not e:
@@ -920,6 +944,8 @@ class SnapshotContext:
     score_basis: str = "observed_prefix"
     observed_end: float = 0.0
     event_count: int = 0
+    nominal_duration: int = 720
+    replayable_end: float = 720.0
 
 
 @dataclass(frozen=True)
@@ -952,6 +978,8 @@ class Snapshot:
                 score_basis=d.get("score_basis", "observed_prefix"),
                 observed_end=float(d.get("coverage", {}).get("observed_end") or 0.0),
                 event_count=int(d.get("coverage", {}).get("event_count") or 0),
+                nominal_duration=int(d.get("format_seconds", 720)),
+                replayable_end=float(d.get("replayable_end") or d.get("format_seconds", 720)),
             )
         return None
 
@@ -976,15 +1004,19 @@ def freeze(
     official_score: dict[str, int] | None = None,
     dataset_revision: str | None = None,
     completeness: dict | None = None,
+    replayable_end: float | None = None,
 ) -> Snapshot:
     is_syn = (match_id is None or match_id.startswith("syn_")) and scenario in SCENARIOS
-    max_d = format_seconds if format_seconds else (720 if is_syn else 5400)
+    nominal_d = format_seconds if format_seconds else (720 if is_syn else 5400)
+    max_d = int(math.ceil(replayable_end)) if replayable_end is not None else nominal_d
+    max_d = max(nominal_d, max_d)
     if at > max_d:
         raise ValueError("clock_out_of_bounds")
     state = reduce_match(
         events,
         at,
         max_duration=max_d,
+        nominal_duration=nominal_d,
         is_synthetic=is_syn,
         team_names=teams,
         team_map=team_map,
@@ -1051,7 +1083,12 @@ def freeze(
             "dataset_revision": dataset_revision,
             "data_version": data_version,
             "match_clock_basis": clock_basis,
-            "format_seconds": max_d,
+            "format_seconds": nominal_d,
+            **(
+                {"nominal_duration": nominal_d, "replayable_end": max_d}
+                if at > nominal_d
+                else {}
+            ),
             "as_of": at,
             "teams": actual_teams,
             "score": state["score"],

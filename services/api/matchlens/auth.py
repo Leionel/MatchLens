@@ -17,6 +17,10 @@ from fastapi import HTTPException, Request
 Role = Literal["viewer", "analyst", "producer", "admin"]
 _PRODUCER_ROLES = {"producer", "admin"}
 
+#: Server-generated anonymous session cookie. It is HttpOnly, SameSite=Strict
+#: and is the only trusted owner identity for private drafts.
+SESSION_COOKIE = "matchlens_session"
+
 
 @dataclass(frozen=True)
 class Principal:
@@ -61,6 +65,19 @@ def authenticate(request: Request) -> Principal:
     if not admin and not producer:
         raise HTTPException(503, "editorial_identity_not_configured")
     raise HTTPException(403, "editorial_role_required")
+
+
+def optional_principal(request: Request) -> Principal | None:
+    """Resolve an explicitly presented editorial identity, or None.
+
+    A supplied but invalid token is rejected rather than silently treated as
+    anonymous: a typo must not make a producer believe they are authenticated.
+    """
+    supplied = request.headers.get("X-MatchLens-Token", "")
+    local = request.headers.get("X-MatchLens-Local-Producer", "")
+    if supplied or local:
+        return authenticate(request)
+    return None
 
 
 def require_content_editor(request: Request) -> Principal:

@@ -43,8 +43,11 @@ def test_repro_set_match_switches_teams_and_events(client):
     if "home_team_name" in state.get("match_context", {}):
         assert state["match_context"]["home_team_name"] == "Argentina"
         assert state["match_context"]["away_team_name"] == "France"
-    # Format seconds must reflect the match duration / coverage
-    assert state["format_seconds"] == 5400
+    # Replay ends at the last recorded event, not at the declared nominal
+    # duration: unobserved time is never invented.
+    context = state["match_context"]
+    assert context["duration"] == 5400
+    assert state["format_seconds"] == 5363
 
 
 def test_repro_match_state_isolation(client):

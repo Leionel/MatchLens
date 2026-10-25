@@ -30,6 +30,9 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("MATCHLENS_RUNTIME_DIR", str(tmp_path))
     monkeypatch.setenv("MATCHLENS_PRODUCER_TOKEN", "producer-test")
     with TestClient(app) as c:
+        # Investigation drafts are private to a server-side session, so the
+        # client must own one before it can create or list them.
+        assert c.post("/api/sessions").status_code == 200
         # Guarantee that no test in this module can dispatch a paid request.
         c.app.state.engine.runner.key = None
         yield c
@@ -241,7 +244,7 @@ def test_maf_agent_mode_failure_degrades_to_isomorphic_plan(client):
     try:
         snap, state = _snap_and_state(540)
         plan = asyncio.run(run_investigation_plan(
-            engine, _body(execution_mode="maf_agent"), snap, state
+            engine, _body(execution_mode="maf_agent"), snap, state, "test-owner"
         ))
         assert plan.execution_mode == "deterministic_planner"
         assert plan.agent_status == "failed"
@@ -255,7 +258,7 @@ def test_maf_agent_mode_failure_degrades_to_isomorphic_plan(client):
         assert record.error == "invalid_agent_output"
         assert engine.ledger.summary()["requests_reserved"] == 0
         # Isomorphic with the deterministic plan: identical field contract.
-        deterministic = asyncio.run(run_investigation_plan(engine, _body(), snap, state))
+        deterministic = asyncio.run(run_investigation_plan(engine, _body(), snap, state, "test-owner"))
         assert set(plan.model_dump().keys()) == set(deterministic.model_dump().keys())
     finally:
         engine.runner.key = None
@@ -310,7 +313,14 @@ def test_registry_blocks_unregistered_tools_and_enforces_budgets():
 def test_agent_runs_api_endpoints(client):
     res = client.get("/api/agent-runs")
     assert res.status_code == 200
-    assert "runs" in res.json() and "budget" in res.json()
+    body = res.json()
+    assert "runs" in body and body["scope"] == "session_owner"
+    # Deployment-wide spend is producer-only operational information.
+    assert "budget" not in body
+    producer = client.get(
+        "/api/agent-runs", headers={"X-MatchLens-Token": "producer-test"}
+    ).json()
+    assert "budget" in producer and producer["scope"] == "producer_all"
     assert client.get("/api/agent-runs/does-not-exist").status_code == 404
     assert client.post("/api/agent-runs/does-not-exist/cancel").status_code == 404
 

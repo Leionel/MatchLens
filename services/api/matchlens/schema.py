@@ -158,8 +158,18 @@ class MatchContext(BaseModel):
     home_score: int
     away_score: int
     match_clock_basis: Literal["period_elapsed", "match_elapsed"] = "match_elapsed"
+    #: Nominal playing time (90/120 minutes; 720s for the synthetic fixture).
     duration: int
     observed_end: float
+    #: Last clock a replay/seek may address. Recorded stoppage time is not
+    #: truncated, and unobserved time is never invented.
+    replayable_end: float = 0.0
+    nominal_duration: float = 0.0
+    stoppage_time: float = 0.0
+    as_of: float = 0.0
+    periods: list[dict[str, Any]] = Field(default_factory=list)
+    shootout_clock: Optional[dict[str, Any]] = None
+    clock_version: str = "match-clock-v2"
     period: int
     attack_directions: dict[str, str]
     event_source: str
@@ -187,6 +197,7 @@ class MatchContext(BaseModel):
     score_basis: Literal["observed_prefix", "official_final"] = "observed_prefix"
     official_home_score: Optional[int] = None
     official_away_score: Optional[int] = None
+    provenance_kind: str = "synthetic"
 
 
 class TypedMetricReceipt(BaseModel):

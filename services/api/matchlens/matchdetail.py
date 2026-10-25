@@ -13,9 +13,12 @@ from typing import Any
 from .contracts import Snapshot
 from .exploration import analyze_action_density_differential, analyze_attacking_channels
 from .football import build_sequences
+from .score import verify_score
 
 
-def _lineups(events: list[Any], home_name: str, away_name: str) -> dict[str, Any]:
+def _lineups(
+    events: list[Any], home_name: str, away_name: str, observed_end: float
+) -> dict[str, Any]:
     """Starter/substitute structure per team from provider lineup records.
 
     A player whose first record is a Starting XI row (or is flagged starter)
@@ -23,6 +26,8 @@ def _lineups(events: list[Any], home_name: str, away_name: str) -> dict[str, Any
     substitute without inventing an entry minute (substitution events carry
     it when the provider recorded them).
     """
+    from .profiles import compute_player_minutes
+
     starters: dict[str, dict[str, list]] = {"H": [], "N": []}
     starter_ids: dict[str, set[str]] = {"H": set(), "N": set()}
     seen: dict[str, dict[str, dict]] = {"H": {}, "N": {}}
@@ -34,12 +39,15 @@ def _lineups(events: list[Any], home_name: str, away_name: str) -> dict[str, Any
         if team not in ("H", "N"):
             continue
         if str(e.player_id) not in seen[team]:
+            minutes = compute_player_minutes(events, str(e.player_id), observed_end)
             seen[team][str(e.player_id)] = {
                 "player_id": str(e.player_id),
                 "player_name": e.player_name,
                 "jersey_number": e.jersey_number,
                 "position": e.position,
                 "position_role": e.position_role,
+                "minutes_seconds": minutes["seconds"],
+                "minutes_method": minutes["method"],
             }
         if e.lineup_role == "starter":
             starter_ids[team].add(str(e.player_id))
@@ -94,6 +102,7 @@ def _shots(events: list[Any]) -> dict[str, Any]:
             "player_id": e.player_id,
             "player_name": e.player_name,
             "minute": round(float(e.clock_seconds) / 60.0, 1) if e.clock_seconds is not None else None,
+            "t": round(float(e.clock_seconds), 1) if e.clock_seconds is not None else None,
             "period": e.period,
             "period_label": e.period_label,
             "outcome": e.outcome,
@@ -154,11 +163,19 @@ def _events_summary(events: list[Any]) -> dict[str, Any]:
     return {
         "total": len(events),
         "by_action_type": dict(counts.most_common()),
-        "full_events_endpoint": "/api/matches/{match_id}/events",
+        "public_events_endpoint": "/api/matches/{match_id}/events",
+        "raw_event_export": "producer_or_internal_data_access_required",
     }
 
 
-def build_match_detail(eng: Any, match_id: str, resolve_snapshot) -> dict[str, Any]:
+def build_match_detail(
+    eng: Any,
+    match_id: str,
+    resolve_snapshot,
+    *,
+    owner_session_id: str | None = None,
+    include_all_investigations: bool = False,
+) -> dict[str, Any]:
     """Assemble the complete Match Detail payload for one match.
 
     `resolve_snapshot(eng, match_id, ctx)` is the main module's cached freeze
@@ -173,7 +190,14 @@ def build_match_detail(eng: Any, match_id: str, resolve_snapshot) -> dict[str, A
     snap, state = resolve_snapshot(eng, match_id, ctx)
     events = MatchCatalog.load_normalized_events(match_id)
 
-    investigations = eng.investigations.list(match_id=match_id, limit=10)
+    # A match detail page is a public analytics projection; private drafts are
+    # only included for their owning session (or an explicit producer role).
+    investigations = eng.investigations.list_for(
+        owner_session_id=owner_session_id,
+        allow_all=include_all_investigations,
+        match_id=match_id,
+        limit=10,
+    )
     return {
         "match_id": match_id,
         "overview": {
@@ -183,7 +207,14 @@ def build_match_detail(eng: Any, match_id: str, resolve_snapshot) -> dict[str, A
                 "season": ctx.season,
                 "label": ctx.label,
                 "duration": ctx.duration,
+                "nominal_duration": ctx.nominal_duration,
                 "observed_end": ctx.observed_end,
+                "replayable_end": ctx.replayable_end,
+                "stoppage_time": ctx.stoppage_time,
+                "as_of": ctx.as_of,
+                "periods": ctx.periods,
+                "shootout_clock": ctx.shootout_clock,
+                "clock_version": ctx.clock_version,
                 "period": ctx.period,
                 "continuous_coverage": ctx.continuous_coverage,
                 "completeness_status": ctx.completeness_status,
@@ -192,7 +223,8 @@ def build_match_detail(eng: Any, match_id: str, resolve_snapshot) -> dict[str, A
                 "provenance_kind": meta.provenance_kind,
             },
         },
-        "lineups": _lineups(events, ctx.home_team_name, ctx.away_team_name),
+        "score_verification": verify_score(events, meta),
+        "lineups": _lineups(events, ctx.home_team_name, ctx.away_team_name, float(ctx.observed_end)),
         "shots": _shots(events),
         "stats": _stats(snap, state),
         "tactics": _tactics(state, ctx.coordinate_frame),

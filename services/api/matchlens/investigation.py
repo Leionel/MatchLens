@@ -8,6 +8,7 @@ claim; promotion is an explicit user action followed by the real registry gate.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import time
 from pathlib import Path
@@ -164,6 +165,10 @@ class InvestigationPlan(BaseModel):
     unresolved: list[str]
     required_scope: list[str] = Field(default_factory=list)
     duration_ms: float = 0.0
+    #: Server-side session that created this private draft. Old records have
+    #: None and are treated as legacy-unowned (producer-only) rather than
+    #: public. A client-supplied owner is never trusted.
+    owner_session_id: str | None = None
 
 
 def _hash(value: Any) -> str:
@@ -236,6 +241,7 @@ class InvestigationPlanner:
         question: str = "",
         compare_match_ids: list[str] | None = None,
         xt_model: Any = None,
+        owner_session_id: str | None = None,
     ) -> InvestigationPlan:
         started = time.perf_counter()
         team = "N" if team == "N" else "H"
@@ -252,9 +258,14 @@ class InvestigationPlanner:
             "team": team,
             "question": question,
             "intent": intent,
+            "owner": owner_session_id,
         })
         run = InvestigationRun(investigation_id)
         run.transition("PLANNING", "intent and scope")
+
+        def finish(**kwargs: Any) -> InvestigationPlan:
+            kwargs.setdefault("owner_session_id", owner_session_id)
+            return cls._finish(**kwargs)
 
         receipts: list[ToolReceipt] = []
         registry = FootballToolRegistry(
@@ -302,7 +313,7 @@ class InvestigationPlanner:
 
         if intent == "UNKNOWN":
             run.transition("FAILED", "question requires a concrete football scope")
-            return cls._finish(
+            return finish(
                 run=run,
                 investigation_id=investigation_id,
                 match_id=match_id,
@@ -346,7 +357,7 @@ class InvestigationPlanner:
             )
         except ToolError as exc:
             run.transition("FAILED", exc.code)
-            return cls._finish(
+            return finish(
                 run=run,
                 investigation_id=investigation_id,
                 match_id=match_id,
@@ -391,7 +402,7 @@ class InvestigationPlanner:
 
         if intent == "COMPARE_MATCHES" and not scope.compare_match_ids:
             run.transition("WITHHELD", "comparison match IDs required")
-            return cls._finish(
+            return finish(
                 run=run,
                 investigation_id=investigation_id,
                 match_id=match_id,
@@ -510,7 +521,7 @@ class InvestigationPlanner:
         if any(explanation.status == "insufficient_evidence" for explanation in explanations):
             unresolved.append("At least one candidate explanation lacks the evidence needed to test it.")
 
-        return cls._finish(
+        return finish(
             run=run,
             investigation_id=investigation_id,
             match_id=match_id,
@@ -962,6 +973,7 @@ class InvestigationPlanner:
         started: float,
         state: str | None = None,
         ledger: dict[str, Any] | None = None,
+        owner_session_id: str | None = None,
     ) -> InvestigationPlan:
         final_state: InvestigationState = (state or run.state)  # type: ignore[assignment]
         not_inferable = [
@@ -996,6 +1008,7 @@ class InvestigationPlanner:
             unresolved=unresolved,
             required_scope=required_scope,
             duration_ms=round((time.perf_counter() - started) * 1000, 3),
+            owner_session_id=owner_session_id,
         )
 
 
@@ -1022,6 +1035,7 @@ async def run_maf_investigation(
     compare_match_ids: list[str] | None = None,
     xt_model: Any = None,
     deadline: float = 45.0,
+    owner_session_id: str | None = None,
 ) -> InvestigationPlan:
     """Real MAF agentic investigation (roadmap C-06).
 
@@ -1057,6 +1071,7 @@ async def run_maf_investigation(
         "team": team,
         "question": question,
         "intent": intent,
+        "owner": owner_session_id,
     })
 
     def deterministic_plan() -> InvestigationPlan:
@@ -1070,6 +1085,7 @@ async def run_maf_investigation(
             question=question,
             compare_match_ids=compare_match_ids,
             xt_model=xt_model,
+            owner_session_id=owner_session_id,
         )
 
     if intent == "UNKNOWN":
@@ -1098,6 +1114,7 @@ async def run_maf_investigation(
         model="deepseek-flash",
         prompt_version=PROMPT_VERSION,
         audit=maf_run.audit,
+        owner_session_id=owner_session_id,
     )
 
     def agent_summary() -> dict[str, Any]:
@@ -1343,6 +1360,7 @@ async def run_maf_investigation(
         started=started,
         state=final_state,
         ledger=ledger,
+        owner_session_id=owner_session_id,
     )
     plan.execution_mode = "maf_agent"
     plan.agent_status = "run"
@@ -1390,12 +1408,50 @@ class InvestigationStore:
     def get(self, investigation_id: str) -> InvestigationPlan | None:
         return self.plans.get(investigation_id)
 
-    def list(self, *, match_id: str | None = None, limit: int = 50) -> list[InvestigationPlan]:
-        """Saved investigations, newest first, optionally scoped to one match.
+    @staticmethod
+    def owned_by(plan: InvestigationPlan, owner_session_id: str | None) -> bool:
+        return bool(
+            owner_session_id
+            and plan.owner_session_id
+            and hmac.compare_digest(str(plan.owner_session_id), str(owner_session_id))
+        )
 
-        Recency comes from the first state transition (creation time); plans
-        from older store versions without a timestamp sort last.
-        """
+    def get_for(
+        self,
+        investigation_id: str,
+        owner_session_id: str | None,
+        *,
+        allow_all: bool = False,
+    ) -> InvestigationPlan | None:
+        plan = self.plans.get(investigation_id)
+        if plan is None:
+            return None
+        if allow_all or self.owned_by(plan, owner_session_id):
+            return plan
+        return None
+
+    def list_for(
+        self,
+        *,
+        owner_session_id: str | None,
+        allow_all: bool = False,
+        match_id: str | None = None,
+        limit: int = 50,
+    ) -> list[InvestigationPlan]:
+        scoped = [
+            plan for plan in self.plans.values()
+            if (allow_all or self.owned_by(plan, owner_session_id))
+        ]
+        return self._sorted(scoped, match_id=match_id, limit=limit)
+
+    @staticmethod
+    def _sorted(
+        plans: list[InvestigationPlan],
+        *,
+        match_id: str | None = None,
+        limit: int = 50,
+    ) -> list[InvestigationPlan]:
+        """Newest first; plans without a timestamp sort last."""
         def created(p: InvestigationPlan) -> float:
             for entry in p.state_history:
                 at = entry.get("at")
@@ -1403,12 +1459,15 @@ class InvestigationStore:
                     return float(at)
             return 0.0
 
-        plans = [
-            p for p in self.plans.values()
+        selected = [
+            p for p in plans
             if match_id is None or p.match_id == match_id
         ]
-        plans.sort(key=created, reverse=True)
-        return plans[:max(0, limit)]
+        selected.sort(key=created, reverse=True)
+        return selected[:max(0, limit)]
+
+    def list(self, *, match_id: str | None = None, limit: int = 50) -> list[InvestigationPlan]:
+        return self._sorted(list(self.plans.values()), match_id=match_id, limit=limit)
 
     def cancel(self, investigation_id: str) -> InvestigationPlan:
         plan = self.plans.get(investigation_id)

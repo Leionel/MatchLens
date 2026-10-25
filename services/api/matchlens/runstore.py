@@ -10,6 +10,7 @@ rejected, not silently coerced.
 """
 from __future__ import annotations
 
+import hmac
 import json
 import time
 from pathlib import Path
@@ -70,6 +71,9 @@ class AgentRunRecord(BaseModel):
     rejected_count: int = 0
     origin: str = "not_run"
     error: str | None = None
+    #: Server-side session that dispatched the run. None on legacy records;
+    #: those are fail-closed to producer/admin access.
+    owner_session_id: str | None = None
     created_at: float = Field(default_factory=time.time)
     updated_at: float = Field(default_factory=time.time)
 
@@ -132,6 +136,7 @@ class AgentRunStore:
         dataset_revision: str | None = None,
         epoch: int = 0,
         audit: list[dict[str, Any]] | None = None,
+        owner_session_id: str | None = None,
     ) -> AgentRunRecord:
         if run_id in self.runs:
             raise ValueError("agent_run_already_exists")
@@ -148,6 +153,7 @@ class AgentRunStore:
             state="QUEUED",
             state_history=[{"state": "QUEUED", "at": time.time(), "reason": "run identity frozen"}],
             audit=list(audit or []),
+            owner_session_id=owner_session_id,
         )
         self.runs[record.run_id] = record
         self._save()
@@ -156,8 +162,42 @@ class AgentRunStore:
     def get(self, run_id: str) -> AgentRunRecord | None:
         return self.runs.get(run_id)
 
+    @staticmethod
+    def owned_by(record: AgentRunRecord, owner_session_id: str | None) -> bool:
+        return bool(
+            owner_session_id
+            and record.owner_session_id
+            and hmac.compare_digest(str(record.owner_session_id), str(owner_session_id))
+        )
+
+    def get_for(self, run_id: str, owner_session_id: str | None, *, allow_all: bool = False) -> AgentRunRecord | None:
+        """Owner-scoped lookup. Legacy records are only reachable with allow_all."""
+        record = self.runs.get(run_id)
+        if record is None:
+            return None
+        if allow_all or self.owned_by(record, owner_session_id):
+            return record
+        return None
+
     def list(self, limit: int = 50) -> list[AgentRunRecord]:
         records = sorted(self.runs.values(), key=lambda r: r.created_at, reverse=True)
+        return records[: max(0, limit)]
+
+    def list_for(
+        self,
+        owner_session_id: str | None,
+        *,
+        allow_all: bool = False,
+        limit: int = 50,
+        state: str | None = None,
+    ) -> list[AgentRunRecord]:
+        records = [
+            record for record in self.runs.values()
+            if allow_all or self.owned_by(record, owner_session_id)
+        ]
+        if state:
+            records = [record for record in records if record.state == state]
+        records.sort(key=lambda r: r.created_at, reverse=True)
         return records[: max(0, limit)]
 
     def transition(self, run_id: str, target: AgentRunState, reason: str = "") -> AgentRunRecord:
