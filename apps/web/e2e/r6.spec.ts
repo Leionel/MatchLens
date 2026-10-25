@@ -156,6 +156,12 @@ test.describe("R6 interaction correctness", () => {
       await capture(page, `match-detail-${width}`);
     }
 
+    await page.setViewportSize({ width: 412, height: 915 });
+    await page.goto("/?workspace=tactical_lab&match=syn_default&at=720");
+    await expect(page.getByTestId("tactical-explorer-page")).toBeVisible();
+    expect(await hasHorizontalOverflow(page), "overflow at 412px tactical").toBe(false);
+    await capture(page, "tactical-explorer-412");
+
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/?workspace=story_agent&match=syn_default&at=720");
     await expect(page.getByTestId("investigation-advanced")).toBeVisible();

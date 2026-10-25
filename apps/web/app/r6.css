@@ -404,3 +404,7 @@
   .zone-distribution-strip { flex-wrap: wrap; }
   .tactical-layer-bar { flex-wrap: wrap; }
 }
+@media (max-width: 560px) {
+  .layer-tab-btn { max-width: 100%; white-space: normal; text-align: left; overflow-wrap: anywhere; }
+  .tactical-layer-bar { padding-left: 12px; padding-right: 12px; }
+}
