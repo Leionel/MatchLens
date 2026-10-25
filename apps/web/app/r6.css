@@ -408,3 +408,25 @@
   .layer-tab-btn { max-width: 100%; white-space: normal; text-align: left; overflow-wrap: anywhere; }
   .tactical-layer-bar { padding-left: 12px; padding-right: 12px; }
 }
+@media (max-width: 900px) {
+  .tactical-stage-grid > *,
+  .tactical-explore-grid > *,
+  .r6-tactical-page .glass-panel { min-width: 0; max-width: 100%; }
+}
+@media (max-width: 560px) {
+  .r6-tactical-page,
+  .r6-tactical-page .glass-panel,
+  .r6-tactical-page .tactical-stage-grid,
+  .r6-tactical-page .tactical-explore-grid { min-width: 0; max-width: 100%; }
+  .r6-tactical-page .feed-filter-btn,
+  .r6-tactical-page .layer-tab-btn,
+  .r6-tactical-page .seq-outcome,
+  .r6-tactical-page .seq-id-badge,
+  .r6-tactical-page .step-chip {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .r6-tactical-page .sequence-row-btn { flex-wrap: wrap; align-items: flex-start; }
+  .r6-tactical-page .seq-meta { min-width: 0; }
+}
