@@ -41,23 +41,34 @@ One FastAPI process, one Uvicorn worker/replica owns sessions, clocks, evidence,
 This replaces a broad empty-folder plan. Add abstractions only for a demonstrated consumer.
 
 
-## R6 product shell
+## R6 / R6.1 product shell
 
-The public product is now organised as Match Hub → Match Detail → Tactical
+The public product is organised as Match Hub → Match Detail → Tactical
 Explorer → Intelligence Studio. Producer and Research Lab sit behind a separate
 Professional tools entry; they are not peers of the match journey.
 
-The global header carries only the brand, search, current match, theme/language
-and evidence utilities. Replay controls live inside Match Detail and Tactical
-Explorer: the slider is a local draft until release, then one seek is sent and a
-late response for another match/clock is discarded. Evidence and coverage move
-into contextual disclosures on the pages that consume them.
+The global header carries only the brand, one search field, current match, theme
+and a tools disclosure. On phones the language and evidence entries move into
+that menu rather than disappearing. Replay controls live inside Match Detail and
+Tactical Explorer: the slider is a local draft until release, then one seek is
+sent and a late response for another match/clock is discarded. Evidence and
+coverage move into contextual disclosures on the pages that consume them.
 
 Match Detail leads with the score, key metrics and the strongest recorded OAAI
-change, then exposes the pitch, highlights and event stream. Every AI insight
-states its metric level, top recorded contributor, coverage and model status, and
-opens a pre-seeded investigation. Intelligence Studio asks the question first;
-focus IDs, engine choice, snapshots and tool records are advanced/result detail.
+change. On phones its remaining modules are grouped into Overview, Tactical,
+Events and More with arrow-key tabs, so the first screen does not stack the
+entire professional analysis surface. Every insight names the signed activity
+leader; a neutral lead change offers a team choice instead of defaulting to the
+home side. The rail separates model availability, the engine behind the current
+snapshot and the latest persisted run. Opening an investigation verifies the
+target match and clock, and does not start when either cannot be aligned.
+
+Intelligence Studio asks the question first; focus IDs, engine choice, snapshots
+and tool records are advanced/result detail. A live request carries a session-
+scoped request key. Cancel asks the server, closes the Agent Run as CANCELLED,
+checks before every model dispatch and races the in-flight provider call; the UI
+reports requested, confirmed, completed-too-late or unavailable rather than
+inferring cancellation from AbortController alone.
 
 ## Collaboration and publication
 

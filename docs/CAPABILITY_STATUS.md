@@ -19,13 +19,14 @@ plan, a passing schema test alone, or an API returning 200 is not completion.
 | **External Dependency** | Blocked on licensed data, account provider, budget or deployment decision. |
 | **Not Run** | Harness/code exists but no execution receipt exists. |
 
-Last executed verification at this baseline (2026-10-25): **backend suite 343
+Last executed verification at this baseline (2026-10-25): **backend suite 346
 passed** (`services/api/.venv/Scripts/python.exe -m pytest services/api/tests/ -q`);
-**web typecheck and production build 0 errors**; **Playwright 30 passed / 1
-skipped locally** (the skip is the catalogued-but-not-installed case) and
-**31/31 passed in CI** against the served static export in the R6 shell, with
-axe-core WCAG AA clean in light and dark themes on Match Detail, Tactical
-Explorer and Intelligence Studio. R6 screenshots are captured at 1440, 1024,
+**web typecheck and production build 0 errors**; **Playwright 37 passed / 1
+skipped locally** (the skip is the catalogued-but-not-installed case). The R6.1
+browser suite adds OAAI sign semantics, model-run status, cross-match clock
+alignment, server-confirmed cancellation, mobile section tabs and the phone
+tools menu. axe-core WCAG AA remains clean in light and dark themes on Match
+Detail, Tactical Explorer and Intelligence Studio. R6/R6.1 screenshots are captured at 1440, 1024,
 768, 412, 390 and 360 px and uploaded with the Playwright artifacts. The real-match CI job also runs
 `scripts/benchmark_real_match.py` (cold snapshot <8s, warm seek <1s, OAAI cold
 <5s) and the provider publication boundary tests. The manual full-corpus CI run
@@ -69,12 +70,12 @@ roadmap; it is not a phase claim.
 | CAP-24 | What-if sandbox | B | Implemented but Partial | `whatif.py` | Validation Lab | existing tests | research identification not implemented |
 | CAP-25 | Stale-run isolation | A | Implemented & Verified | `Run` identity + epoch | — | fourth-pass test | — |
 | CAP-26 | Async UI response guards | D | Implemented & Verified | exploration responses | page handlers | Playwright suite in CI (`browser-e2e` job) | — |
-| CAP-27 | Match Hub / discover / search | D | Implemented & Verified (R6) | `/api/matches` + availability contract | Hub intro, global search, filters, provenance/availability and disabled analysis | Playwright library tests + R6 screenshots | no head-to-head filter yet |
+| CAP-27 | Match Hub / discover / search | D | Implemented & Verified (R6.1) | `/api/matches` + availability contract | Single header search; query chip and clear; advanced filters collapsed; analysis-ready recommendations first; catalogued matches remain browsable | Playwright library/R6 tests + screenshots | no head-to-head filter yet |
 | CAP-28 | URL deep links / refresh restore | D | Implemented & Verified (R6) | — | `page.tsx` URL state | deep-link, popstate-without-push, seek and zero-clock tests | investigation id not yet in the URL |
 | CAP-29 | Multi-user drafts/isolation | E | Implemented & Verified (anonymous sessions); accounts External Dependency | session-owned investigations/runs + producer role | — | `test_authorization.py` + Playwright security spec | no SSO/account provider; legacy ownerless records are producer-only |
 | CAP-30 | Live multi-agent ablation | F | Not Run | deterministic harness only | — | provenance audit | paid budget + frozen samples required |
-| CAP-31 | Real browser/screenshot QA | F | Implemented but Partial (R6) | served static export | Playwright + axe-core | 29 passed / 1 skipped locally; screenshots at 1440/1024/768/390/360; CI uploads traces and report | no committed visual-diff baselines |
-| CAP-32 | Mobile/tablet device QA | D | Implemented but Partial (R6) | — | Pixel 7 + iPad Mini + 360/390 viewport captures | responsive overflow/axe checks on detail, tactical and studio | real device and screen reader |
+| CAP-31 | Real browser/screenshot QA | F | Implemented but Partial (R6.1) | served static export | Playwright + axe-core | 37 passed / 1 skipped locally; screenshots at 1440/1024/768/412/390/360, including each phone section; CI uploads traces and report | no committed visual-diff baselines |
+| CAP-32 | Mobile/tablet device QA | D | Implemented & Verified (R6.1) | — | Pixel 7 + iPad Mini + 360/390 viewport captures; phone section tabs, compact tools menu, key-event shortlist | responsive overflow/axe checks on detail, tactical and studio; R6 tab/menu interaction tests | real device and screen reader |
 | CAP-33 | Dataset Completeness Verification | A | Implemented & Verified | `completeness.py` (5 states) | ingest receipt, hub, rail, investigation | fifth-pass completeness tests | provider-side declarations trusted only when supplied |
 | CAP-34 | Public/Producer broadcast projections | E | Implemented & Verified | `public_claim_projection` / `producer_claim_projection` | Producer workspace | projection test | producer UI is token-based, not account-based |
 | CAP-35 | Read-time rundown validity | A | Implemented & Verified | GET rundown revalidation + export 409 | Producer workspace notice | stale-rundown test + live withdrawal acceptance | — |
@@ -84,7 +85,7 @@ roadmap; it is not a phase claim.
 | CAP-38 | Chart→Investigation handoff | C | Implemented & Verified | `InvestigationSeed` + `oaai_point` focus | OAAI timeline drawer | live CP-01 acceptance at `at=54` | none |
 | CAP-39 | OAAI contribution ledger | B | Implemented & Verified | `compute_oaai_contribution_ledger` | investigation + `/api/oaai/ledger` | reconciliation test | top-N list plus explicit unlisted remainder |
 | CAP-40 | Investigation state machine | C | Implemented & Verified | bounded transitions + persisted store + cancel | state chip/history | fifth-pass state tests | no retry backoff on tool failure |
-| CAP-41 | Agent run lifecycle persistence | C | Implemented but Partial | `agents.py` Run identity/audit | — | stale-run tests | no persisted state machine; roadmap `C-09` |
+| CAP-41 | Agent run lifecycle persistence | C | Implemented & Verified (R6.1) | persisted `AgentRunStore` + live request cancellation | investigation cancellation status | `test_slice_b_agentic.py` + R6 browser test | no retry/backoff |
 | CAP-43 | Provider corpus curation | B | Implemented & Verified | corpus + selection/refresh scripts + `scripts/verify_corpus.py` | library filters + sample-bias note | 80 matches, all analysis-ready and content-verified | curated functional-acceptance sample; never presented as an unbiased football population |
 | CAP-44 | Score and identity cross-verification | B | Implemented & Verified | `/api/matches/{id}/score` (`score.verify_score`) + provider index | detail score verification | real-match test (2-1, own goal counted once) | second source is still the provider index; no independent results oracle |
 | CAP-45 | Full-match momentum chart | D | Implemented & Verified | OAAI effective-time recurrence + peak-preserving chart payload | `OAAITimeline` period bands, change points, rug marks | exact oracle test; real match 15s → ~0.3s cold / <10ms warm; Playwright stoppage seek | heuristic activity index, not momentum/causality |
@@ -96,6 +97,7 @@ roadmap; it is not a phase claim.
 
 | CAP-50 | R6 product information architecture | D | Implemented & Verified | static export + existing APIs | Match Hub, Match Detail, Tactical Explorer, Intelligence Studio; Professional tools menu; contextual replay/evidence | `r6.spec.ts`, responsive/a11y, screenshots | producer/research remain token-based tools |
 | CAP-51 | Interaction correctness (Space/history/seek/clock) | D | Implemented & Verified | page state layer | replay draft-on-release, one-seek guard, popstate without push, zero-clock guard, match-scoped async results | R6 Playwright interaction suite | no distributed session store |
+| CAP-52 | R6.1 semantic and cancellation correctness | D | Implemented & Verified | owner-scoped live-cancel endpoint + cooperative MAF cancellation + agent-run reads | signed OAAI wording with neutral team choice; model availability/current source/latest run split; cross-match clock verify-or-block; server-confirmed cancel; phone tools and section tabs | 3 new backend tests, 7 new R6 browser tests, axe/overflow suite | deterministic cancellation is exercised without a paid model request |
 
 ---
 

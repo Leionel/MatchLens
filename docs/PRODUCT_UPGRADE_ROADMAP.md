@@ -736,8 +736,10 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Promotion endpoint and UI.
 
 #### C-09 — Agent run lifecycle persistence (P2)
-- **Current Status**: Partial: Run identity/audit and stale-run rejection exist;
-  the target state machine is not persisted.
+- **Current Status**: Implemented & Verified for persistence and cancellation
+  (R6.1): bounded run records, owner-scoped live request cancellation, checks
+  before each model dispatch, a race against the in-flight provider call and a
+  terminal CANCELLED audit. Retry/backoff remains outside this capability.
 - **Goal**: Persist `QUEUED → ANALYSING → TOOL_WAIT → HANDOFF → VERIFYING →
   GATED/WITHHELD/FAILED/CANCELLED` with bounded transitions.
 - **User Value**: A run can be inspected, cancelled or retried without ambiguous
@@ -755,7 +757,7 @@ research value; they are not a uniform P0 list.
 ### Track D — Football Product Experience
 
 #### D-01 — Match Hub (P1)
-- **Current Status**: Implemented & Verified at `ee388ed` — Match Hub lists catalog matches with verified completeness.
+- **Current Status**: Implemented & Verified (R6.1) — one header search field drives the Hub; analysis-ready matches are recommended first, advanced filters are collapsed, and catalogued-but-uninstalled matches remain browsable with explicit availability.
 - **Goal**: Discover, fixtures, results, competitions, seasons, teams, players,
   recent and saved entities.
 - **User Value**: A fan can find a match naturally and enter it in one flow.
@@ -770,7 +772,7 @@ research value; they are not a uniform P0 list.
 - **Deliverable**: Match Hub page.
 
 #### D-02 — Match Detail information architecture (P1)
-- **Current Status**: Implemented & Verified (R6) — Match Detail is a core page with replay dock, score, key metrics, OAAI, AI insight rail, pitch/events and team-aware recap.
+- **Current Status**: Implemented & Verified (R6.1) — Match Detail is a core page with replay dock, score, key metrics, signed OAAI insight, model-run status and team-aware recap; phones group the remaining surfaces into keyboard-accessible Overview/Tactical/Events/More sections.
 - **Goal**: Overview, statistics, timeline, lineups, shots/spatial, tactical, AI
   insights and story.
 - **User Value**: The score and key events are understandable without opening a
