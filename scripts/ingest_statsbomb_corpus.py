@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -55,6 +56,14 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _rel(path: Path) -> str:
+    """Repository-relative POSIX path, stable across operating systems."""
+    try:
+        return path.resolve().relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def _raw_path(raw_dir: Path, provider_match_id: int, kind: str) -> Path:
@@ -206,7 +215,7 @@ def import_match(entry: dict[str, Any], *, raw_dir: Path, dataset_dir: Path, dry
             "events": len(events),
             "observed_end": round(observed_end, 1),
             "reordered_events": len(adapter.reordered_events),
-            "dataset_path": str(dataset_path.relative_to(ROOT)),
+            "dataset_path": _rel(dataset_path),
             "score_reconciliation": reconciliation,
         }
 
@@ -232,11 +241,11 @@ def import_match(entry: dict[str, Any], *, raw_dir: Path, dataset_dir: Path, dry
         "away_score": entry["away_score"],
         "home_provider_team_id": entry["home_provider_team_id"],
         "away_provider_team_id": entry["away_provider_team_id"],
-        "source_file": str(events_path.relative_to(ROOT)),
+        "source_file": _rel(events_path),
         "source_sha256": _sha256(events_path),
-        "lineups_file": str(lineups_path.relative_to(ROOT)) if lineups_path.exists() else None,
+        "lineups_file": _rel(lineups_path) if lineups_path.exists() else None,
         "lineups_sha256": _sha256(lineups_path) if lineups_path.exists() else None,
-        "target_file": str(dataset_path.relative_to(ROOT)),
+        "target_file": _rel(dataset_path),
         "target_sha256": _sha256(dataset_path),
         "raw_event_count": len(raw_events),
         "normalized_event_count": len(events),
@@ -262,11 +271,115 @@ def import_match(entry: dict[str, Any], *, raw_dir: Path, dataset_dir: Path, dry
         "raw_events": len(raw_events),
         "observed_end": round(observed_end, 1),
         "reordered_events": len(adapter.reordered_events),
-        "dataset_path": str(dataset_path.relative_to(ROOT)),
+        "dataset_path": _rel(dataset_path),
         "dataset_sha256": receipt["target_sha256"],
         "metadata": metadata,
         "receipt": receipt,
     }
+
+
+def _atomic_write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _manifest_entry(row: dict[str, Any], entry: dict[str, Any], corpus: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "match_id": row["match_id"],
+        "dataset_path": row["dataset_path"],
+        "dataset_sha256": row["dataset_sha256"],
+        "stage": entry.get("stage"),
+        # The completeness report lives here once. The catalog reads it back
+        # into the match metadata, so the committed file never carries two
+        # copies that could drift apart.
+        "completeness": row["receipt"]["completeness"],
+        "source": {
+            "provider": "statsbomb_open_data",
+            "competition_id": entry["competition_id"],
+            "season_id": entry["season_id"],
+            "match_id": entry["provider_match_id"],
+            "events_url": f"{corpus['provider']['base_url']}/events/{entry['provider_match_id']}.json",
+            "lineups_url": f"{corpus['provider']['base_url']}/lineups/{entry['provider_match_id']}.json",
+            "source_sha256": row["receipt"]["source_sha256"],
+        },
+        "metadata": row["metadata"],
+    }
+
+
+def merge_manifest_entries(
+    existing: dict[str, dict[str, Any]],
+    results: list[dict[str, Any]],
+    entries: list[dict[str, Any]],
+    corpus: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    """Merge freshly imported rows into the full manifest by match id.
+
+    ``--match`` imports a subset; every other committed entry must survive.
+    Sorting by id keeps repeated imports byte-stable.
+    """
+    merged = {str(match_id): dict(entry) for match_id, entry in existing.items()}
+    by_id = {str(entry["match_id"]): entry for entry in entries}
+    for row in results:
+        entry = by_id.get(str(row["match_id"]))
+        if entry is None:
+            continue
+        merged[str(row["match_id"])] = _manifest_entry(row, entry, corpus)
+    return {match_id: merged[match_id] for match_id in sorted(merged)}
+
+
+def _verify_manifest(*, require_all: bool = False) -> int:
+    if not MANIFEST_PATH.exists():
+        print(f"manifest not found: {MANIFEST_PATH}", file=sys.stderr)
+        return 1
+    manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    failures: list[str] = []
+    missing: list[str] = []
+    verified = 0
+    for entry in manifest.get("matches", []):
+        match_id = str(entry.get("match_id", "?"))
+        rel = str(entry.get("dataset_path") or "")
+        if not rel:
+            failures.append(f"{match_id}: dataset_path missing")
+            continue
+        if "\\" in rel:
+            failures.append(f"{match_id}: dataset_path uses a Windows separator: {rel!r}")
+            continue
+        parts = rel.split("/")
+        if rel.startswith("/") or ".." in parts or (parts and ":" in parts[0]):
+            failures.append(f"{match_id}: dataset_path escapes the repository: {rel!r}")
+            continue
+        path = ROOT / Path(*parts)
+        if not path.exists():
+            if require_all:
+                failures.append(f"{match_id}: dataset not materialised: {rel}")
+            else:
+                missing.append(match_id)
+            continue
+        actual = _sha256(path)
+        expected = entry.get("dataset_sha256")
+        if not expected or actual != expected:
+            failures.append(f"{match_id}: checksum mismatch expected={str(expected)[:16]} actual={actual[:16]}")
+            continue
+        metadata = entry.get("metadata") or {}
+        if not metadata.get("home_provider_team_id") or not metadata.get("away_provider_team_id"):
+            failures.append(f"{match_id}: provider team mapping incomplete")
+        if not (entry.get("completeness") or {}).get("status"):
+            failures.append(f"{match_id}: completeness report missing")
+        verified += 1
+    if failures:
+        for row in failures:
+            print(f"  FAILED {row}", file=sys.stderr)
+        print(f"\n{len(failures)} manifest failure(s)", file=sys.stderr)
+        return 1
+    print(
+        f"manifest verified: {verified} materialised matches have valid content hashes; "
+        f"{len(missing)} catalogued match(es) are not installed in this checkout"
+    )
+    if missing and not require_all:
+        print(f"  not installed: {', '.join(missing[:5])}" + (" ..." if len(missing) > 5 else ""))
+    return 0
 
 
 def main() -> int:
@@ -275,10 +388,23 @@ def main() -> int:
     parser.add_argument("--raw-dir", default=str(RAW_DIR))
     parser.add_argument("--dataset-dir", default=str(DATASET_DIR))
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="verify installed datasets against the committed manifest without importing",
+    )
+    parser.add_argument(
+        "--verify-all",
+        action="store_true",
+        help="like --verify, but fail if any catalogued match is not installed",
+    )
     args = parser.parse_args()
 
+    if args.verify or args.verify_all:
+        return _verify_manifest(require_all=args.verify_all)
+
     corpus = json.loads(CORPUS_PATH.read_text(encoding="utf-8"))
-    entries = corpus["matches"]
+    entries = list(corpus["matches"])
     if args.match:
         wanted = set(args.match)
         entries = [e for e in entries if e["match_id"] in wanted]
@@ -309,6 +435,31 @@ def main() -> int:
         print(f"\n{len(results)} ok, {len(failures)} failed")
         return 1 if failures else 0
 
+    if failures and not results:
+        print("every requested import failed; manifest was not modified", file=sys.stderr)
+        return 1
+
+    existing: dict[str, Any] = {}
+    existing_generated_at = None
+    previous_body: dict[str, Any] | None = None
+    if MANIFEST_PATH.exists():
+        try:
+            previous = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+            existing_generated_at = previous.get("generated_at")
+            existing = {
+                str(e.get("match_id")): e
+                for e in previous.get("matches", [])
+                if isinstance(e, dict) and e.get("match_id")
+            }
+            previous_body = {k: v for k, v in previous.items() if k != "generated_at"}
+        except (OSError, ValueError) as exc:
+            # A corrupt manifest must not be "repaired" by dropping every entry
+            # that this invocation did not happen to import.
+            print(f"manifest is unreadable; refusing to overwrite it: {exc}", file=sys.stderr)
+            return 1
+
+    merged = merge_manifest_entries(existing, results, entries, corpus)
+
     manifest = {
         "version": "matchlens-source-manifest-v1",
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -325,32 +476,13 @@ def main() -> int:
             "metadata and provenance only; run scripts/ingest_statsbomb_corpus.py to "
             "materialise the dataset files under data/datasets/."
         ),
-        "matches": [],
+        "matches": list(merged.values()),
     }
-    for row in results:
-        entry = next(e for e in entries if e["match_id"] == row["match_id"])
-        manifest["matches"].append({
-            "match_id": row["match_id"],
-            "dataset_path": row["dataset_path"],
-            "dataset_sha256": row["dataset_sha256"],
-            "stage": entry.get("stage"),
-            # The completeness report lives here once. The catalog reads it back
-            # into the match metadata, so the committed file never carries two
-            # copies that could drift apart.
-            "completeness": row["receipt"]["completeness"],
-            "source": {
-                "provider": "statsbomb_open_data",
-                "competition_id": entry["competition_id"],
-                "season_id": entry["season_id"],
-                "match_id": entry["provider_match_id"],
-                "events_url": f"{corpus['provider']['base_url']}/events/{entry['provider_match_id']}.json",
-                "lineups_url": f"{corpus['provider']['base_url']}/lineups/{entry['provider_match_id']}.json",
-                "source_sha256": row["receipt"]["source_sha256"],
-            },
-            "metadata": row["metadata"],
-        })
-    MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
-    MANIFEST_PATH.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    new_body = {k: v for k, v in manifest.items() if k != "generated_at"}
+    if previous_body == new_body and existing_generated_at:
+        # A repeated import of unchanged content must not churn the manifest.
+        manifest["generated_at"] = existing_generated_at
+    _atomic_write(MANIFEST_PATH, json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
 
     print(f"manifest: {MANIFEST_PATH} ({len(manifest['matches'])} matches)")
     for row in results:
@@ -362,7 +494,10 @@ def main() -> int:
             f"recorded={recon['recorded_goals']} {mark}"
         )
     if failures:
-        print(f"\n{len(failures)} match(es) failed", file=sys.stderr)
+        print(
+            f"\n{len(failures)} match(es) failed; existing manifest entries were preserved",
+            file=sys.stderr,
+        )
         return 1
     return 0
 

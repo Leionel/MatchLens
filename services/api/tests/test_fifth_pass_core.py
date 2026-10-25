@@ -137,11 +137,36 @@ def test_import_does_not_mark_end_time_as_complete(tmp_path):
 
 
 def test_catalog_listing_agrees_with_context_completeness():
-    """Hub cards and the match context must report the same verified completeness."""
+    """Hub cards and the match context must agree about data availability.
+
+    A clean checkout has the committed provider metadata but no payloads. Those
+    matches must stay visible as CATALOGUED while analysis stays closed; only
+    an ANALYSIS_READY match may be resolved into a context.
+    """
     listed = {m.match_id: m for m in MatchCatalog.list_matches()}
     assert listed, "catalog must list at least one match"
 
     for match_id, meta in listed.items():
+        assert meta.availability_status in ("CATALOGUED", "MATERIALIZED", "ANALYSIS_READY")
+        assert meta.analysis_ready is (meta.availability_status == "ANALYSIS_READY")
+        if not meta.analysis_ready:
+            # Not one synthetic or empty event list may stand in for a missing
+            # provider payload.
+            with pytest.raises((FileNotFoundError, ValueError)):
+                MatchCatalog.get_match_context(match_id)
+
+    # Resolving every provider payload would turn a contract test into a full
+    # corpus parse. A deterministic sample proves card/context agreement while
+    # the availability loop above covers every catalog row.
+    ready_provider = sorted(
+        m.match_id for m in listed.values()
+        if m.analysis_ready and m.provenance_kind == "provider_payload"
+    )[:3]
+    sampled = list(ready_provider) + sorted(
+        m.match_id for m in listed.values() if m.match_id.startswith("syn_")
+    )
+    for match_id in sampled:
+        meta = listed[match_id]
         ctx = MatchCatalog.get_match_context(match_id)
         assert meta.completeness_status == ctx.completeness_status, match_id
         assert bool(meta.continuous_coverage) is bool(ctx.continuous_coverage), match_id
@@ -149,9 +174,16 @@ def test_catalog_listing_agrees_with_context_completeness():
     synthetic = [m for m in listed.values() if m.match_id.startswith("syn_")]
     assert synthetic
     for meta in synthetic:
+        assert meta.availability_status == "ANALYSIS_READY"
         assert meta.completeness_status == "COMPLETE_VERIFIED"
         assert meta.continuous_coverage is True
         assert meta.completeness and meta.completeness["synthetic"] is True
+
+    for meta in listed.values():
+        if meta.provenance_kind == "provider_payload" and not meta.dataset_installed:
+            assert meta.availability_status == "CATALOGUED"
+            assert meta.availability_reason
+            assert meta.install_hint
 
 
 def test_investigation_intent_changes_plan_and_invalid_focus_is_rejected(client):
@@ -334,3 +366,22 @@ def test_oaai_ledger_api_and_idempotency_owner_scope(client):
     registry.remember_challenge(request_payload={"owner": "b"}, owner_id="b", **common)
     assert registry.find_idempotency_key("same-key", owner_id="a", match_id="syn_default") is not None
     assert registry.find_idempotency_key("same-key", owner_id="c", match_id="syn_default") is None
+
+
+def test_cross_match_difference_investigation_uses_the_compare_tool(client):
+    """The Match Detail compare action opens a real investigation scope."""
+    response = client.post("/api/investigate", json={
+        "match_id": "syn_default",
+        "at": 720,
+        "team": "H",
+        "focus_type": "cross_match_diff",
+        "focus_id": "shots",
+        "compare_match_ids": ["syn_balanced"],
+        "question": "What evidence supports the difference in shot activity?",
+    })
+    assert response.status_code == 200, response.text
+    plan = response.json()
+    assert plan["intent"] == "COMPARE_MATCHES"
+    assert plan["scope"]["compare_match_ids"] == ["syn_balanced"]
+    assert plan["state"] not in ("FAILED", "CANCELLED")
+    assert any(receipt["tool"] == "compare_matches" for receipt in plan["tool_receipts"])

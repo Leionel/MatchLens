@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      full_corpus:
+        description: "Fetch, ingest and verify the complete 80-match corpus"
+        type: boolean
+        default: false
 
 jobs:
   backend-test:
@@ -32,6 +38,91 @@ jobs:
 
       - name: Run Pytest test suite
         run: uv run pytest tests -v --tb=short
+
+  real-match-integration:
+    name: Real Match Integration (minimum provider corpus)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/api
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "services/api/uv.lock"
+
+      - name: Set up Python 3.13
+        run: uv python install 3.13
+
+      - name: Install dependencies from lockfile
+        run: uv sync --frozen
+
+      # One real provider payload proves the fetch → ingest → catalog → replay
+      # path from a clean checkout. It is deliberately not the developer's
+      # private 80-match corpus.
+      - name: Fetch and import the minimum real corpus
+        working-directory: .
+        run: |
+          services/api/.venv/bin/python scripts/fetch_statsbomb_open_data.py \
+            --competition 55 --season 43 --match-ids 3795221
+          services/api/.venv/bin/python scripts/ingest_statsbomb_corpus.py --match sb_3795221
+          services/api/.venv/bin/python scripts/ingest_statsbomb_corpus.py --verify
+
+      - name: Real-match performance gate
+        working-directory: .
+        run: services/api/.venv/bin/python scripts/benchmark_real_match.py
+
+      - name: Run provider integration tests
+        run: |
+          uv run pytest \
+            tests/test_real_match_integration.py \
+            tests/test_provider_publication.py \
+            tests/test_provider_match_semantics.py \
+            -v --tb=short
+
+  full-corpus:
+    name: Full 80-Match Corpus (manual)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.full_corpus }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: services/api
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "services/api/uv.lock"
+
+      - name: Set up Python 3.13
+        run: uv python install 3.13
+
+      - name: Install dependencies from lockfile
+        run: uv sync --frozen
+
+      - name: Fetch and ingest the complete corpus
+        working-directory: .
+        run: |
+          services/api/.venv/bin/python scripts/fetch_statsbomb_open_data.py --corpus
+          services/api/.venv/bin/python scripts/ingest_statsbomb_corpus.py
+          services/api/.venv/bin/python scripts/ingest_statsbomb_corpus.py --verify-all
+
+      - name: Verify every catalogued match is analysis-ready
+        working-directory: .
+        run: services/api/.venv/bin/python scripts/verify_corpus.py
+
+      - name: Run full corpus tests
+        run: uv run pytest tests/test_statsbomb_corpus.py tests/test_real_match_integration.py -v --tb=short
 
   frontend-build:
     name: Frontend Build & Typecheck (Next.js)
@@ -115,11 +206,13 @@ jobs:
         working-directory: apps/web
         run: npx playwright test
 
-      - name: Upload failure screenshots and traces
-        if: failure()
+      - name: Upload Playwright traces, screenshots and HTML report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-artifacts
-          path: apps/web/e2e/.artifacts
+          name: playwright-artifacts-${{ github.run_attempt }}
+          path: |
+            apps/web/e2e/.artifacts
+            apps/web/e2e/.playwright-report
           retention-days: 7
-          if-no-files-found: ignore
+          if-no-files-found: warn

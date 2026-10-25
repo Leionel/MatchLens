@@ -25,5 +25,6 @@ data/datasets/
 # artifacts; the bootstrapped session cookie is a live credential for the local
 # server. Neither belongs in history.
 apps/web/e2e/.artifacts/
+apps/web/e2e/.playwright-report/
 apps/web/e2e/.auth.json
 

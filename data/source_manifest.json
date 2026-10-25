@@ -19,7 +19,7 @@
   "matches": [
     {
       "match_id": "sb_18235",
-      "dataset_path": "data\\datasets\\sb_18235.json",
+      "dataset_path": "data/datasets/sb_18235.json",
       "dataset_sha256": "d17a453853d2a20980d5fca766cd7d9472752d8ae9f5259465d1d8d91d0e4d87",
       "stage": "final",
       "completeness": {
@@ -189,7 +189,7 @@
     },
     {
       "match_id": "sb_18236",
-      "dataset_path": "data\\datasets\\sb_18236.json",
+      "dataset_path": "data/datasets/sb_18236.json",
       "dataset_sha256": "2cf1433dfabd0c48ef2d20d7e55a7869c6cc8e9cc9a80a79470e47e30e29b92e",
       "stage": "final",
       "completeness": {
@@ -359,7 +359,7 @@
     },
     {
       "match_id": "sb_18237",
-      "dataset_path": "data\\datasets\\sb_18237.json",
+      "dataset_path": "data/datasets/sb_18237.json",
       "dataset_sha256": "eb59865c6c49f5502d03d26f1f2c4829c324e7698225893ed3f6a674b9eafd36",
       "stage": "final",
       "completeness": {
@@ -577,7 +577,7 @@
     },
     {
       "match_id": "sb_18240",
-      "dataset_path": "data\\datasets\\sb_18240.json",
+      "dataset_path": "data/datasets/sb_18240.json",
       "dataset_sha256": "c3d69c185cae24f37dafecf33296b9d24d551c7c47586f05554d2ec78d5cfe73",
       "stage": "final",
       "completeness": {
@@ -747,7 +747,7 @@
     },
     {
       "match_id": "sb_18241",
-      "dataset_path": "data\\datasets\\sb_18241.json",
+      "dataset_path": "data/datasets/sb_18241.json",
       "dataset_sha256": "7224d09a9e315dd64719d6d185171684c4fd6b805cd5aacd1aa390f34a18ccbf",
       "stage": "final",
       "completeness": {
@@ -947,7 +947,7 @@
     },
     {
       "match_id": "sb_18242",
-      "dataset_path": "data\\datasets\\sb_18242.json",
+      "dataset_path": "data/datasets/sb_18242.json",
       "dataset_sha256": "7f75a8787eb2116d19744a3da63b25856e2db620c4cb3f5d7b261cab9240318b",
       "stage": "final",
       "completeness": {
@@ -1117,7 +1117,7 @@
     },
     {
       "match_id": "sb_18243",
-      "dataset_path": "data\\datasets\\sb_18243.json",
+      "dataset_path": "data/datasets/sb_18243.json",
       "dataset_sha256": "5e90f7b776638e39f1662b4312c3846788c375ca616b4f9a992acac5c8f8dca5",
       "stage": "final",
       "completeness": {
@@ -1335,7 +1335,7 @@
     },
     {
       "match_id": "sb_18244",
-      "dataset_path": "data\\datasets\\sb_18244.json",
+      "dataset_path": "data/datasets/sb_18244.json",
       "dataset_sha256": "cca0ff2854069af45ccd257edc234faf793050e63258d07f929fdcfd292f5091",
       "stage": "final",
       "completeness": {
@@ -1505,7 +1505,7 @@
     },
     {
       "match_id": "sb_18245",
-      "dataset_path": "data\\datasets\\sb_18245.json",
+      "dataset_path": "data/datasets/sb_18245.json",
       "dataset_sha256": "90df6277a51eabd146695a44e6a91994ea98684eb1dce3d35817f35c4c6acda5",
       "stage": "final",
       "completeness": {
@@ -1675,7 +1675,7 @@
     },
     {
       "match_id": "sb_22912",
-      "dataset_path": "data\\datasets\\sb_22912.json",
+      "dataset_path": "data/datasets/sb_22912.json",
       "dataset_sha256": "deb1d96a6c8717542df3d2836ea4dc78979ad8ad298667b7d41c79d18bb35d61",
       "stage": "final",
       "completeness": {
@@ -1845,7 +1845,7 @@
     },
     {
       "match_id": "sb_3942228",
-      "dataset_path": "data\\datasets\\sb_3942228.json",
+      "dataset_path": "data/datasets/sb_3942228.json",
       "dataset_sha256": "cf78820be86a4eaab0828b4385e910df134034cfffedadcfd2999d0f53fa9a47",
       "stage": "quarter_final",
       "completeness": {
@@ -2033,7 +2033,7 @@
     },
     {
       "match_id": "sb_3942229",
-      "dataset_path": "data\\datasets\\sb_3942229.json",
+      "dataset_path": "data/datasets/sb_3942229.json",
       "dataset_sha256": "0ae98fefb4d581a50a14887f17f8ef0f67cb8b088663ca1528fa3b3f7760abc3",
       "stage": "quarter_final",
       "completeness": {
@@ -2221,7 +2221,7 @@
     },
     {
       "match_id": "sb_3942416",
-      "dataset_path": "data\\datasets\\sb_3942416.json",
+      "dataset_path": "data/datasets/sb_3942416.json",
       "dataset_sha256": "30bc409a03c2dcc13add55efb7f247b842dd78debd556d96da66fe7b78d2793e",
       "stage": "quarter_final",
       "completeness": {
@@ -2391,7 +2391,7 @@
     },
     {
       "match_id": "sb_3942415",
-      "dataset_path": "data\\datasets\\sb_3942415.json",
+      "dataset_path": "data/datasets/sb_3942415.json",
       "dataset_sha256": "642ffc777e2bb31c756a955bca15210e96d0a2d43851037e39bd9cfcd6010497",
       "stage": "quarter_final",
       "completeness": {
@@ -2579,7 +2579,7 @@
     },
     {
       "match_id": "sb_3942785",
-      "dataset_path": "data\\datasets\\sb_3942785.json",
+      "dataset_path": "data/datasets/sb_3942785.json",
       "dataset_sha256": "a33460bd1469560ef6cf07090ee752a187e06cc0a0f6e815945e192bd264a981",
       "stage": "semi_final",
       "completeness": {
@@ -2749,7 +2749,7 @@
     },
     {
       "match_id": "sb_3942852",
-      "dataset_path": "data\\datasets\\sb_3942852.json",
+      "dataset_path": "data/datasets/sb_3942852.json",
       "dataset_sha256": "923bbbc3be32c79b48d03267095aec38abeee0d191d9f309e15ba0c568fad07f",
       "stage": "semi_final",
       "completeness": {
@@ -2919,7 +2919,7 @@
     },
     {
       "match_id": "sb_3943076",
-      "dataset_path": "data\\datasets\\sb_3943076.json",
+      "dataset_path": "data/datasets/sb_3943076.json",
       "dataset_sha256": "fa83fd15663a1abd30c234c81132e5fe26a9c19ac838cef70104beba7395244b",
       "stage": "third_place",
       "completeness": {
@@ -3107,7 +3107,7 @@
     },
     {
       "match_id": "sb_3943077",
-      "dataset_path": "data\\datasets\\sb_3943077.json",
+      "dataset_path": "data/datasets/sb_3943077.json",
       "dataset_sha256": "bc6a7f3a8d1b017d146f7c41d1daa1e3fcce28e48359fbbab5621a4133b895e7",
       "stage": "final",
       "completeness": {
@@ -3307,7 +3307,7 @@
     },
     {
       "match_id": "sb_7525",
-      "dataset_path": "data\\datasets\\sb_7525.json",
+      "dataset_path": "data/datasets/sb_7525.json",
       "dataset_sha256": "179146e8c35f9dc6729add9b2b92adc779ac6bd36ea15e84b5a4808b3030d551",
       "stage": "group_stage",
       "completeness": {
@@ -3477,7 +3477,7 @@
     },
     {
       "match_id": "sb_7576",
-      "dataset_path": "data\\datasets\\sb_7576.json",
+      "dataset_path": "data/datasets/sb_7576.json",
       "dataset_sha256": "c9fcab133fb84c8d02c045e685c347804801892a46fc3e74779f560bd503e92d",
       "stage": "group_stage",
       "completeness": {
@@ -3647,7 +3647,7 @@
     },
     {
       "match_id": "sb_7552",
-      "dataset_path": "data\\datasets\\sb_7552.json",
+      "dataset_path": "data/datasets/sb_7552.json",
       "dataset_sha256": "b5cec52b9fac055d6c61f25f828ee32189954bbe916417b896740fa2790277a1",
       "stage": "group_stage",
       "completeness": {
@@ -3817,7 +3817,7 @@
     },
     {
       "match_id": "sb_7554",
-      "dataset_path": "data\\datasets\\sb_7554.json",
+      "dataset_path": "data/datasets/sb_7554.json",
       "dataset_sha256": "9c483a61f8d7db1a5548177fc74e2cd9b36901a1716e41b1203e1e2f8b860def",
       "stage": "group_stage",
       "completeness": {
@@ -3987,7 +3987,7 @@
     },
     {
       "match_id": "sb_7579",
-      "dataset_path": "data\\datasets\\sb_7579.json",
+      "dataset_path": "data/datasets/sb_7579.json",
       "dataset_sha256": "8a53bf8fecb8f5782f5542659d9bd9e1479ea9e461273e64376622c04d8061a1",
       "stage": "round_of_16",
       "completeness": {
@@ -4157,7 +4157,7 @@
     },
     {
       "match_id": "sb_7580",
-      "dataset_path": "data\\datasets\\sb_7580.json",
+      "dataset_path": "data/datasets/sb_7580.json",
       "dataset_sha256": "553e3fd83e4c80815c4ddd5f76f5c180146fbbe77178da70b2e856c60ef05064",
       "stage": "round_of_16",
       "completeness": {
@@ -4327,7 +4327,7 @@
     },
     {
       "match_id": "sb_7581",
-      "dataset_path": "data\\datasets\\sb_7581.json",
+      "dataset_path": "data/datasets/sb_7581.json",
       "dataset_sha256": "18ca168f99f242a088cf8272b8b669eccf4bb44fe095e5b4f9c7c555ef0bf7ba",
       "stage": "round_of_16",
       "completeness": {
@@ -4545,7 +4545,7 @@
     },
     {
       "match_id": "sb_7584",
-      "dataset_path": "data\\datasets\\sb_7584.json",
+      "dataset_path": "data/datasets/sb_7584.json",
       "dataset_sha256": "a297ecb2a2be727785486f6b9e9e9801eaa1018911a59da7cdc4214422596f0c",
       "stage": "round_of_16",
       "completeness": {
@@ -4715,7 +4715,7 @@
     },
     {
       "match_id": "sb_8649",
-      "dataset_path": "data\\datasets\\sb_8649.json",
+      "dataset_path": "data/datasets/sb_8649.json",
       "dataset_sha256": "3b4ddce682b43df215e2d4f6c56da8fad4ad7afa1c01a19e624429e44c19b7f6",
       "stage": "quarter_final",
       "completeness": {
@@ -4885,7 +4885,7 @@
     },
     {
       "match_id": "sb_8650",
-      "dataset_path": "data\\datasets\\sb_8650.json",
+      "dataset_path": "data/datasets/sb_8650.json",
       "dataset_sha256": "cd52a72a66a0ff6fc692375766175893a7a7592c7c422f4ab331cde01aa79fe8",
       "stage": "quarter_final",
       "completeness": {
@@ -5055,7 +5055,7 @@
     },
     {
       "match_id": "sb_8651",
-      "dataset_path": "data\\datasets\\sb_8651.json",
+      "dataset_path": "data/datasets/sb_8651.json",
       "dataset_sha256": "3197a610348b99fc261d40fce36822a803aeb34b1e025233ab8db2fac8b62948",
       "stage": "quarter_final",
       "completeness": {
@@ -5225,7 +5225,7 @@
     },
     {
       "match_id": "sb_8652",
-      "dataset_path": "data\\datasets\\sb_8652.json",
+      "dataset_path": "data/datasets/sb_8652.json",
       "dataset_sha256": "4c51f959804e1ba6c02afc99a8156009dac6e25996f061c688585e31394dac08",
       "stage": "quarter_final",
       "completeness": {
@@ -5443,7 +5443,7 @@
     },
     {
       "match_id": "sb_8655",
-      "dataset_path": "data\\datasets\\sb_8655.json",
+      "dataset_path": "data/datasets/sb_8655.json",
       "dataset_sha256": "f40932cf1221903b57c5c5ad70b638511f842029660237684145b5b6fffb862d",
       "stage": "semi_final",
       "completeness": {
@@ -5613,7 +5613,7 @@
     },
     {
       "match_id": "sb_8656",
-      "dataset_path": "data\\datasets\\sb_8656.json",
+      "dataset_path": "data/datasets/sb_8656.json",
       "dataset_sha256": "2f722773329366b4195cb824e83f478c34934bfdafad3682ce9490731044ad39",
       "stage": "semi_final",
       "completeness": {
@@ -5813,7 +5813,7 @@
     },
     {
       "match_id": "sb_8657",
-      "dataset_path": "data\\datasets\\sb_8657.json",
+      "dataset_path": "data/datasets/sb_8657.json",
       "dataset_sha256": "1afef8390659ae68ff0551be4fdd375df7f1afabe0c55af088ee2a592ff0b328",
       "stage": "third_place",
       "completeness": {
@@ -5983,7 +5983,7 @@
     },
     {
       "match_id": "sb_8658",
-      "dataset_path": "data\\datasets\\sb_8658.json",
+      "dataset_path": "data/datasets/sb_8658.json",
       "dataset_sha256": "ae9da4989e4b31aee23b61872205eaab8dc806aff6abe1bb8a73da0ad8009adf",
       "stage": "final",
       "completeness": {
@@ -6153,7 +6153,7 @@
     },
     {
       "match_id": "sb_3857271",
-      "dataset_path": "data\\datasets\\sb_3857271.json",
+      "dataset_path": "data/datasets/sb_3857271.json",
       "dataset_sha256": "db6abb091038fc7b8afc866153b4f1d1e249583b1911c5f37bbb54e843e035fe",
       "stage": "group_stage",
       "completeness": {
@@ -6323,7 +6323,7 @@
     },
     {
       "match_id": "sb_3857291",
-      "dataset_path": "data\\datasets\\sb_3857291.json",
+      "dataset_path": "data/datasets/sb_3857291.json",
       "dataset_sha256": "3af27a9f8c7e42cec8e234dc69f48fcdd233ceaf0ebd481226b112f6d34a71e6",
       "stage": "group_stage",
       "completeness": {
@@ -6493,7 +6493,7 @@
     },
     {
       "match_id": "sb_3857259",
-      "dataset_path": "data\\datasets\\sb_3857259.json",
+      "dataset_path": "data/datasets/sb_3857259.json",
       "dataset_sha256": "c2234ffed87c7a675698bcf483b00aa0a89afc03fefda6e2c37d8a4c841c25b7",
       "stage": "group_stage",
       "completeness": {
@@ -6663,7 +6663,7 @@
     },
     {
       "match_id": "sb_3857292",
-      "dataset_path": "data\\datasets\\sb_3857292.json",
+      "dataset_path": "data/datasets/sb_3857292.json",
       "dataset_sha256": "fea039bc9b44d61dbddd0c36e6affb4421ec00548bb4b9242915caf71b23e1c7",
       "stage": "group_stage",
       "completeness": {
@@ -6833,7 +6833,7 @@
     },
     {
       "match_id": "sb_3869117",
-      "dataset_path": "data\\datasets\\sb_3869117.json",
+      "dataset_path": "data/datasets/sb_3869117.json",
       "dataset_sha256": "e7f172586a85d515f65e34c04e3903bdb7a1fdd7bf4e2659d6d8d8e1eb4869f1",
       "stage": "round_of_16",
       "completeness": {
@@ -7003,7 +7003,7 @@
     },
     {
       "match_id": "sb_3869152",
-      "dataset_path": "data\\datasets\\sb_3869152.json",
+      "dataset_path": "data/datasets/sb_3869152.json",
       "dataset_sha256": "3ac302c7a71f4569e87b07eec840347074c63e611e7c9534145efbff1a590afd",
       "stage": "round_of_16",
       "completeness": {
@@ -7173,7 +7173,7 @@
     },
     {
       "match_id": "sb_3869253",
-      "dataset_path": "data\\datasets\\sb_3869253.json",
+      "dataset_path": "data/datasets/sb_3869253.json",
       "dataset_sha256": "420e4dac3ed175eb75271ae715db399f95a71e5a8dd895d2ff27b05315a86fbe",
       "stage": "round_of_16",
       "completeness": {
@@ -7343,7 +7343,7 @@
     },
     {
       "match_id": "sb_3869254",
-      "dataset_path": "data\\datasets\\sb_3869254.json",
+      "dataset_path": "data/datasets/sb_3869254.json",
       "dataset_sha256": "ea5589d672dd166c706de6e7a162dd1175800e0ec9d1e74557b2bfb38d7cb2a1",
       "stage": "round_of_16",
       "completeness": {
@@ -7513,7 +7513,7 @@
     },
     {
       "match_id": "sb_3869321",
-      "dataset_path": "data\\datasets\\sb_3869321.json",
+      "dataset_path": "data/datasets/sb_3869321.json",
       "dataset_sha256": "34ce2c5f0bd3f40a5546c3b76a6eeff062cfaa0ae426549b28e07f8183677bcc",
       "stage": "quarter_final",
       "completeness": {
@@ -7731,7 +7731,7 @@
     },
     {
       "match_id": "sb_3869420",
-      "dataset_path": "data\\datasets\\sb_3869420.json",
+      "dataset_path": "data/datasets/sb_3869420.json",
       "dataset_sha256": "521ce08d3d9332b20aa24f87b1a50628e17f578c55fc84e5b307d4de4b7443b6",
       "stage": "quarter_final",
       "completeness": {
@@ -7949,7 +7949,7 @@
     },
     {
       "match_id": "sb_3869354",
-      "dataset_path": "data\\datasets\\sb_3869354.json",
+      "dataset_path": "data/datasets/sb_3869354.json",
       "dataset_sha256": "80db00a5c78714a42e6d2991c182d46781eb21438d0ab89125b54556de90d8d7",
       "stage": "quarter_final",
       "completeness": {
@@ -8119,7 +8119,7 @@
     },
     {
       "match_id": "sb_3869486",
-      "dataset_path": "data\\datasets\\sb_3869486.json",
+      "dataset_path": "data/datasets/sb_3869486.json",
       "dataset_sha256": "392389e7c3723420dfd9601a6a24fb04e231b6dd4fa62fb9e3ccf4ef06859e49",
       "stage": "quarter_final",
       "completeness": {
@@ -8289,7 +8289,7 @@
     },
     {
       "match_id": "sb_3869519",
-      "dataset_path": "data\\datasets\\sb_3869519.json",
+      "dataset_path": "data/datasets/sb_3869519.json",
       "dataset_sha256": "fc00365a4d3c0adc7d7853f191a33cbd60819cbe7624699e36556b6204ac516e",
       "stage": "semi_final",
       "completeness": {
@@ -8459,7 +8459,7 @@
     },
     {
       "match_id": "sb_3869552",
-      "dataset_path": "data\\datasets\\sb_3869552.json",
+      "dataset_path": "data/datasets/sb_3869552.json",
       "dataset_sha256": "d39865e622123053785af28f72a088263b306012a31bf7a1393760df6496a694",
       "stage": "semi_final",
       "completeness": {
@@ -8629,7 +8629,7 @@
     },
     {
       "match_id": "sb_3869684",
-      "dataset_path": "data\\datasets\\sb_3869684.json",
+      "dataset_path": "data/datasets/sb_3869684.json",
       "dataset_sha256": "a219a7c6d6a873510178f035f86f8289b5f2177177f5cd61dcf7b91885a52082",
       "stage": "third_place",
       "completeness": {
@@ -8799,7 +8799,7 @@
     },
     {
       "match_id": "sb_3869685",
-      "dataset_path": "data\\datasets\\sb_3869685.json",
+      "dataset_path": "data/datasets/sb_3869685.json",
       "dataset_sha256": "425294331a33af5f67c3ad6d1230898bf765840e8de8a865e86bedb5b24aadb8",
       "stage": "final",
       "completeness": {
@@ -9017,7 +9017,7 @@
     },
     {
       "match_id": "sb_3788746",
-      "dataset_path": "data\\datasets\\sb_3788746.json",
+      "dataset_path": "data/datasets/sb_3788746.json",
       "dataset_sha256": "6aa4785cfc144b8fa84b6053d615a2f506934ccf100fbe146af9a7125eaba5bf",
       "stage": "group_stage",
       "completeness": {
@@ -9187,7 +9187,7 @@
     },
     {
       "match_id": "sb_3788764",
-      "dataset_path": "data\\datasets\\sb_3788764.json",
+      "dataset_path": "data/datasets/sb_3788764.json",
       "dataset_sha256": "61486ac7286b08333afbaad67f842fe8acde3553a720e821d6bc9357b757a364",
       "stage": "group_stage",
       "completeness": {
@@ -9357,7 +9357,7 @@
     },
     {
       "match_id": "sb_3788769",
-      "dataset_path": "data\\datasets\\sb_3788769.json",
+      "dataset_path": "data/datasets/sb_3788769.json",
       "dataset_sha256": "a99fdffdff1cb823b6c47cca3ab140d0bb67ac24a61b272e79235c9955b95a67",
       "stage": "group_stage",
       "completeness": {
@@ -9527,7 +9527,7 @@
     },
     {
       "match_id": "sb_3788775",
-      "dataset_path": "data\\datasets\\sb_3788775.json",
+      "dataset_path": "data/datasets/sb_3788775.json",
       "dataset_sha256": "2c5be420cba3645502f6ee37d4e46a14e0b26e87680f1001a5d3cfa697ae39ef",
       "stage": "group_stage",
       "completeness": {
@@ -9697,7 +9697,7 @@
     },
     {
       "match_id": "sb_3794685",
-      "dataset_path": "data\\datasets\\sb_3794685.json",
+      "dataset_path": "data/datasets/sb_3794685.json",
       "dataset_sha256": "3cb567cd4bec152fb4329cad9356b5c44ab75e444b735b37a296cab3ca89272b",
       "stage": "round_of_16",
       "completeness": {
@@ -9897,7 +9897,7 @@
     },
     {
       "match_id": "sb_3794689",
-      "dataset_path": "data\\datasets\\sb_3794689.json",
+      "dataset_path": "data/datasets/sb_3794689.json",
       "dataset_sha256": "ae0dd065af362bc45f2e2f89247ca06a8652d23b9df7edbff9e508e31fc3df7f",
       "stage": "round_of_16",
       "completeness": {
@@ -10067,7 +10067,7 @@
     },
     {
       "match_id": "sb_3794686",
-      "dataset_path": "data\\datasets\\sb_3794686.json",
+      "dataset_path": "data/datasets/sb_3794686.json",
       "dataset_sha256": "81980e2882d0e8f74e5885abed58bd28238e2806ecd5b177df500470a357d3b6",
       "stage": "round_of_16",
       "completeness": {
@@ -10267,7 +10267,7 @@
     },
     {
       "match_id": "sb_3794691",
-      "dataset_path": "data\\datasets\\sb_3794691.json",
+      "dataset_path": "data/datasets/sb_3794691.json",
       "dataset_sha256": "138e93391fafe433ad4675b849d998ef190ba3749a371db12db90efed3e24624",
       "stage": "round_of_16",
       "completeness": {
@@ -10485,7 +10485,7 @@
     },
     {
       "match_id": "sb_3795107",
-      "dataset_path": "data\\datasets\\sb_3795107.json",
+      "dataset_path": "data/datasets/sb_3795107.json",
       "dataset_sha256": "494effb4011be445bc1627ef3158ac0b2b93ba376d7b00c3d377fbcac98d6007",
       "stage": "quarter_final",
       "completeness": {
@@ -10655,7 +10655,7 @@
     },
     {
       "match_id": "sb_3795108",
-      "dataset_path": "data\\datasets\\sb_3795108.json",
+      "dataset_path": "data/datasets/sb_3795108.json",
       "dataset_sha256": "0ae6fbe9063392ae7faced12e8c8d6dc65515d64a1f34419e7d4942ef991a04e",
       "stage": "quarter_final",
       "completeness": {
@@ -10873,7 +10873,7 @@
     },
     {
       "match_id": "sb_3795109",
-      "dataset_path": "data\\datasets\\sb_3795109.json",
+      "dataset_path": "data/datasets/sb_3795109.json",
       "dataset_sha256": "d7e97ebf2a741e88d0c1e897c45ac8dca2ece6faa1713f0df0e125b3f0cac7c1",
       "stage": "quarter_final",
       "completeness": {
@@ -11043,7 +11043,7 @@
     },
     {
       "match_id": "sb_3795187",
-      "dataset_path": "data\\datasets\\sb_3795187.json",
+      "dataset_path": "data/datasets/sb_3795187.json",
       "dataset_sha256": "9a6ea1eacf1b92068a47abbf13856f43053108280f1b16b7671d4b07c7d2eaa6",
       "stage": "quarter_final",
       "completeness": {
@@ -11213,7 +11213,7 @@
     },
     {
       "match_id": "sb_3795220",
-      "dataset_path": "data\\datasets\\sb_3795220.json",
+      "dataset_path": "data/datasets/sb_3795220.json",
       "dataset_sha256": "2543b976cf8af66dd71ce8968c6675efbf980307a05ecb207da9774e1e7b779d",
       "stage": "semi_final",
       "completeness": {
@@ -11431,7 +11431,7 @@
     },
     {
       "match_id": "sb_3795221",
-      "dataset_path": "data\\datasets\\sb_3795221.json",
+      "dataset_path": "data/datasets/sb_3795221.json",
       "dataset_sha256": "c0103c79843a218840c79eca44bc623583a60ec563b3b28d5711d0e2e6bd5c4e",
       "stage": "semi_final",
       "completeness": {
@@ -11631,7 +11631,7 @@
     },
     {
       "match_id": "sb_3795506",
-      "dataset_path": "data\\datasets\\sb_3795506.json",
+      "dataset_path": "data/datasets/sb_3795506.json",
       "dataset_sha256": "b0c7aeecf0a26e9c4b0323e94494f757a2884643d65acb1913548b721798685a",
       "stage": "final",
       "completeness": {
@@ -11849,7 +11849,7 @@
     },
     {
       "match_id": "sb_3930158",
-      "dataset_path": "data\\datasets\\sb_3930158.json",
+      "dataset_path": "data/datasets/sb_3930158.json",
       "dataset_sha256": "2eb33e60f1d7fd2cd35283b15057fb57e0f486cad67b287b3c855581f633f539",
       "stage": "group_stage",
       "completeness": {
@@ -12019,7 +12019,7 @@
     },
     {
       "match_id": "sb_3930159",
-      "dataset_path": "data\\datasets\\sb_3930159.json",
+      "dataset_path": "data/datasets/sb_3930159.json",
       "dataset_sha256": "b77a41756b0bafcbf720585bc980930d9a0238f8406209688fd1c457f8bd18f3",
       "stage": "group_stage",
       "completeness": {
@@ -12189,7 +12189,7 @@
     },
     {
       "match_id": "sb_3938639",
-      "dataset_path": "data\\datasets\\sb_3938639.json",
+      "dataset_path": "data/datasets/sb_3938639.json",
       "dataset_sha256": "9093e9cf6065b0bad9390a77218cd298ea7f4d805b96cd64471774a75b28b40d",
       "stage": "group_stage",
       "completeness": {
@@ -12359,7 +12359,7 @@
     },
     {
       "match_id": "sb_3930180",
-      "dataset_path": "data\\datasets\\sb_3930180.json",
+      "dataset_path": "data/datasets/sb_3930180.json",
       "dataset_sha256": "815937198cd9bf17e36dd51c88fe612730a5ea5c7531413e4525f5eb249e98dd",
       "stage": "group_stage",
       "completeness": {
@@ -12529,7 +12529,7 @@
     },
     {
       "match_id": "sb_3941017",
-      "dataset_path": "data\\datasets\\sb_3941017.json",
+      "dataset_path": "data/datasets/sb_3941017.json",
       "dataset_sha256": "48508d5b1eb5d64385c92773d0d91d5ad1733d494af987556d3f9b788660adc4",
       "stage": "round_of_16",
       "completeness": {
@@ -12729,7 +12729,7 @@
     },
     {
       "match_id": "sb_3941018",
-      "dataset_path": "data\\datasets\\sb_3941018.json",
+      "dataset_path": "data/datasets/sb_3941018.json",
       "dataset_sha256": "0c1475f6dd781d590cb089e1892e2eb85fc60cbe76b26ce3dad957c69990680f",
       "stage": "round_of_16",
       "completeness": {
@@ -12899,7 +12899,7 @@
     },
     {
       "match_id": "sb_3941021",
-      "dataset_path": "data\\datasets\\sb_3941021.json",
+      "dataset_path": "data/datasets/sb_3941021.json",
       "dataset_sha256": "48b1576f00c1b7e63fdb14ecef5739715e97f1b081f1e44b8382b03f03f3e69c",
       "stage": "round_of_16",
       "completeness": {
@@ -13069,7 +13069,7 @@
     },
     {
       "match_id": "sb_3941022",
-      "dataset_path": "data\\datasets\\sb_3941022.json",
+      "dataset_path": "data/datasets/sb_3941022.json",
       "dataset_sha256": "a2ffc4d56acdd7cb0525680fbe0ed6a07a511a69d9eafb544c63a8363782ec46",
       "stage": "round_of_16",
       "completeness": {
@@ -13239,7 +13239,7 @@
     },
     {
       "match_id": "sb_3942226",
-      "dataset_path": "data\\datasets\\sb_3942226.json",
+      "dataset_path": "data/datasets/sb_3942226.json",
       "dataset_sha256": "000e7f49e88bf30922fd427b04db58e59a7929671b8bfb402c38edf39a3d5106",
       "stage": "quarter_final",
       "completeness": {
@@ -13439,7 +13439,7 @@
     },
     {
       "match_id": "sb_3942349",
-      "dataset_path": "data\\datasets\\sb_3942349.json",
+      "dataset_path": "data/datasets/sb_3942349.json",
       "dataset_sha256": "5bd09ae50419d2dd9666ec48505f14ae2f26cb96cb535a3f10d8c91d6bb13366",
       "stage": "quarter_final",
       "completeness": {
@@ -13657,7 +13657,7 @@
     },
     {
       "match_id": "sb_3942227",
-      "dataset_path": "data\\datasets\\sb_3942227.json",
+      "dataset_path": "data/datasets/sb_3942227.json",
       "dataset_sha256": "e1dd6981afabc433ec11661cccc94af1026010879e610c99000236d088864cb2",
       "stage": "quarter_final",
       "completeness": {
@@ -13875,7 +13875,7 @@
     },
     {
       "match_id": "sb_3942382",
-      "dataset_path": "data\\datasets\\sb_3942382.json",
+      "dataset_path": "data/datasets/sb_3942382.json",
       "dataset_sha256": "838a6444291c4fa624af9024ce826e1bc026899769431aa511042ec5298a151f",
       "stage": "quarter_final",
       "completeness": {
@@ -14045,7 +14045,7 @@
     },
     {
       "match_id": "sb_3942752",
-      "dataset_path": "data\\datasets\\sb_3942752.json",
+      "dataset_path": "data/datasets/sb_3942752.json",
       "dataset_sha256": "c0391e1c81a435e9e38e5492ed4c50dd386bbe82c7db0ed3fff0401a9603711f",
       "stage": "semi_final",
       "completeness": {
@@ -14215,7 +14215,7 @@
     },
     {
       "match_id": "sb_3942819",
-      "dataset_path": "data\\datasets\\sb_3942819.json",
+      "dataset_path": "data/datasets/sb_3942819.json",
       "dataset_sha256": "448ed6903e0ecd6febf8fe8be6a1aa48907268cf471800149fb3c5e0702fafbf",
       "stage": "semi_final",
       "completeness": {
@@ -14385,7 +14385,7 @@
     },
     {
       "match_id": "sb_3943043",
-      "dataset_path": "data\\datasets\\sb_3943043.json",
+      "dataset_path": "data/datasets/sb_3943043.json",
       "dataset_sha256": "81ffd942d1c603466bd9950c5fc54bc42bc1b4024a712f48f1f9a5ef3d2d68eb",
       "stage": "final",
       "completeness": {
