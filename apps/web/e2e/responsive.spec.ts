@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, Page, test } from "@playwright/test";
 import {
   hasHorizontalOverflow,
+  overflowingElements,
   openCockpit,
   selectWorkspace,
   useEnglish,
@@ -31,22 +32,22 @@ async function focusFirstWorkspaceTab(page: Page): Promise<void> {
 test.describe("responsive acceptance", () => {
   test("the cockpit fits the viewport without sideways scrolling", async ({ page }) => {
     await openCockpit(page);
-    expect(await hasHorizontalOverflow(page)).toBe(false);
+    expect(await hasHorizontalOverflow(page), await overflowingElements(page)).toBe(false);
 
     await selectWorkspace(page, WORKSPACE_TABS.matchCenter);
     await expect(workspaceTablist(page)).toBeVisible();
-    expect(await hasHorizontalOverflow(page)).toBe(false);
+    expect(await hasHorizontalOverflow(page), await overflowingElements(page)).toBe(false);
 
     await selectWorkspace(page, WORKSPACE_TABS.storyAgent);
-    expect(await hasHorizontalOverflow(page)).toBe(false);
+    expect(await hasHorizontalOverflow(page), await overflowingElements(page)).toBe(false);
 
     await selectWorkspace(page, WORKSPACE_TABS.matchCenter);
     await expect(page.getByTestId("replay-dock")).toBeVisible();
-    expect(await hasHorizontalOverflow(page)).toBe(false);
+    expect(await hasHorizontalOverflow(page), await overflowingElements(page)).toBe(false);
 
     await selectWorkspace(page, WORKSPACE_TABS.tacticalLab);
     await expect(page.getByTestId("tactical-explorer-page")).toBeVisible();
-    expect(await hasHorizontalOverflow(page)).toBe(false);
+    expect(await hasHorizontalOverflow(page), await overflowingElements(page)).toBe(false);
   });
 
   test("the workspace tabs are reachable and operable with the keyboard", async ({ page }) => {

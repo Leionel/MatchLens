@@ -77,3 +77,26 @@ export async function hasHorizontalOverflow(page: Page): Promise<boolean> {
     return doc.scrollWidth > doc.clientWidth + 1;
   });
 }
+
+/** The elements that actually push the document wider than the viewport. */
+export async function overflowingElements(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const viewport = document.documentElement.clientWidth;
+    const rows = Array.from(document.querySelectorAll<HTMLElement>("body *"))
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          tag: element.tagName,
+          cls: typeof element.className === "string" ? element.className.slice(0, 70) : "",
+          left: Math.round(rect.left),
+          right: Math.round(rect.right),
+          width: Math.round(rect.width),
+          text: (element.textContent || "").replace(/\s+/g, " ").trim().slice(0, 40),
+        };
+      })
+      .filter((row) => row.right > viewport + 1 || row.left < -1)
+      .sort((a, b) => b.right - a.right)
+      .slice(0, 8);
+    return JSON.stringify({ viewport, scrollWidth: document.documentElement.scrollWidth, rows });
+  });
+}

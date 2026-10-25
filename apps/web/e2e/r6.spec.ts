@@ -3,6 +3,7 @@ import path from "node:path";
 import { expect, Page, test } from "@playwright/test";
 import {
   hasHorizontalOverflow,
+  overflowingElements,
   openCockpit,
   readState,
   seekClock,
@@ -159,7 +160,7 @@ test.describe("R6 interaction correctness", () => {
     await page.setViewportSize({ width: 412, height: 915 });
     await page.goto("/?workspace=tactical_lab&match=syn_default&at=720");
     await expect(page.getByTestId("tactical-explorer-page")).toBeVisible();
-    expect(await hasHorizontalOverflow(page), "overflow at 412px tactical").toBe(false);
+    expect(await hasHorizontalOverflow(page), `overflow at 412px tactical ${await overflowingElements(page)}`).toBe(false);
     await capture(page, "tactical-explorer-412");
 
     await page.setViewportSize({ width: 390, height: 844 });
