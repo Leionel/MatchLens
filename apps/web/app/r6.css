@@ -430,3 +430,8 @@
   .r6-tactical-page .sequence-row-btn { flex-wrap: wrap; align-items: flex-start; }
   .r6-tactical-page .seq-meta { min-width: 0; }
 }
+
+/* A closed fixed drawer translated off-canvas still widens the document in
+   Chromium; remove it from layout until opened. */
+.inspector-drawer { display: none; transform: none; }
+.inspector-drawer.open { display: flex; transform: none; }
