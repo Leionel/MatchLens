@@ -10,6 +10,7 @@ interface TacticalHeaderProps {
   theme: "dark" | "light";
   isDrawerOpen: boolean;
   locale?: Locale;
+  query?: string;
   onSearch: (query: string) => void;
   onOpenHub: () => void;
   onOpenMatch: () => void;
@@ -35,6 +36,7 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
   theme,
   isDrawerOpen,
   locale = "zh",
+  query: controlledQuery,
   onSearch,
   onOpenHub,
   onOpenMatch,
@@ -47,6 +49,31 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
   const isZh = locale === "zh";
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const toolsRef = useRef<HTMLDetailsElement | null>(null);
+
+  const closeTools = () => {
+    if (toolsRef.current) toolsRef.current.open = false;
+  };
+
+  React.useEffect(() => {
+    const closeOnOutside = (event: PointerEvent) => {
+      const details = toolsRef.current;
+      if (!details?.open || details.contains(event.target as Node)) return;
+      details.open = false;
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      const details = toolsRef.current;
+      if (event.key !== "Escape" || !details?.open) return;
+      details.open = false;
+      details.querySelector("summary")?.focus();
+    };
+    document.addEventListener("pointerdown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, []);
 
   React.useEffect(() => {
     try {
@@ -54,6 +81,11 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
       if (q) setQuery(q);
     } catch {}
   }, []);
+
+  // The header owns the only search field; the hub's query chip reflects it.
+  React.useEffect(() => {
+    if (controlledQuery !== undefined) setQuery(controlledQuery);
+  }, [controlledQuery]);
 
   React.useEffect(() => {
     const focusSearch = (event: KeyboardEvent) => {
@@ -162,6 +194,46 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
           >
             {isZh ? "证据" : "Evidence"}
           </button>
+
+          <details className="r6-mobile-tools" ref={toolsRef}>
+            <summary className="r6-icon-button r6-tools-summary" data-testid="mobile-tools-trigger">
+              {isZh ? "更多" : "More"}
+            </summary>
+            <div className="r6-tools-menu" data-testid="mobile-tools-menu">
+              {onToggleLocale && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onToggleLocale();
+                    closeTools();
+                  }}
+                >
+                  {isZh ? "切换为 English" : "切换为中文"}
+                </button>
+              )}
+              {onOpenGuide && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenGuide();
+                    closeTools();
+                  }}
+                >
+                  {isZh ? "指标释义" : "Indicator guide"}
+                </button>
+              )}
+              <button
+                type="button"
+                aria-expanded={isDrawerOpen}
+                onClick={() => {
+                  onToggleDrawer();
+                  closeTools();
+                }}
+              >
+                {isZh ? "证据检查器" : "Evidence inspector"}
+              </button>
+            </div>
+          </details>
         </div>
       </div>
     </header>

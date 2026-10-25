@@ -9,6 +9,7 @@ import { QuickRecoveryAnalysis } from "../QuickRecoveryAnalysis";
 import { MetricComparison } from "../MetricComparison";
 import { ReplayDock } from "./ReplayDock";
 import { EvidenceRail } from "./EvidenceRail";
+import { MobileTabs } from "./MobileTabs";
 
 export interface TacticalLabWorkspaceProps {
   state: CockpitState;
@@ -66,6 +67,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
   const t = getTranslation(locale);
   const isZh = locale === "zh";
   const [explorerTab, setExplorerTab] = useState<"sequences" | "players">("sequences");
+  const [mobileSection, setMobileSection] = useState<"pitch" | "sequences" | "metrics">("pitch");
   const [sequenceFilter, setSequenceFilter] = useState<
     "all" | "final_third" | "shots" | "progression" | "turnover"
   >("all");
@@ -122,7 +124,12 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
   });
 
   return (
-    <div className="workspace-pane-fade r6-tactical-page" data-testid="tactical-explorer-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div
+      className="workspace-pane-fade r6-tactical-page"
+      data-testid="tactical-explorer-page"
+      data-mobile-section={mobileSection}
+      style={{ display: "flex", flexDirection: "column", gap: 16 }}
+    >
       <header className="r6-page-head">
         <div>
           <span className="r6-kicker">{isZh ? "战术探索" : "Tactical explorer"}</span>
@@ -165,6 +172,17 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
       </header>
 
       <ReplayDock state={state} busy={busy} locale={locale} onSeek={onSeek} onControl={onControl} />
+
+      <MobileTabs
+        tabs={[
+          { id: "pitch", label: isZh ? "球场" : "Pitch" },
+          { id: "sequences", label: isZh ? "序列" : "Sequences", count: totalSeq },
+          { id: "metrics", label: isZh ? "指标" : "Metrics" },
+        ]}
+        active={mobileSection}
+        onChange={setMobileSection}
+        label={isZh ? "战术探索分区" : "Tactical explorer sections"}
+      />
 
       {/* Top Banner: Spatial & Tactical Mode Header */}
       <div
@@ -247,7 +265,14 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
       <div className="tactical-stage-grid">
         {/* Left Column: Full-featured 2D Pitch Stage */}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div className="glass-panel" style={{ padding: 14 }}>
+          <div
+            className="glass-panel"
+            data-mobile-panel="pitch"
+            id="r6-panel-pitch"
+            role="tabpanel"
+            aria-labelledby="r6-tab-pitch"
+            style={{ padding: 14 }}
+          >
             <div className="r6-canvas-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>
@@ -321,7 +346,14 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
           </div>
 
           {/* Metric Comparison for Tactical Analyst */}
-          <div className="glass-panel" style={{ padding: 14 }}>
+          <div
+            className="glass-panel"
+            data-mobile-panel="metrics"
+            id="r6-panel-metrics"
+            role="tabpanel"
+            aria-labelledby="r6-tab-metrics"
+            style={{ padding: 14 }}
+          >
             <MetricComparison
               receipts={state.analysis_receipts || state.receipts}
               at={state.snapshot_as_of ?? state.at}
@@ -345,7 +377,14 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
 
         {/* Right Column: S2 Sequences & Player Spotlight Explorer */}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div className="glass-panel" style={{ padding: 14 }}>
+          <div
+            className="glass-panel"
+            data-mobile-panel="sequences"
+            id="r6-panel-sequences"
+            role="tabpanel"
+            aria-labelledby="r6-tab-sequences"
+            style={{ padding: 14 }}
+          >
             {/* Header with Sequences / Players Toggle */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <div>
@@ -650,7 +689,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
 
       {/* Bottom Exploration Cards: 9-Zone Density Differential & 6s Quick Recoveries */}
       <div className="tactical-explore-grid">
-        <div className="glass-panel" style={{ padding: 14 }}>
+        <div className="glass-panel" data-mobile-panel="metrics" style={{ padding: 14 }}>
           <ActionDensityDifferential
             data={state.density_differential}
             homeTeamName={state.teams?.H || "Harbor FC"}
@@ -671,7 +710,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
           />
         </div>
 
-        <div className="glass-panel" style={{ padding: 14 }}>
+        <div className="glass-panel" data-mobile-panel="metrics" style={{ padding: 14 }}>
           <QuickRecoveryAnalysis
             data={state.quick_recoveries}
             focusTeam={state.focus_team || "H"}

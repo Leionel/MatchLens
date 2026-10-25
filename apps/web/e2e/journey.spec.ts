@@ -122,7 +122,8 @@ test.describe("match library", () => {
 
   test("searching the library narrows to the real match without hiding its provenance", async ({ page }) => {
     await openCockpit(page);
-    await page.getByPlaceholder("e.g. France or 2022").fill("England 2-1 Denmark");
+    await page.getByLabel("Search matches").fill("England 2-1 Denmark");
+    await page.keyboard.press("Enter");
 
     const card = page.locator(`[data-testid="match-card"][data-match-id="${REAL_MATCH}"]`);
     await expect(card).toBeVisible();
@@ -355,7 +356,21 @@ test.describe("real match journey", () => {
     await expect(detail).toBeVisible();
     await detail.getByTestId("detail-tab-shots").click();
     await expect(detail.getByTestId("shot-investigate").first()).toBeVisible();
+    await expect(detail.getByTestId("shot-investigate").first()).toBeVisible();
+
+    const investigateRequest = page
+      .waitForRequest((request) => request.url().endsWith("/api/investigate"), { timeout: 90_000 })
+      .catch(() => null);
     await detail.getByTestId("shot-investigate").first().click();
+    const request = await investigateRequest;
+    const seedAt = Number(request ? JSON.parse(request.postData() || "{}").at : NaN);
+    expect(Number.isFinite(seedAt)).toBe(true);
+    // A cross-match handoff must seek the newly loaded session to the shot; it
+    // may not run the investigation at whatever clock the old match left.
+    await expect.poll(async () => {
+      const state = await readState(page);
+      return Math.abs(Number(state.snapshot_as_of ?? state.at) - seedAt) <= 1;
+    }, { timeout: 30_000 }).toBe(true);
 
     await expect(page.getByRole("tab", { name: new RegExp(WORKSPACE_TABS.storyAgent) })).toHaveAttribute(
       "aria-selected",

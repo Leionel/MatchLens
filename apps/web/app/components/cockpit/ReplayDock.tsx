@@ -38,6 +38,9 @@ export const ReplayDock: React.FC<ReplayDockProps> = ({
   const [dragging, setDragging] = useState(false);
   const [draft, setDraft] = useState(current);
   const draftRef = useRef(current);
+  // One pointer drag emits both touchend and pointerup in Chromium. Remembering
+  // the last committed draft lets the second handler return without a seek.
+  const committedRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!dragging) {
@@ -52,6 +55,8 @@ export const ReplayDock: React.FC<ReplayDockProps> = ({
     setDragging(false);
     setDraft(bounded);
     draftRef.current = bounded;
+    if (committedRef.current === bounded) return;
+    committedRef.current = bounded;
     if (bounded !== current) onSeek(bounded);
   };
 
@@ -94,8 +99,12 @@ export const ReplayDock: React.FC<ReplayDockProps> = ({
         data-testid="replay-slider"
         aria-label={isZh ? "回放时间轴" : "Replay timeline"}
         aria-valuetext={`${clock(value)} / ${clock(max)}`}
-        onPointerDown={() => setDragging(true)}
+        onPointerDown={() => {
+          committedRef.current = null;
+          setDragging(true);
+        }}
         onInput={(event) => {
+          committedRef.current = null;
           draftRef.current = Number(event.currentTarget.value);
           setDragging(true);
           setDraft(draftRef.current);

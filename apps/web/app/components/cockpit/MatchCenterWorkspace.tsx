@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { CockpitState, PerspectiveId, InspectorPayload } from "./types";
 import { Scoreboard } from "../Scoreboard";
 import { OAAITimeline, buildPeriodBands } from "../OAAITimeline";
@@ -11,6 +11,8 @@ import { HighlightLocator } from "../HighlightLocator";
 import { MatchRecap } from "../MatchRecap";
 import { ReplayDock } from "./ReplayDock";
 import { MatchInsightRail } from "./MatchInsightRail";
+import { MatchKeyEvents } from "./MatchKeyEvents";
+import { MobileTabs } from "./MobileTabs";
 import { Locale, getTranslation } from "../../lib/i18n";
 
 interface MatchCenterWorkspaceProps {
@@ -82,6 +84,7 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
 }) => {
   const t = getTranslation(locale);
   const isZh = locale === "zh";
+  const [mobileSection, setMobileSection] = useState<"overview" | "tactical" | "events" | "more">("overview");
 
   const clockText = clock(state.at || 0);
   const rawPossession = state.receipts?.["H.possession.current"]?.value;
@@ -131,7 +134,12 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
   const xgN = typeof receiptXgN === "number" ? receiptXgN.toFixed(2) : "—";
 
   return (
-    <div className="workspace-pane-fade r6-detail-page" data-testid="match-detail-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div
+      className="workspace-pane-fade r6-detail-page"
+      data-testid="match-detail-page"
+      data-mobile-section={mobileSection}
+      style={{ display: "flex", flexDirection: "column", gap: 16 }}
+    >
       <header className="r6-page-head">
         <div>
           <span className="r6-kicker">{isZh ? "比赛详情" : "Match detail"}</span>
@@ -186,7 +194,7 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
         />
       </div>
 
-      <div className="match-quickstats" role="group" aria-label={isZh ? "核心指标" : "Key metrics"}>
+      <div className="match-quickstats" data-mobile-panel="overview" role="group" aria-label={isZh ? "核心指标" : "Key metrics"}>
         <span>
           {t.possession}{" "}
           <b>{posValue === null ? (isZh ? "未观测" : "Unknown") : `${posValue.toFixed(0)}%`}</b>
@@ -221,8 +229,26 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
         )}
       </div>
 
+      <MobileTabs
+        tabs={[
+          { id: "overview", label: isZh ? "概览" : "Overview" },
+          { id: "tactical", label: isZh ? "战术" : "Tactical" },
+          { id: "events", label: isZh ? "事件" : "Events", count: state.coverage?.event_count ?? state.events?.length },
+          { id: "more", label: isZh ? "更多" : "More" },
+        ]}
+        active={mobileSection}
+        onChange={setMobileSection}
+        label={isZh ? "比赛详情分区" : "Match detail sections"}
+      />
+
       <div className="r6-detail-layout">
         <div className="r6-detail-main">
+      <div
+        data-mobile-panel="overview"
+        id="r6-panel-overview"
+        role="tabpanel"
+        aria-labelledby="r6-tab-overview"
+      >
       {/* 2. OAAI Momentum Wave Chart (Full Width Card) */}
       <OAAITimeline
         data={state.oaai}
@@ -257,10 +283,26 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
         }
       />
 
+      <MatchKeyEvents
+        events={state.events}
+        teams={state.teams}
+        locale={locale}
+        onOpenAll={() => setMobileSection("events")}
+        onSelectEvent={onSelectEvent}
+        onSeek={onSeek}
+      />
+      </div>
+
       {/* 3. Core Match Stage & Event Stream Split */}
       <div className="match-split-grid">
         {/* Left Column: 2D Pitch Stage & Corridors */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div
+          data-mobile-panel="tactical"
+          id="r6-panel-tactical"
+          role="tabpanel"
+          aria-labelledby="r6-tab-tactical"
+          style={{ display: "flex", flexDirection: "column", gap: 14 }}
+        >
           <div className="glass-panel" style={{ padding: 14 }}>
             {selectedSeq && (
               <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
@@ -316,7 +358,13 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
         </div>
 
         {/* Right Column: Live Event Feed & Highlights */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div
+          data-mobile-panel="events"
+          id="r6-panel-events"
+          role="tabpanel"
+          aria-labelledby="r6-tab-events"
+          style={{ display: "flex", flexDirection: "column", gap: 14 }}
+        >
           {/* Highlight Locator Candidates */}
           {state.highlights && state.highlights.length > 0 && (
             <HighlightLocator
@@ -361,18 +409,34 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
         </div>
       </div>
 
-      {state.ended && (
-        <div className="r6-recap-slot">
-          <MatchRecap
-            score={state.score}
-            homeTeam={homeTeam}
-            awayTeam={awayTeam}
-            history={state.history}
-            locale={locale}
-            onInspect={(receiptId, snapshotId) => onInspectReceipt(receiptId, snapshotId)}
-          />
-        </div>
-      )}
+      <div
+        data-mobile-panel="more"
+        id="r6-panel-more"
+        role="tabpanel"
+        aria-labelledby="r6-tab-more"
+      >
+        {state.ended ? (
+          <div className="r6-recap-slot">
+            <MatchRecap
+              score={state.score}
+              homeTeam={homeTeam}
+              awayTeam={awayTeam}
+              history={state.history}
+              locale={locale}
+              onInspect={(receiptId, snapshotId) => onInspectReceipt(receiptId, snapshotId)}
+            />
+          </div>
+        ) : (
+          <div className="r6-more-empty">
+            <h3>{isZh ? "完整复盘尚未生成" : "Full-time dossier not available yet"}</h3>
+            <p>
+              {isZh
+                ? "比赛结束后会在这里展示逐条门禁结论与可回放证据；回放期间请先使用概览中的 AI 洞察和关键事件。"
+                : "Gate-verified conclusions and replayable evidence appear here after full time. During replay, use the overview insight and key events first."}
+            </p>
+          </div>
+        )}
+      </div>
         </div>
 
         <MatchInsightRail

@@ -158,6 +158,7 @@ export const MatchLibraryBrowser: React.FC<MatchLibraryBrowserProps> = ({
                         data-testid="match-card"
                         data-match-id={match.match_id}
                         data-provenance={match.provenance_kind || "synthetic"}
+                        data-analysis-ready={match.analysis_ready === false ? "false" : "true"}
                         aria-current={isSelected ? "true" : undefined}
                         onClick={() => onSelectMatch(match.match_id)}
                       >
@@ -188,6 +189,11 @@ export const MatchLibraryBrowser: React.FC<MatchLibraryBrowserProps> = ({
                               ? isZh ? "完整" : "Complete"
                               : isZh ? "部分样本" : "Partial"}
                           </span>
+                          {match.analysis_ready === false && (
+                            <span className="rail-chip unknown" data-testid="match-analysis-ready" data-analysis-ready="false">
+                              {isZh ? "仅目录" : "Catalogued"}
+                            </span>
+                          )}
                           {isCurrent && <span className="ml-row-current">{isZh ? "当前" : "Current"}</span>}
                         </span>
                       </button>

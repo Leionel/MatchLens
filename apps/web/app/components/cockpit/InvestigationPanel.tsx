@@ -136,6 +136,23 @@ const AGENT_STATUS_LABELS: Record<string, { zh: string; en: string }> = {
   failed: { zh: "Agent 失败（已回退确定性）", en: "Agent Failed (fell back)" },
 };
 
+type CancelState = "idle" | "requesting" | "requested" | "confirmed" | "unavailable" | "too_late";
+
+const newRequestKey = () => {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+  } catch {}
+  return `req-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
+
+const requestServerCancel = async (key: string) => {
+  const res = await fetch(`/api/investigation-requests/${encodeURIComponent(key)}/cancel`, { method: "POST" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.detail || `Cancel failed (${res.status})`);
+  return data as { state?: string; active?: boolean; run_id?: string | null };
+};
 
 export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
   state,
@@ -160,8 +177,23 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
   const [plan, setPlan] = useState<Plan | null>(null);
   const [promoting, setPromoting] = useState(false);
   const [promoted, setPromoted] = useState<{ claim_id: string; current_revision_id?: string | null } | null>(null);
+  const [cancelState, setCancelState] = useState<CancelState>("idle");
+  const [cancelMessage, setCancelMessage] = useState("");
+  const cancelStateRef = useRef<CancelState>("idle");
+  const requestKeyRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const busyRef = useRef(false);
   const runToken = useRef(0);
+
+  const updateCancelState = useCallback((next: CancelState, message: string) => {
+    cancelStateRef.current = next;
+    setCancelState(next);
+    setCancelMessage(message);
+  }, []);
+
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
 
   const run = useCallback(
     async (override?: Partial<InvestigationSeed>) => {
@@ -171,14 +203,20 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
       const targetType = useSeed?.focusType ?? focusType;
       const targetId = useSeed?.focusId ?? (focusId || null);
       const token = ++runToken.current;
+      if (busyRef.current && requestKeyRef.current) {
+        void requestServerCancel(requestKeyRef.current).catch(() => {});
+      }
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
+      const requestKey = newRequestKey();
+      requestKeyRef.current = requestKey;
       const matchId = state.match_id;
       setBusy(true);
       setError("");
       setPromoted(null);
       setPlan(null);
+      updateCancelState("idle", "");
       try {
         const res = await fetch("/api/investigate", {
           method: "POST",
@@ -193,8 +231,22 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
             compare_match_ids: useSeed?.compareMatchIds ?? [],
             question: useSeed?.question ?? question,
             execution_mode: executionMode,
+            request_key: requestKey,
           }),
         });
+        if (res.status === 409) {
+          const cancelled = await res.json().catch(() => ({}));
+          if (cancelled?.cancelled || cancelled?.detail === "investigation_cancelled") {
+            if (token !== runToken.current) return;
+            updateCancelState(
+              "confirmed",
+              isZh
+                ? `服务端已确认取消${cancelled.run_id ? ` · Run ${cancelled.run_id}` : ""} · CANCELLED`
+                : `Server confirmed cancellation${cancelled.run_id ? ` · run ${cancelled.run_id}` : ""} · CANCELLED`,
+            );
+            return;
+          }
+        }
         if (!res.ok) throw new Error(`Investigation failed (${res.status})`);
         const data: Plan = await res.json();
         if (token !== runToken.current) return;
@@ -202,6 +254,14 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
         // asked for. A switched match or a later seek invalidates it.
         if (data.match_id !== matchId || Math.abs(Number(data.as_of) - Number(targetAt)) > 1) {
           throw new Error("Stale investigation response");
+        }
+        if (cancelStateRef.current === "requesting" || cancelStateRef.current === "requested") {
+          updateCancelState(
+            "too_late",
+            isZh
+              ? "取消请求送达时调查已完成；以下为服务端返回的完整结果。"
+              : "The investigation had already completed when the cancel arrived; the full result is shown below.",
+          );
         }
         setPlan(data);
         setTeam(data.team === "N" ? "N" : "H");
@@ -219,17 +279,51 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
         if (token === runToken.current) setBusy(false);
       }
     },
-    [executionMode, focusId, focusType, isZh, question, seed, state.at, state.match_id, state.snapshot_as_of, team]
+    [executionMode, focusId, focusType, isZh, question, seed, state.at, state.match_id, state.snapshot_as_of, team, updateCancelState]
   );
 
-  const cancel = () => {
-    runToken.current += 1;
-    abortRef.current?.abort();
-    setBusy(false);
-    setError(isZh ? "调查已取消" : "Investigation cancelled");
+  const cancel = async () => {
+    const key = requestKeyRef.current;
+    if (!key) {
+      runToken.current += 1;
+      abortRef.current?.abort();
+      setBusy(false);
+      updateCancelState("unavailable", isZh ? "已停止本地等待。" : "Stopped waiting locally.");
+      return;
+    }
+    if (cancelStateRef.current === "requesting" || cancelStateRef.current === "requested") return;
+    updateCancelState("requesting", isZh ? "正在向服务端发送取消请求…" : "Requesting server cancellation…");
+    try {
+      const data = await requestServerCancel(key);
+      // The investigation may have returned while the cancel was in flight.
+      if (cancelStateRef.current === "confirmed" || cancelStateRef.current === "too_late") return;
+      updateCancelState(
+        "requested",
+        isZh
+          ? `取消请求已送达${data.run_id ? ` · Run ${data.run_id}` : ""}${data.active === false ? "（请求尚未注册，已记录待取消）" : ""}，等待服务端确认…`
+          : `Cancel request delivered${data.run_id ? ` · run ${data.run_id}` : ""}${data.active === false ? " (not yet registered; remembered)" : ""}; waiting for server confirmation…`,
+      );
+    } catch (e) {
+      runToken.current += 1;
+      abortRef.current?.abort();
+      setBusy(false);
+      updateCancelState(
+        "unavailable",
+        isZh
+          ? `无法连接服务端取消（${(e as Error).message}），已停止本地等待。`
+          : `Server cancellation unavailable (${(e as Error).message}); stopped waiting locally.`,
+      );
+    }
   };
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+  useEffect(
+    () => () => {
+      const key = requestKeyRef.current;
+      if (busyRef.current && key) void requestServerCancel(key).catch(() => {});
+      abortRef.current?.abort();
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!seed?.requestId) return;
@@ -316,8 +410,18 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
             {busy ? (isZh ? "分析中…" : "Analysing…") : isZh ? "分析" : "Analyse"}
           </button>
           {busy && (
-            <button type="button" className="r6-text-action" onClick={cancel}>
-              {isZh ? "取消" : "Cancel"}
+            <button
+              type="button"
+              className="r6-text-action"
+              onClick={() => void cancel()}
+              disabled={cancelState === "requesting" || cancelState === "requested"}
+              data-cancel-state={cancelState}
+            >
+              {cancelState === "requesting"
+                ? isZh ? "取消中…" : "Cancelling…"
+                : cancelState === "requested"
+                  ? isZh ? "已请求取消" : "Cancel requested"
+                  : isZh ? "取消" : "Cancel"}
             </button>
           )}
         </div>
@@ -391,10 +495,24 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
         </div>
       )}
 
+      {cancelMessage && (
+        <div
+          className={`r6-cancel-status ${cancelState}`}
+          role="status"
+          data-testid="investigation-cancel-status"
+          data-cancel-state={cancelState}
+        >
+          {cancelMessage}
+        </div>
+      )}
+
       {plan && (
         <div style={{ display: "grid", gap: 12 }} data-testid="investigation-plan">
           <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
             {isZh ? "快照" : "Snapshot"} <code>{plan.snapshot_id.slice(0, 18)}</code> / {plan.as_of}s / {plan.tool_receipts.length} {isZh ? "次工具调用" : "tool calls"}
+            {plan.agent_run_id && (
+              <span data-testid="investigation-run-id"> / Run <code>{plan.agent_run_id}</code></span>
+            )}
           </div>
           <div className="r6-plan-status" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <span className="rail-chip neutral">{plan.intent}</span>

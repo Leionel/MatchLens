@@ -269,18 +269,23 @@ export default function MatchLensCockpit() {
    * One seek at a time. The dock commits on release, so this is also the guard
    * that drops a late response belonging to an older match or clock request.
    */
-  const seekTo = async (at: number) => {
+  const seekTo = async (at: number): Promise<boolean> => {
     const token = ++seekRequest.current;
     const matchId = stateRef.current?.match_id;
     setError("");
     setBusy(true);
     try {
       const next = await api<CockpitState>("control", { action: "seek", at });
-      if (token !== seekRequest.current) return;
-      if (matchId && next.match_id !== matchId) return;
+      if (token !== seekRequest.current) return false;
+      if (matchId && next.match_id !== matchId) return false;
       commit(next);
+      // The caller may verify the clock immediately, before React flushes the
+      // state updater. Keep the ref as the synchronous source of truth.
+      stateRef.current = next;
+      return true;
     } catch (e) {
       if (token === seekRequest.current) setError((e as Error).message);
+      return false;
     } finally {
       if (token === seekRequest.current) setBusy(false);
     }
@@ -394,7 +399,11 @@ export default function MatchLensCockpit() {
     setError("");
     try {
       const current = stateRef.current;
-      if (current?.match_id !== seed.matchId) {
+      if (!current) {
+        setError(locale === "zh" ? "比赛数据尚未加载，无法发起调查。" : "Match data is not loaded; the investigation was not started.");
+        return;
+      }
+      if (current.match_id !== seed.matchId) {
         await selectMatch(seed.matchId, "story_agent", {
           preserveSeed: true,
           history: "none",
@@ -403,8 +412,30 @@ export default function MatchLensCockpit() {
           setError(locale === "zh" ? "比赛数据不可用，无法发起调查。" : "Match data is unavailable; the investigation was not started.");
           return;
         }
-      } else if (Math.abs(Number(current?.snapshot_as_of ?? current?.at ?? 0) - seed.at) > 1) {
-        await seekTo(seed.at);
+      }
+      // Always align after a match switch: the new match starts at its own
+      // clock, never at the evidence moment carried over from the old one.
+      const loadedAt = Number(stateRef.current?.snapshot_as_of ?? stateRef.current?.at ?? 0);
+      if (Math.abs(loadedAt - seed.at) > 1) {
+        const aligned = await seekTo(seed.at);
+        if (!aligned) {
+          setError(
+            locale === "zh"
+              ? "无法把回放时钟对齐到该证据时刻，调查未发起。"
+              : "Could not align the replay clock to the evidence moment; the investigation was not started.",
+          );
+          return;
+        }
+      }
+      const aligned = stateRef.current;
+      const alignedAt = Number(aligned?.snapshot_as_of ?? aligned?.at ?? 0);
+      if (aligned?.match_id !== seed.matchId || Math.abs(alignedAt - seed.at) > 1) {
+        setError(
+          locale === "zh"
+            ? "回放时钟与证据时刻不一致，调查未发起。"
+            : "The replay clock does not match the evidence moment; the investigation was not started.",
+        );
+        return;
       }
       setInvestigationSeed(seed);
       setActiveWorkspace("story_agent");
@@ -640,6 +671,7 @@ export default function MatchLensCockpit() {
           theme={theme}
           isDrawerOpen={isDrawerOpen}
           locale={locale}
+          query={globalQuery}
           onSearch={handleSearch}
           onOpenHub={() => selectWorkspace("match_hub")}
           onOpenMatch={() => selectWorkspace("match_center")}

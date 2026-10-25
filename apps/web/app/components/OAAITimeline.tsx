@@ -946,7 +946,15 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
                     : `Inflection Attribution Analysis (${Math.floor(selectedChangePoint.at / 60)}m ${Math.floor(selectedChangePoint.at % 60)}s)`}
                 </span>
                 <span style={{ fontSize: 12, color: "var(--text-emerald)", fontWeight: 700 }}>
-                  {isZh ? "优势方" : "Lead"}: {selectedChangePoint.leading_team === "H" ? homeTeamName : awayTeamName} ({selectedChangePoint.oaai_amplitude > 0 ? `+${selectedChangePoint.oaai_amplitude.toFixed(2)}` : selectedChangePoint.oaai_amplitude.toFixed(2)})
+                  {isZh ? "优势方" : "Lead"}:{" "}
+                  {selectedChangePoint.leading_team === "H"
+                    ? homeTeamName
+                    : selectedChangePoint.leading_team === "N"
+                      ? awayTeamName
+                      : isZh
+                        ? "中立 / 主导权转换"
+                        : "neutral / lead change"}{" "}
+                  ({selectedChangePoint.oaai_amplitude > 0 ? `+${selectedChangePoint.oaai_amplitude.toFixed(2)}` : selectedChangePoint.oaai_amplitude.toFixed(2)})
                 </span>
               </div>
               <p style={{ fontSize: 12, color: "var(--text-gold)", marginTop: 4 }}>
@@ -954,14 +962,36 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
               </p>
             </div>
 
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <button
-                type="button"
-                className="mz-btn mz-btn-primary"
-                onClick={() => onInvestigateChangePoint?.(selectedChangePoint)}
-              >
-                {isZh ? "调查这个峰值" : "Investigate this peak"}
-              </button>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              {selectedChangePoint.leading_team === "H" || selectedChangePoint.leading_team === "N" ? (
+                <button
+                  type="button"
+                  className="mz-btn mz-btn-primary"
+                  onClick={() => onInvestigateChangePoint?.(selectedChangePoint)}
+                >
+                  {isZh ? "调查这次变化" : "Investigate this change"}
+                </button>
+              ) : (
+                <>
+                  <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+                    {isZh ? "主导权转换为中性，请选择调查球队：" : "Neutral lead change — choose a team:"}
+                  </span>
+                  <button
+                    type="button"
+                    className="mz-btn mz-btn-primary"
+                    onClick={() => onInvestigateChangePoint?.({ ...selectedChangePoint, leading_team: "H" })}
+                  >
+                    {isZh ? `调查 ${homeTeamName}` : `Investigate ${homeTeamName}`}
+                  </button>
+                  <button
+                    type="button"
+                    className="mz-btn"
+                    onClick={() => onInvestigateChangePoint?.({ ...selectedChangePoint, leading_team: "N" })}
+                  >
+                    {isZh ? `调查 ${awayTeamName}` : `Investigate ${awayTeamName}`}
+                  </button>
+                </>
+              )}
               <button type="button" className="mz-btn" onClick={() => setSelectedChangePoint(null)}>
                 {isZh ? "关闭" : "Close"}
               </button>

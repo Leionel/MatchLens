@@ -8,8 +8,10 @@ import { MatchLibraryDetail } from "./MatchLibraryDetail";
 import {
   LibraryMatch,
   allSeasons,
+  competitionLabel,
   groupByStage,
   groupCompetitions,
+  stageLabel,
 } from "./matchLibrary";
 
 interface MatchLibraryWorkspaceProps {
@@ -113,6 +115,15 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
   }, [matches, competition, season, team, provenance, coverage, dateFrom, dateTo, query]);
 
   const hasAdvancedFilters = Boolean(team || provenance || coverage || dateFrom || dateTo);
+  const activeFilterCount = [team, provenance, coverage, dateFrom, dateTo].filter(Boolean).length;
+  const recommended = useMemo(
+    () =>
+      visible
+        .filter((match) => match.analysis_ready !== false)
+        .sort((a, b) => (b.events_count ?? 0) - (a.events_count ?? 0))
+        .slice(0, 4),
+    [visible],
+  );
 
   const stageGroups = useMemo(() => groupByStage(visible), [visible]);
   const selected = useMemo(
@@ -159,101 +170,114 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
         </div>
       </header>
 
-      <section className="ml-header r6-hub-tools">
-        <div className="ml-header-text">
-          <h2 className="ml-title">{isZh ? "筛选与搜索" : "Filter and search"}</h2>
+      <section className="r6-hub-tools" aria-label={isZh ? "搜索与筛选" : "Search and filters"}>
+        <div className="r6-hub-tool-line">
+          {query.trim() ? (
+            <div className="r6-hub-query-chip" data-testid="match-hub-query">
+              <span>{isZh ? "搜索" : "Search"}</span>
+              <b>{query}</b>
+              <button
+                type="button"
+                aria-label={isZh ? "清除搜索" : "Clear search"}
+                onClick={() => {
+                  setQuery("");
+                  onQueryChange?.("");
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <p className="r6-hub-search-hint">
+              {isZh ? "使用顶部搜索框查找比赛、球队或赛事；筛选只影响下方目录。" : "Use the header search for matches, teams or competitions; filters only scope the catalog below."}
+            </p>
+          )}
+          <details className="r6-hub-advanced" data-testid="match-hub-advanced">
+            <summary>
+              {isZh ? "高级筛选" : "Advanced filters"}
+              {activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+            </summary>
+            <div className="ml-filter-row" role="group" aria-label={isZh ? "组合筛选" : "Filters"} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }}>
+              <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)" }}>
+                {isZh ? "球队" : "Team"}
+                <select
+                  value={team}
+                  onChange={(e) => setTeam(e.target.value)}
+                  data-testid="match-hub-team-filter"
+                  style={{ minHeight: 32, background: "var(--input-bg)", color: "var(--input-text)", border: "0.5px solid var(--pitch-border)", borderRadius: 6, padding: "4px 8px" }}
+                >
+                  <option value="">{isZh ? "全部球队" : "All teams"}</option>
+                  {teamOptions.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)" }}>
+                {isZh ? "数据来源" : "Provenance"}
+                <select
+                  value={provenance}
+                  onChange={(e) => setProvenance(e.target.value)}
+                  data-testid="match-hub-provenance-filter"
+                  style={{ minHeight: 32, background: "var(--input-bg)", color: "var(--input-text)", border: "0.5px solid var(--pitch-border)", borderRadius: 6, padding: "4px 8px" }}
+                >
+                  <option value="">{isZh ? "全部来源" : "All provenance"}</option>
+                  <option value="provider_payload">{isZh ? "真实数据" : "Provider data"}</option>
+                  <option value="synthetic">{isZh ? "合成数据" : "Synthetic"}</option>
+                  <option value="provider_schema_excerpt">{isZh ? "样本摘录" : "Excerpt"}</option>
+                </select>
+              </label>
+              <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)" }}>
+                {isZh ? "覆盖" : "Coverage"}
+                <select
+                  value={coverage}
+                  onChange={(e) => setCoverage(e.target.value)}
+                  data-testid="match-hub-coverage-filter"
+                  style={{ minHeight: 32, background: "var(--input-bg)", color: "var(--input-text)", border: "0.5px solid var(--pitch-border)", borderRadius: 6, padding: "4px 8px" }}
+                >
+                  <option value="">{isZh ? "全部覆盖" : "All coverage"}</option>
+                  <option value="complete">{isZh ? "完整" : "Complete"}</option>
+                  <option value="partial">{isZh ? "部分" : "Partial"}</option>
+                </select>
+              </label>
+              <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)" }}>
+                {isZh ? "日期从" : "From"}
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  data-testid="match-hub-date-from"
+                  style={{ minHeight: 32, background: "var(--input-bg)", color: "var(--input-text)", border: "0.5px solid var(--pitch-border)", borderRadius: 6, padding: "4px 8px" }}
+                />
+              </label>
+              <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)" }}>
+                {isZh ? "到" : "To"}
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  data-testid="match-hub-date-to"
+                  style={{ minHeight: 32, background: "var(--input-bg)", color: "var(--input-text)", border: "0.5px solid var(--pitch-border)", borderRadius: 6, padding: "4px 8px" }}
+                />
+              </label>
+              {hasAdvancedFilters && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTeam("");
+                    setProvenance("");
+                    setCoverage("");
+                    setDateFrom("");
+                    setDateTo("");
+                  }}
+                  style={{ minHeight: 32, fontSize: 12 }}
+                >
+                  {isZh ? "清除筛选" : "Clear filters"}
+                </button>
+              )}
+            </div>
+          </details>
         </div>
-        <label className="ml-search">
-          <input
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              onQueryChange?.(e.target.value);
-            }}
-            placeholder={isZh ? "例如 France 或 2022" : "e.g. France or 2022"}
-            className="ml-search-input"
-          />
-        </label>
       </section>
-
-      <div className="ml-filter-row" role="group" aria-label={isZh ? "组合筛选" : "Filters"} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "end" }}>
-        <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)" }}>
-          {isZh ? "球队" : "Team"}
-          <select
-            value={team}
-            onChange={(e) => setTeam(e.target.value)}
-            data-testid="match-hub-team-filter"
-            style={{ minHeight: 32, background: "var(--input-bg)", color: "var(--input-text)", border: "0.5px solid var(--pitch-border)", borderRadius: 6, padding: "4px 8px" }}
-          >
-            <option value="">{isZh ? "全部球队" : "All teams"}</option>
-            {teamOptions.map((name) => (
-              <option key={name} value={name}>{name}</option>
-            ))}
-          </select>
-        </label>
-        <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)" }}>
-          {isZh ? "数据来源" : "Provenance"}
-          <select
-            value={provenance}
-            onChange={(e) => setProvenance(e.target.value)}
-            data-testid="match-hub-provenance-filter"
-            style={{ minHeight: 32, background: "var(--input-bg)", color: "var(--input-text)", border: "0.5px solid var(--pitch-border)", borderRadius: 6, padding: "4px 8px" }}
-          >
-            <option value="">{isZh ? "全部来源" : "All provenance"}</option>
-            <option value="provider_payload">{isZh ? "真实数据" : "Provider data"}</option>
-            <option value="synthetic">{isZh ? "合成数据" : "Synthetic"}</option>
-            <option value="provider_schema_excerpt">{isZh ? "样本摘录" : "Excerpt"}</option>
-          </select>
-        </label>
-        <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)" }}>
-          {isZh ? "覆盖" : "Coverage"}
-          <select
-            value={coverage}
-            onChange={(e) => setCoverage(e.target.value)}
-            data-testid="match-hub-coverage-filter"
-            style={{ minHeight: 32, background: "var(--input-bg)", color: "var(--input-text)", border: "0.5px solid var(--pitch-border)", borderRadius: 6, padding: "4px 8px" }}
-          >
-            <option value="">{isZh ? "全部覆盖" : "All coverage"}</option>
-            <option value="complete">{isZh ? "完整" : "Complete"}</option>
-            <option value="partial">{isZh ? "部分" : "Partial"}</option>
-          </select>
-        </label>
-        <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)" }}>
-          {isZh ? "日期从" : "From"}
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            data-testid="match-hub-date-from"
-            style={{ minHeight: 32, background: "var(--input-bg)", color: "var(--input-text)", border: "0.5px solid var(--pitch-border)", borderRadius: 6, padding: "4px 8px" }}
-          />
-        </label>
-        <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)" }}>
-          {isZh ? "到" : "To"}
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            data-testid="match-hub-date-to"
-            style={{ minHeight: 32, background: "var(--input-bg)", color: "var(--input-text)", border: "0.5px solid var(--pitch-border)", borderRadius: 6, padding: "4px 8px" }}
-          />
-        </label>
-        {hasAdvancedFilters && (
-          <button
-            type="button"
-            onClick={() => {
-              setTeam("");
-              setProvenance("");
-              setCoverage("");
-              setDateFrom("");
-              setDateTo("");
-            }}
-            style={{ minHeight: 32, fontSize: 12 }}
-          >
-            {isZh ? "清除筛选" : "Clear filters"}
-          </button>
-        )}
-      </div>
 
       {loading && (
         <div role="status" className="ml-empty">
@@ -268,11 +292,63 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
 
       {!loading && !error && (
         <>
-          <p className="ml-count" data-testid="match-hub-count">
-            {isZh
-              ? `显示 ${visible.length} / ${matches.length} 场比赛`
-              : `Showing ${visible.length} of ${matches.length} matches`}
-          </p>
+          <section className="r6-recommended" aria-labelledby="r6-recommended-title" data-testid="match-hub-recommended">
+            <div className="r6-recommended-head">
+              <div>
+                <span className="r6-kicker">{isZh ? "推荐开始" : "Recommended"}</span>
+                <h2 id="r6-recommended-title">{isZh ? "已安装、可直接分析的比赛" : "Installed and ready to analyse"}</h2>
+              </div>
+              <p>
+                {isZh
+                  ? "这些比赛的数据已就绪；已登记但未安装的场次仍保留在下方目录中。"
+                  : "These datasets are installed. Catalogued matches without local data stay browsable in the full catalog below."}
+              </p>
+            </div>
+            {recommended.length === 0 ? (
+              <p className="r6-recommended-empty">
+                {isZh ? "当前筛选下没有已安装的分析就绪比赛。" : "No installed, analysis-ready matches under the current filters."}
+              </p>
+            ) : (
+              <div className="r6-recommended-grid">
+                {recommended.map((match) => {
+                  const isCurrent = match.match_id === currentMatchId;
+                  return (
+                    <article key={match.match_id} className={`r6-recommended-card ${isCurrent ? "current" : ""}`} data-testid="match-recommended">
+                      <span className="r6-rec-comp">
+                        {competitionLabel(match.competition, isZh)} · {match.season} · {match.stage ? stageLabel(match.stage, isZh) : "—"}
+                        {isCurrent ? ` · ${isZh ? "当前" : "current"}` : ""}
+                      </span>
+                      <h3>
+                        {match.home_team} <strong>{match.home_score ?? "-"} : {match.away_score ?? "-"}</strong> {match.away_team}
+                      </h3>
+                      <div className="r6-rec-meta">
+                        <span className="r6-rec-badge">{isZh ? "可分析" : "Ready"}</span>
+                        <span>{match.events_count ?? 0} {isZh ? "事件" : "events"}</span>
+                        <span>{match.match_date || "—"}</span>
+                      </div>
+                      <div className="r6-rec-actions">
+                        <button type="button" className="r6-primary-action" onClick={() => onSelectMatch(match.match_id)}>
+                          {isZh ? "进入比赛 →" : "Open match →"}
+                        </button>
+                        <button type="button" className="r6-text-action" onClick={() => setSelectedId(match.match_id)}>
+                          {isZh ? "查看详情" : "View details"}
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <div className="r6-hub-catalog-head">
+            <h2>{isZh ? "全部比赛目录" : "Full match catalog"}</h2>
+            <p className="ml-count" data-testid="match-hub-count">
+              {isZh
+                ? `显示 ${visible.length} / ${matches.length} 场比赛`
+                : `Showing ${visible.length} of ${matches.length} matches`}
+            </p>
+          </div>
 
           <div className="ml-layout">
             <MatchLibraryBrowser
