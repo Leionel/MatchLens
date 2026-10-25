@@ -115,18 +115,18 @@ export const HighlightLocator: React.FC<HighlightLocatorProps> = ({
           const teamLabel = isHome ? homeTeamName : awayTeamName;
 
           let badgeBg = "color-mix(in srgb, var(--cyan-9) 15%, transparent)";
-          let badgeColor = "var(--tech-cyan)";
+          let badgeColor = "var(--text-cyan)";
           let badgeBorder = "color-mix(in srgb, var(--cyan-9) 30%, transparent)";
           let catLabel = t.waveCategorySurge;
 
           if (isGoal) {
             badgeBg = "color-mix(in srgb, var(--green-9) 20%, transparent)";
-            badgeColor = "var(--turf-emerald)";
+            badgeColor = "var(--text-emerald)";
             badgeBorder = "color-mix(in srgb, var(--green-9) 40%, transparent)";
             catLabel = t.waveCategoryGoal;
           } else if (isShot) {
             badgeBg = "color-mix(in srgb, var(--amber-9) 20%, transparent)";
-            badgeColor = "var(--amber-gold)";
+            badgeColor = "var(--text-gold)";
             badgeBorder = "color-mix(in srgb, var(--amber-9) 40%, transparent)";
             catLabel = t.waveCategoryShot;
           }
@@ -226,7 +226,7 @@ export const HighlightLocator: React.FC<HighlightLocatorProps> = ({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: isHome ? "var(--turf-emerald)" : "var(--tech-cyan)",
+                    color: isHome ? "var(--text-emerald)" : "var(--tech-cyan)",
                   }}
                 >
                   {t.dominantTeam}: {teamLabel}

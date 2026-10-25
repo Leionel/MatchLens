@@ -19,6 +19,8 @@ type Card = {
 
 type MatchRecapProps = {
   score: { H: number; N: number };
+  homeTeam?: string;
+  awayTeam?: string;
   history: Card[];
   locale?: Locale;
   onInspect: (receiptId: string, snapshotId: string) => void;
@@ -27,28 +29,37 @@ type MatchRecapProps = {
 const clock = (s: number) =>
   `${Math.floor(s / 60).toString().padStart(2, "0")}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
 
-export function MatchRecap({ score, history, locale = "zh", onInspect }: MatchRecapProps) {
+export function MatchRecap({ score, homeTeam = "Harbor FC", awayTeam = "Northbridge United", history, locale = "zh", onInspect }: MatchRecapProps) {
   const isZh = locale === "zh";
   const sorted = [...history].sort((a, b) => a.as_of - b.as_of);
+  const hasFindings = sorted.length > 0;
 
   return (
     <section className="fulltime-recap-section" aria-label="Full-time match recap and verified narrative">
       <div className="recap-header">
         <div className="recap-tag-group">
           <span className="recap-badge">
-            {isZh ? "全场终局 认证事实研报" : "FULL-TIME APPROVED FINDINGS"}
+            {hasFindings
+              ? isZh ? "全场终局 · 已认证发现" : "FULL-TIME APPROVED FINDINGS"
+              : isZh ? "全场终局 · 研报" : "FULL-TIME DOSSIER"}
           </span>
           <span className="final-score-pill">
-            Harbor FC {score.H} – {score.N} Northbridge United
+            {homeTeam} {score.H} – {score.N} {awayTeam}
           </span>
         </div>
         <h2 className="recap-title">
-          {isZh ? "全场核心战术论据与事实研报" : "The match, through its key findings"}
+          {hasFindings
+            ? isZh ? "全场核心战术论据与事实研报" : "The match, through its key findings"
+            : isZh ? "还没有通过门禁的全场结论" : "No approved findings yet"}
         </h2>
         <p className="recap-intro">
-          {isZh
-            ? "回顾各个时刻经由 Publication Gate 门禁严苛认证的战术论断。每条论断均可一键回溯至对应时刻的确定性事件序列与数学收据。"
-            : "Revisit approved findings at their original analysis times. Each opens the exact events and metrics used in its review."}
+          {hasFindings
+            ? isZh
+              ? "回顾各个时刻经由 Publication Gate 门禁严苛认证的战术论断。每条论断均可一键回溯至对应时刻的确定性事件序列与数学收据。"
+              : "Revisit approved findings at their original analysis times. Each opens the exact events and metrics used in its review."
+            : isZh
+              ? "回放比赛并发起调查，只有经过证据核验与发布门禁的结论才会出现在这里。"
+              : "Replay the match and run an investigation; only evidence-checked, gate-approved conclusions appear here."}
         </p>
       </div>
 

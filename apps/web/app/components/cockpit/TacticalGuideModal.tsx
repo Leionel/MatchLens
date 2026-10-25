@@ -116,7 +116,7 @@ export const TacticalGuideModal: React.FC<TacticalGuideModalProps> = ({
                 background: "transparent",
                 border: "none",
                 borderBottom: activeTab === tab.id ? "0.5px solid var(--turf-emerald)" : "0.5px solid transparent",
-                color: activeTab === tab.id ? "var(--turf-emerald)" : "var(--text-secondary)",
+                color: activeTab === tab.id ? "var(--text-emerald)" : "var(--text-secondary)",
                 fontWeight: activeTab === tab.id ? 700 : 500,
                 fontSize: 14,
                 padding: "12px 14px",

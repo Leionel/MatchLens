@@ -407,6 +407,7 @@ export function InsightSpotlight({
           revisions={revisions}
           onOpenChallengeModal={() => setIsChallengeOpen(true)}
           canChallenge={!!snapshotId}
+          locale={locale}
         />
       )}
 
@@ -426,6 +427,7 @@ export function InsightSpotlight({
           if (onChallengeSubmitted) onChallengeSubmitted(res);
           setActiveTab("timeline");
         }}
+        locale={locale}
       />
     </section>
   );

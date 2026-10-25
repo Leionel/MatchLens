@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Locale } from "../lib/i18n";
 
 type ChallengeType =
   | "challenge_causal_interpretation"
@@ -27,38 +28,57 @@ type ChallengeModalProps = {
   isOpen: boolean;
   onClose: () => void;
   onChallengeSubmitted: (result: any) => void;
+  locale?: Locale;
 };
 
-const challengeOptions: { type: ChallengeType; title: string; desc: string }[] = [
+const challengeOptions: {
+  type: ChallengeType;
+  zh: string;
+  en: string;
+  descZh: string;
+  descEn: string;
+}[] = [
   {
     type: "challenge_causal_interpretation",
-    title: "1. Challenge Causal Interpretation",
-    desc: "Allege that the insight confuses a chronological sequence with a tactical cause or coach instruction.",
+    zh: "质疑因果解释",
+    en: "Challenge causal interpretation",
+    descZh: "指出结论把时间先后顺序误当成战术原因或教练指令。",
+    descEn: "Allege that the insight confuses a chronological sequence with a tactical cause or coach instruction.",
   },
   {
     type: "check_counterevidence",
-    title: "2. Audit Negative / Counterevidence",
-    desc: "Verify whether the gate actively audited contradictory metrics (e.g. 0 shots or 0 box entries).",
+    zh: "审查反证与负面指标",
+    en: "Audit counterevidence",
+    descZh: "核查门禁是否真的检查了相反指标（例如 0 射门或 0 禁区进入）。",
+    descEn: "Verify whether the gate actively audited contradictory metrics (e.g. 0 shots or 0 box entries).",
   },
   {
     type: "check_sample_sufficiency",
-    title: "3. Check Sample Size & Window Sufficiency",
-    desc: "Question whether a short 180s sample is sufficient to generalize beyond isolated events.",
+    zh: "检查样本与窗口充分性",
+    en: "Check sample sufficiency",
+    descZh: "质疑 180 秒窗口是否足以支持跨事件、跨时段的结论。",
+    descEn: "Question whether a short 180s sample is sufficient to generalize beyond isolated events.",
   },
   {
     type: "check_comparison_window",
-    title: "4. Test Baseline Window Comparison",
-    desc: "Cross-check against the preceding 180s window to verify that delta calculations hold true.",
+    zh: "检验基线窗口对比",
+    en: "Test baseline comparison",
+    descZh: "与前一窗口交叉核对，确认差值计算是否成立。",
+    descEn: "Cross-check against the preceding 180s window to verify that delta calculations hold true.",
   },
   {
     type: "examine_sequence",
-    title: "5. Examine On-Ball Sequence Continuity",
-    desc: "Audit the chain of events leading up to the action for ball possession continuity.",
+    zh: "检查有球序列连续性",
+    en: "Examine sequence continuity",
+    descZh: "审计动作之前的控球链，确认球权归属连续。",
+    descEn: "Audit the chain of events leading up to the action for ball possession continuity.",
   },
   {
     type: "withdraw_claim",
-    title: "6. Withdraw This Claim",
-    desc: "Retire the claim from publication. The original statement and evidence stay in the revision history.",
+    zh: "撤回这条结论",
+    en: "Withdraw this claim",
+    descZh: "从发布队列撤回结论；原始陈述与证据仍保留在修订历史中。",
+    descEn: "Retire the claim from publication. The original statement and evidence stay in the revision history.",
   },
 ];
 
@@ -69,7 +89,9 @@ export function ChallengeModal({
   isOpen,
   onClose,
   onChallengeSubmitted,
+  locale = "zh",
 }: ChallengeModalProps) {
+  const isZh = locale === "zh";
   const [selectedType, setSelectedType] = useState<ChallengeType>("challenge_causal_interpretation");
   const [concern, setConcern] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -132,7 +154,7 @@ export function ChallengeModal({
       onChallengeSubmitted(data);
       onClose();
     } catch (err: any) {
-      setError(err.message || "Failed to submit challenge.");
+      setError(err.message || (isZh ? "提交审查失败。" : "Failed to submit challenge."));
     } finally {
       setSubmitting(false);
     }
@@ -143,17 +165,19 @@ export function ChallengeModal({
       <div className="challenge-modal-panel">
         <div className="modal-header">
           <div>
-            <span className="modal-badge">ADVERSARIAL SCRUTINY</span>
-            <h3 className="modal-title">Challenge Published Insight</h3>
+            <span className="modal-badge">{isZh ? "对抗性审查" : "ADVERSARIAL SCRUTINY"}</span>
+            <h3 className="modal-title">{isZh ? "质疑已发布结论" : "Challenge published insight"}</h3>
           </div>
-          <button type="button" className="btn-modal-close" onClick={onClose} aria-label="Close modal">
+          <button type="button" className="btn-modal-close" onClick={onClose} aria-label={isZh ? "关闭对话框" : "Close modal"}>
             ✕
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="modal-form">
           <p className="modal-intro">
-            Select an adversarial angle to test whether this conclusion overreaches, lacks sample size, or ignores counterevidence.
+            {isZh
+              ? "选择一个对抗角度，检验结论是否过度推断、样本不足或忽略反证。"
+              : "Select an adversarial angle to test whether this conclusion overreaches, lacks sample size, or ignores counterevidence."}
           </p>
 
           <div className="challenge-types-list">
@@ -170,8 +194,8 @@ export function ChallengeModal({
                   onChange={() => setSelectedType(opt.type)}
                 />
                 <div className="opt-text">
-                  <span className="opt-title">{opt.title}</span>
-                  <span className="opt-desc">{opt.desc}</span>
+                  <span className="opt-title">{isZh ? opt.zh : opt.en}</span>
+                  <span className="opt-desc">{isZh ? opt.descZh : opt.descEn}</span>
                 </div>
               </label>
             ))}
@@ -179,7 +203,7 @@ export function ChallengeModal({
 
           <div className="user-concern-group">
             <label htmlFor="challenge-claim-select" className="concern-label">
-              Claim under review:
+              {isZh ? "待审查结论：" : "Claim under review:"}
             </label>
             <select
               id="challenge-claim-select"
@@ -204,13 +228,13 @@ export function ChallengeModal({
 
           <div className="user-concern-group">
             <label htmlFor="concern-input" className="concern-label">
-              Specific user note (optional):
+              {isZh ? "补充说明（可选）：" : "Specific user note (optional):"}
             </label>
             <input
               id="concern-input"
               type="text"
               className="concern-input"
-              placeholder="e.g. Did the opponent intentionally concede possession?"
+              placeholder={isZh ? "例如：对手是否主动放弃控球？" : "e.g. Did the opponent intentionally concede possession?"}
               value={concern}
               onChange={(e) => setConcern(e.target.value)}
               maxLength={140}
@@ -221,10 +245,10 @@ export function ChallengeModal({
 
           <div className="modal-actions-bar">
             <button type="button" className="btn-modal-cancel" onClick={onClose} disabled={submitting}>
-              Cancel
+              {isZh ? "取消" : "Cancel"}
             </button>
             <button type="submit" className="btn-modal-submit" disabled={submitting}>
-              {submitting ? "Verifier Re-Evaluating..." : "Execute Adversarial Challenge ↗"}
+              {submitting ? (isZh ? "核验员重新评估中…" : "Verifier re-evaluating…") : isZh ? "执行对抗审查 ↗" : "Execute adversarial challenge ↗"}
             </button>
           </div>
         </form>

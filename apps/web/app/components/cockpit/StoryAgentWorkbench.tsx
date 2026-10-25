@@ -46,7 +46,7 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
   const isZh = locale === "zh";
   const [workbenchTab, setWorkbenchTab] = useState<
     "deliberation" | "attribution" | "match_story" | "gate_audit" | "investigation"
-  >("deliberation");
+  >("investigation");
   const [mode, setMode] = useState<"fan" | "analyst">("analyst");
   const [showTrace, setShowTrace] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
@@ -95,7 +95,13 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
   // Fetch real EventAttributionSpecialist output
   React.useEffect(() => {
     let active = true;
-    const at = state.at || 600;
+    const at = state.snapshot_as_of ?? state.at ?? 0;
+    if (at <= 0) {
+      setBackendAttribution(null);
+      return () => {
+        active = false;
+      };
+    }
     const start = Math.max(0, at - 180);
     fetch(`/api/matches/${matchId}/attribution?window_start=${start}&window_end=${at}&team=${state.focus_team || "H"}`)
       .then((res) => (res.ok ? res.json() : null))
@@ -108,7 +114,7 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
     return () => {
       active = false;
     };
-  }, [matchId, state.at, state.focus_team]);
+  }, [matchId, state.at, state.snapshot_as_of, state.focus_team]);
 
   const clockText = clock(state.at || 0);
   const activeMoment = state.active_moment || null;
@@ -406,7 +412,8 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
 
   return (
     <div className="workspace-pane-fade" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* 1. Tri-Agent Deliberation Pipeline Visual Header */}
+      {/* The question surface leads; the deliberation pipeline is advanced detail. */}
+      {workbenchTab !== "investigation" && (
       <div className="glass-panel" style={{ padding: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <div>
@@ -556,6 +563,7 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
           </div>
         </div>
       </div>
+      )}
 
       {/* 2. Sub-tab Navigation Bar */}
       <div
@@ -566,6 +574,15 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
           flexWrap: "wrap",
         }}
       >
+        <button
+          type="button"
+          onClick={() => setWorkbenchTab("investigation")}
+          className={`feed-filter-btn ${workbenchTab === "investigation" ? "active" : ""}`}
+          style={{ fontSize: 14, padding: "8px 16px" }}
+        >
+          {isZh ? "调查" : "Investigation"}
+        </button>
+
         <button
           type="button"
           onClick={() => setWorkbenchTab("deliberation")}
@@ -600,15 +617,6 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
           style={{ fontSize: 14, padding: "8px 16px" }}
         >
           {isZh ? "门禁审计" : "Gate audit"}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setWorkbenchTab("investigation")}
-          className={`feed-filter-btn ${workbenchTab === "investigation" ? "active" : ""}`}
-          style={{ fontSize: 14, padding: "8px 16px" }}
-        >
-          {isZh ? "调查" : "Investigation"}
         </button>
       </div>
 

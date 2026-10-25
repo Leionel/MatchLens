@@ -213,7 +213,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
                     </div>
                     <div>
                       <div style={{ fontSize: 12, color: "var(--text-tertiary)", textTransform: "uppercase" }}>{isZh ? "打入前场" : "Final 3rd"}</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: seq.entered_final_third ? "var(--turf-emerald)" : "var(--text-tertiary)" }}>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: seq.entered_final_third ? "var(--text-emerald)" : "var(--text-tertiary)" }}>
                         {seq.entered_final_third ? (isZh ? "是 ✓" : "YES ✓") : (isZh ? "否" : "NO")}
                       </div>
                     </div>
@@ -273,7 +273,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
 
                           <div style={{ textAlign: "right" }}>
                             {st.gain_m !== 0 && (
-                              <span style={{ fontSize: 12, fontWeight: 700, color: st.gain_m > 0 ? "var(--turf-emerald)" : "var(--crimson-warn)" }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: st.gain_m > 0 ? "var(--text-emerald)" : "var(--crimson-warn)" }}>
                                 {st.gain_m > 0 ? `+${st.gain_m}m` : `${st.gain_m}m`}
                               </span>
                             )}
@@ -517,7 +517,7 @@ export const InspectorDrawer: React.FC<InspectorDrawerProps> = ({
 
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: "var(--text-secondary)" }}>{isZh ? "反证事实检索:" : "Counterevidence Searched:"}</span>
-                      <span style={{ fontWeight: 700, color: claim.counterevidence_checked ? "var(--turf-emerald)" : "var(--electric-gold)" }}>
+                      <span style={{ fontWeight: 700, color: claim.counterevidence_checked ? "var(--text-emerald)" : "var(--electric-gold)" }}>
                         {claim.counterevidence_checked
                           ? (isZh ? "已审计 (未发现反证) ✓" : "Audited (None Found) ✓")
                           : (isZh ? "已执行对抗校验" : "Adversarial Checked")}

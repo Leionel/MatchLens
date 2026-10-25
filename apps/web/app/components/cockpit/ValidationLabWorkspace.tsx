@@ -474,7 +474,7 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
                       <td>—</td>
                       <td>{typeof cfg.latency_ms_measured === "number" ? `${cfg.latency_ms_measured.toFixed(1)}ms` : "—"}</td>
                       <td>
-                        <span style={{ color: cfg.alternative_hypothesis_tool_executed ? "var(--turf-emerald)" : "var(--text-tertiary)", fontWeight: 700 }}>
+                        <span style={{ color: cfg.alternative_hypothesis_tool_executed ? "var(--text-emerald)" : "var(--text-tertiary)", fontWeight: 700 }}>
                           {cfg.alternative_hypothesis_tool_executed ? (isZh ? "工具已执行" : "Tools run") : (isZh ? "未执行" : "Not run")}
                         </span>
                       </td>
@@ -589,7 +589,7 @@ export const ValidationLabWorkspace: React.FC<ValidationLabWorkspaceProps> = ({
           >
             <div>
               <div style={{ fontSize: 12, color: "var(--text-tertiary)", textTransform: "uppercase" }}>Δ OAAI 动量幅度</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: whatIfResult.delta_oaai_amplitude >= 0 ? "var(--turf-emerald)" : "var(--crimson-warn)" }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: whatIfResult.delta_oaai_amplitude >= 0 ? "var(--text-emerald)" : "var(--crimson-warn)" }}>
                 {whatIfResult.delta_oaai_amplitude > 0 ? `+${whatIfResult.delta_oaai_amplitude}` : whatIfResult.delta_oaai_amplitude}
               </div>
             </div>

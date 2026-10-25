@@ -11,39 +11,43 @@ type RevisionEntry = {
   timestamp: number;
 };
 
+import { Locale } from "../lib/i18n";
+
 type Props = {
   revisions: RevisionEntry[];
   onOpenChallengeModal: () => void;
   canChallenge: boolean;
+  locale?: Locale;
 };
 
-const challengeLabels: Record<string, string> = {
-  challenge_causal_interpretation: "Causal Interpretation Scrutiny",
-  check_counterevidence: "Counterevidence Audit",
-  check_sample_sufficiency: "Sample Sufficiency Verification",
-  check_comparison_window: "Baseline Window Comparison",
-  examine_sequence: "Sequence Continuity Check",
+const challengeLabels: Record<string, { zh: string; en: string }> = {
+  challenge_causal_interpretation: { zh: "因果解释审查", en: "Causal interpretation scrutiny" },
+  check_counterevidence: { zh: "反证审查", en: "Counterevidence audit" },
+  check_sample_sufficiency: { zh: "样本充分性检查", en: "Sample sufficiency check" },
+  check_comparison_window: { zh: "基线窗口对比", en: "Baseline window comparison" },
+  examine_sequence: { zh: "序列连续性检查", en: "Sequence continuity check" },
 };
 
 const clock = (s: number) =>
   `${Math.floor(s / 60).toString().padStart(2, "0")}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
 
-export function RevisionTimeline({ revisions, onOpenChallengeModal, canChallenge }: Props) {
+export function RevisionTimeline({ revisions, onOpenChallengeModal, canChallenge, locale = "zh" }: Props) {
+  const isZh = locale === "zh";
   return (
     <div className="revision-timeline-panel">
       <div className="timeline-header-row">
         <div>
-          <span className="timeline-badge">CHALLENGE & REVISION TIMELINE</span>
-          <h4 className="timeline-heading">Judgment Evolution Audit</h4>
+          <span className="timeline-badge">{isZh ? "质疑与修订时间线" : "CHALLENGE & REVISION TIMELINE"}</span>
+          <h4 className="timeline-heading">{isZh ? "判断演进审计" : "Judgment evolution audit"}</h4>
         </div>
         {canChallenge && (
           <button
             type="button"
             className="btn-new-challenge"
             onClick={onOpenChallengeModal}
-            title="Challenge the current claim with adversarial scrutiny"
+            title={isZh ? "对当前结论发起对抗性审查" : "Challenge the current claim with adversarial scrutiny"}
           >
-            ⚡ Challenge Current Insight
+            ⚡ {isZh ? "质疑当前结论" : "Challenge current insight"}
           </button>
         )}
       </div>
@@ -75,7 +79,7 @@ export function RevisionTimeline({ revisions, onOpenChallengeModal, canChallenge
                   <div className="rev-meta-bar">
                     <span className="rev-id">{rev.revision_id}</span>
                     <span className="rev-type">
-                      {challengeLabels[rev.challenge_type] || rev.challenge_type}
+                      {(challengeLabels[rev.challenge_type]?.[isZh ? 'zh' : 'en']) || rev.challenge_type}
                     </span>
                     <span className="rev-time">Match Time {clock(rev.at)}</span>
                     <span className={`rev-outcome-badge ${outcomeClass}`}>

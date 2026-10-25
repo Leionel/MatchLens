@@ -153,7 +153,7 @@ export const EventFeed: React.FC<EventFeedProps> = ({
                 borderRadius: 4,
                 border: "none",
                 background: teamFilter === "H" ? "color-mix(in srgb, var(--green-9) 25%, transparent)" : "transparent",
-                color: teamFilter === "H" ? "var(--turf-emerald)" : "var(--text-secondary)",
+                color: teamFilter === "H" ? "var(--text-emerald)" : "var(--text-secondary)",
                 cursor: "pointer",
               }}
             >
@@ -198,7 +198,7 @@ export const EventFeed: React.FC<EventFeedProps> = ({
                 borderRadius: 6,
                 border: filter === cat.id ? "0.5px solid var(--turf-emerald)" : "0.5px solid color-mix(in srgb, var(--slate-12) 8%, transparent)",
                 background: filter === cat.id ? "color-mix(in srgb, var(--green-9) 20%, transparent)" : "color-mix(in srgb, var(--slate-12) 3%, transparent)",
-                color: filter === cat.id ? "var(--turf-emerald)" : "var(--text-secondary)",
+                color: filter === cat.id ? "var(--text-emerald)" : "var(--text-secondary)",
                 cursor: "pointer",
               }}
             >
@@ -230,6 +230,9 @@ export const EventFeed: React.FC<EventFeedProps> = ({
 
       {/* Modern Event Stream Scroll View */}
       <div
+        tabIndex={0}
+        role="region"
+        aria-label={isZh ? "比赛事件流" : "Match event stream"}
         style={{
           flex: 1,
           maxHeight: "440px",
@@ -352,7 +355,7 @@ export const EventFeed: React.FC<EventFeedProps> = ({
                         padding: "1px 5px",
                         borderRadius: 3,
                         background: isHome ? "color-mix(in srgb, var(--green-9) 15%, transparent)" : "color-mix(in srgb, var(--cyan-9) 15%, transparent)",
-                        color: isHome ? "var(--turf-emerald)" : "var(--tech-cyan)",
+                        color: isHome ? "var(--text-emerald)" : "var(--tech-cyan)",
                       }}
                     >
                       {isHome ? (teamNames?.H || "HAR").slice(0, 3).toUpperCase() : (teamNames?.N || "NOR").slice(0, 3).toUpperCase()}

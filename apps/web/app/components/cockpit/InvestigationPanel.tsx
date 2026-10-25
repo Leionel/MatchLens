@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { CockpitState, InvestigationSeed } from "./types";
 import { Locale } from "../../lib/i18n";
 
@@ -160,6 +160,8 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
   const [plan, setPlan] = useState<Plan | null>(null);
   const [promoting, setPromoting] = useState(false);
   const [promoted, setPromoted] = useState<{ claim_id: string; current_revision_id?: string | null } | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const runToken = useRef(0);
 
   const run = useCallback(
     async (override?: Partial<InvestigationSeed>) => {
@@ -168,15 +170,22 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
       const targetTeam = useSeed?.team ?? team;
       const targetType = useSeed?.focusType ?? focusType;
       const targetId = useSeed?.focusId ?? (focusId || null);
+      const token = ++runToken.current;
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const matchId = state.match_id;
       setBusy(true);
       setError("");
       setPromoted(null);
+      setPlan(null);
       try {
         const res = await fetch("/api/investigate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
           body: JSON.stringify({
-            match_id: state.match_id,
+            match_id: matchId,
             at: targetAt,
             team: targetTeam,
             focus_type: targetType,
@@ -188,22 +197,39 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
         });
         if (!res.ok) throw new Error(`Investigation failed (${res.status})`);
         const data: Plan = await res.json();
-        if (data.match_id !== state.match_id || data.as_of > ((state.snapshot_as_of ?? state.at) + 1)) {
+        if (token !== runToken.current) return;
+        // The plan must belong to the same match and the moment this request
+        // asked for. A switched match or a later seek invalidates it.
+        if (data.match_id !== matchId || Math.abs(Number(data.as_of) - Number(targetAt)) > 1) {
           throw new Error("Stale investigation response");
         }
         setPlan(data);
+        setTeam(data.team === "N" ? "N" : "H");
         if (useSeed) {
           setFocusType(data.focus_type as typeof focusType);
           setFocusId(data.focus_id || "");
         }
       } catch (e) {
-        setError((e as Error).message);
+        if ((e as Error).name === "AbortError") {
+          if (token === runToken.current) setError(isZh ? "调查已取消" : "Investigation cancelled");
+          return;
+        }
+        if (token === runToken.current) setError((e as Error).message);
       } finally {
-        setBusy(false);
+        if (token === runToken.current) setBusy(false);
       }
     },
-    [executionMode, focusId, focusType, question, seed, state.at, state.match_id, state.snapshot_as_of, team]
+    [executionMode, focusId, focusType, isZh, question, seed, state.at, state.match_id, state.snapshot_as_of, team]
   );
+
+  const cancel = () => {
+    runToken.current += 1;
+    abortRef.current?.abort();
+    setBusy(false);
+    setError(isZh ? "调查已取消" : "Investigation cancelled");
+  };
+
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   useEffect(() => {
     if (!seed?.requestId) return;
@@ -237,136 +263,161 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
   };
 
   return (
-    <div className="glass-panel" style={{ padding: 16, display: "grid", gap: 14 }}>
+    <div className="glass-panel r6-ask-panel" style={{ padding: 18, display: "grid", gap: 14 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "end" }}>
         <div>
-          <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>{isZh ? "调查工作台" : "Investigation"}</h3>
+          <h3 style={{ fontSize: 20, fontWeight: 800, margin: 0, letterSpacing: "-.02em" }}>{isZh ? "询问这场比赛" : "Ask about this match"}</h3>
           <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 4 }}>
             {isZh
               ? "确定性工具与真实证据回执；未通过的结论不会写入注册表。"
               : "Deterministic tools and real receipts; an unapproved conclusion is never registered."}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          <span className="rail-chip neutral">{plan ? plan.intent : isZh ? "待运行" : "Idle"}</span>
-          <span className="rail-chip neutral" style={{ color: statusTone[plan?.state || ""] || undefined }}>
-            {plan ? plan.state : isZh ? "未开始" : "Not started"}
-          </span>
-          <span
-            className="rail-chip neutral"
-            data-testid="investigation-execution-mode"
-            data-execution-mode={plan?.execution_mode || ""}
-            title={isZh ? "产生该计划的执行引擎" : "Engine that produced this plan"}
-          >
-            {plan
-              ? (EXECUTION_LABELS[plan.execution_mode]?.en ?? plan.execution_mode)
-              : isZh
-                ? "确定性引擎"
-                : "Deterministic"}
-          </span>
-          <span
-            className="rail-chip neutral"
-            data-testid="investigation-agent-status"
-            data-agent-status={plan?.agent_status || ""}
-            title={isZh ? "模型智能体是否真的执行过" : "Whether a model agent actually ran"}
-          >
-            {plan
-              ? (AGENT_STATUS_LABELS[plan.agent_status]?.en ?? plan.agent_status)
-              : isZh
-                ? "模型未运行"
-                : "Not Run"}
-          </span>
-          <span className="rail-chip neutral" title={plan?.dataset_revision || undefined}>
-            {plan?.completeness?.status || "—"}
-          </span>
-        </div>
+        <span className="r6-status-pill">{isZh ? "证据优先 · 未通过门禁不写入" : "Evidence-first · gate required"}</span>
       </div>
 
       {seed && (
-        <div style={{ fontSize: 12, color: "var(--text-emerald)" }}>
-          {isZh
-            ? `来自图表选择：${seed.focusType} ${seed.focusId || ""} @ ${Math.floor(seed.at / 60)}'`
-            : `From chart selection: ${seed.focusType} ${seed.focusId || ""} @ ${Math.floor(seed.at / 60)}'`}
+        <div className="r6-seed-context">
+          <span>{isZh ? "已继承当前选择" : "Selection carried over"}</span>
+          <b>
+            {seed.focusType} {seed.focusId || ""} @ {Math.floor(seed.at / 60)}'
+          </b>
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8 }}>
-        <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)" }}>
-          {isZh ? "队伍" : "Team"}
-          <select
-            value={team}
-            onChange={(e) => setTeam(e.target.value as "H" | "N")}
-            style={{ minHeight: 34, background: "var(--input-bg)", color: "var(--input-text)", border: "0.5px solid var(--pitch-border)", borderRadius: 6, padding: "4px 8px" }}
-          >
-            <option value="H">{homeName}</option>
-            <option value="N">{awayName}</option>
-          </select>
-        </label>
-        <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)" }}>
-          {isZh ? "焦点类型" : "Focus"}
-          <select
-            value={focusType}
-            onChange={(e) => setFocusType(e.target.value as typeof focusType)}
-            style={{ minHeight: 34, background: "var(--input-bg)", color: "var(--input-text)", border: "0.5px solid var(--pitch-border)", borderRadius: 6, padding: "4px 8px" }}
-          >
-            <option value="moment">{isZh ? "当前异常/时刻" : "Current moment"}</option>
-            <option value="oaai_point">{isZh ? "OAAI 峰值" : "OAAI peak"}</option>
-            <option value="event">{isZh ? "事件" : "Event"}</option>
-            <option value="metric">{isZh ? "指标" : "Metric"}</option>
-            <option value="sequence">{isZh ? "控球序列" : "Sequence"}</option>
-            <option value="player">{isZh ? "球员" : "Player"}</option>
-            <option value="zone">{isZh ? "球场区域" : "Zone"}</option>
-            <option value="shot_location">{isZh ? "射门位置" : "Shot location"}</option>
-            <option value="cross_match_diff">{isZh ? "跨场差异" : "Cross-match difference"}</option>
-          </select>
-        </label>
-        <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)" }}>
-          {isZh ? "焦点 ID（高级）" : "Focus ID (advanced)"}
+      <div className="r6-ask-context">
+        <span>
+          <small>{isZh ? "比赛" : "Match"}</small>
+          <b>{homeName} vs {awayName}</b>
+        </span>
+        <span>
+          <small>{isZh ? "快照" : "Snapshot"}</small>
+          <b>{Math.floor((state.snapshot_as_of ?? state.at) / 60)}' · {state.coverage?.continuous ? (isZh ? "覆盖已验证" : "coverage verified") : isZh ? "部分覆盖" : "partial"}</b>
+        </span>
+        <span>
+          <small>{isZh ? "分析球队" : "Team"}</small>
+          <b>{team === "H" ? homeName : awayName}</b>
+        </span>
+      </div>
+
+      <div className="r6-question-box">
+        <label htmlFor="r6-investigation-question">{isZh ? "你想了解这场比赛的什么？" : "What do you want to understand?"}</label>
+        <div className="r6-question-row">
           <input
-            value={focusId}
-            onChange={(e) => setFocusId(e.target.value)}
-            placeholder={isZh ? "留空使用当前时刻" : "Leave empty for current moment"}
-            style={{ minHeight: 34, background: "var(--input-bg)", color: "var(--input-text)", border: "0.5px solid var(--pitch-border)", borderRadius: 6, padding: "4px 8px" }}
-          />
-        </label>
-        <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)" }}>
-          {isZh ? "执行引擎" : "Engine"}
-          <select
-            value={executionMode}
-            onChange={(e) => setExecutionMode(e.target.value as typeof executionMode)}
-            data-testid="investigation-engine-select"
-            style={{ minHeight: 34, background: "var(--input-bg)", color: "var(--input-text)", border: "0.5px solid var(--pitch-border)", borderRadius: 6, padding: "4px 8px" }}
-          >
-            <option value="deterministic_planner">{isZh ? "确定性引擎（免费）" : "Deterministic (free)"}</option>
-            <option value="maf_agent">{isZh ? "真实 Agent（消耗模型预算）" : "Real Agent (uses model budget)"}</option>
-          </select>
-        </label>
-        <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)", gridColumn: "span 2" }}>
-          {isZh ? "问题" : "Question"}
-          <input
+            id="r6-investigation-question"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            placeholder={isZh ? "这段攻势由什么造成？" : "What produced this attacking spell?"}
-            style={{ minHeight: 34, background: "var(--input-bg)", color: "var(--input-text)", border: "0.5px solid var(--pitch-border)", borderRadius: 6, padding: "4px 8px" }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !busy && state.match_id) void run();
+            }}
+            placeholder={isZh ? "例如：为什么第 32 分钟的进攻活动上升？" : "e.g. Why did attacking activity rise around 32'?"}
           />
-        </label>
+          <button type="button" className="r6-primary-action" onClick={() => void run()} disabled={busy || !state.match_id}>
+            {busy ? (isZh ? "分析中…" : "Analysing…") : isZh ? "分析" : "Analyse"}
+          </button>
+          {busy && (
+            <button type="button" className="r6-text-action" onClick={cancel}>
+              {isZh ? "取消" : "Cancel"}
+            </button>
+          )}
+        </div>
+        <div className="r6-question-suggestions" aria-label={isZh ? "推荐问题" : "Suggested questions"}>
+          {[
+            isZh ? "这次攻势有哪些可观测的关键动作？" : "Which recorded actions shaped this spell?",
+            isZh ? "前后两个阶段的活动如何变化？" : "How did activity change between the two phases?",
+            isZh ? "这些证据足以证明战术因果吗？" : "Does this evidence support a tactical cause?",
+          ].map((text) => (
+            <button key={text} type="button" onClick={() => setQuestion(text)}>
+              {text}
+            </button>
+          ))}
+        </div>
       </div>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <button type="button" className="mz-btn mz-btn-primary" onClick={() => void run()} disabled={busy || !state.match_id}>
-          {busy ? (isZh ? "执行中..." : "Running...") : isZh ? "运行调查" : "Run investigation"}
-        </button>
-        <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+
+      <details className="r6-investigation-advanced" data-testid="investigation-advanced">
+        <summary>{isZh ? "高级设置 · 焦点 / 模型执行 / 工具记录" : "Advanced · focus, execution and tool records"}</summary>
+        <div className="r6-advanced-grid">
+          <label>
+            {isZh ? "队伍" : "Team"}
+            <select value={team} onChange={(e) => setTeam(e.target.value as "H" | "N")}>
+              <option value="H">{homeName}</option>
+              <option value="N">{awayName}</option>
+            </select>
+          </label>
+          <label>
+            {isZh ? "焦点类型" : "Focus"}
+            <select value={focusType} onChange={(e) => setFocusType(e.target.value as typeof focusType)}>
+              <option value="moment">{isZh ? "当前时刻" : "Current moment"}</option>
+              <option value="oaai_point">{isZh ? "OAAI 变化点" : "OAAI change point"}</option>
+              <option value="event">{isZh ? "事件" : "Event"}</option>
+              <option value="metric">{isZh ? "指标" : "Metric"}</option>
+              <option value="sequence">{isZh ? "控球序列" : "Sequence"}</option>
+              <option value="player">{isZh ? "球员" : "Player"}</option>
+              <option value="zone">{isZh ? "球场区域" : "Zone"}</option>
+              <option value="shot_location">{isZh ? "射门位置" : "Shot location"}</option>
+              <option value="cross_match_diff">{isZh ? "跨场差异" : "Cross-match difference"}</option>
+            </select>
+          </label>
+          <label>
+            {isZh ? "焦点 ID（可选）" : "Focus ID (optional)"}
+            <input
+              value={focusId}
+              onChange={(e) => setFocusId(e.target.value)}
+              placeholder={isZh ? "留空使用当前时刻" : "Leave empty for current moment"}
+            />
+          </label>
+          <label>
+            {isZh ? "执行引擎" : "Engine"}
+            <select
+              value={executionMode}
+              onChange={(e) => setExecutionMode(e.target.value as typeof executionMode)}
+              data-testid="investigation-engine-select"
+            >
+              <option value="deterministic_planner">{isZh ? "确定性引擎（免费）" : "Deterministic (free)"}</option>
+              <option value="maf_agent">{isZh ? "真实 Agent（消耗模型预算）" : "Real Agent (uses model budget)"}</option>
+            </select>
+          </label>
+        </div>
+        <p className="r6-advanced-note">
           {isZh
-            ? "提示：在 OAAI 波峰、事件或控球序列上点「调查」，会带着焦点自动回到这里。"
-            : "Tip: clicking Investigate on an OAAI peak, event or sequence returns here with the focus pre-filled."}
-        </span>
-        {error && <span style={{ color: "var(--red-11)", fontSize: 12 }}>{error}</span>}
-      </div>
+            ? "焦点 ID、快照与工具收据是高级信息；默认问题会继承当前比赛与时间。"
+            : "Focus IDs, snapshots and tool receipts are advanced details; the default question inherits the current match and clock."}
+        </p>
+      </details>
+
+      {error && (
+        <div className="r6-inline-error" role="alert">
+          {error}
+        </div>
+      )}
 
       {plan && (
         <div style={{ display: "grid", gap: 12 }} data-testid="investigation-plan">
           <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
             {isZh ? "快照" : "Snapshot"} <code>{plan.snapshot_id.slice(0, 18)}</code> / {plan.as_of}s / {plan.tool_receipts.length} {isZh ? "次工具调用" : "tool calls"}
+          </div>
+          <div className="r6-plan-status" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <span className="rail-chip neutral">{plan.intent}</span>
+            <span className="rail-chip neutral" style={{ color: statusTone[plan.state] || undefined }}>{plan.state}</span>
+            <span
+              className="rail-chip neutral"
+              data-testid="investigation-execution-mode"
+              data-execution-mode={plan.execution_mode}
+              title={isZh ? "产生该计划的执行引擎" : "Engine that produced this plan"}
+            >
+              {EXECUTION_LABELS[plan.execution_mode]?.[isZh ? "zh" : "en"] ?? plan.execution_mode}
+            </span>
+            <span
+              className="rail-chip neutral"
+              data-testid="investigation-agent-status"
+              data-agent-status={plan.agent_status}
+              title={isZh ? "模型智能体是否真的执行过" : "Whether a model agent actually ran"}
+            >
+              {AGENT_STATUS_LABELS[plan.agent_status]?.[isZh ? "zh" : "en"] ?? plan.agent_status}
+            </span>
+            <span className="rail-chip neutral" title={plan.dataset_revision || undefined}>
+              {plan.completeness?.status || "—"}
+            </span>
           </div>
 
           {(plan.required_scope.length > 0 || plan.state === "FAILED" || plan.state === "UNKNOWN") && (
