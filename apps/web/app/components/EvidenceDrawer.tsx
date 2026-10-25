@@ -33,6 +33,11 @@ type Evidence = {
   snapshot_id: string;
   as_of: number;
   events: FootballEvent[];
+  total_event_count?: number;
+  provider_data_boundary?: {
+    access_tier: string;
+    state_window?: { window_seconds: number; total_events_observed: number } | null;
+  } | null;
   receipts: Record<string, Receipt>;
   limitations: string[];
 };
@@ -328,8 +333,16 @@ export function EvidenceDrawer({
             {/* Prefix Events Scrubber */}
             <details className="prefix-scrubber-details">
               <summary>
-                Browse All {evidence.events.length} Events in Snapshot Prefix
+                {evidence.provider_data_boundary
+                  ? `Browse ${evidence.events.length} events in the public replay window of ${evidence.total_event_count ?? "?"}`
+                  : `Browse All ${evidence.events.length} Events in Snapshot Prefix`}
               </summary>
+              {evidence.provider_data_boundary && (
+                <p className="no-event-selected" style={{ fontSize: 11 }}>
+                  The full provider event stream is protected data; this panel shows a bounded
+                  evidence window.
+                </p>
+              )}
               <div className="prefix-scrubber-list">
                 {evidence.events.map((e) => (
                   <button

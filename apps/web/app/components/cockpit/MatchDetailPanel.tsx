@@ -15,6 +15,7 @@ type DetailShot = {
   team: string;
   player_name?: string | null;
   minute?: number | null;
+  t?: number | null;
   period_label?: string | null;
   outcome?: string | null;
   is_own_goal: boolean;
@@ -28,6 +29,8 @@ type PlayerRow = {
   player_name?: string | null;
   jersey_number?: number | null;
   position?: string | null;
+  minutes_seconds?: number;
+  minutes_method?: string;
 };
 
 type MatchDetail = {
@@ -49,14 +52,48 @@ type MatchDetail = {
     };
     context: {
       duration: number;
+      nominal_duration?: number;
       observed_end: number;
+      replayable_end?: number;
+      stoppage_time?: number;
+      as_of?: number;
       period: number;
+      periods?: {
+        period: number;
+        label: string;
+        is_shootout: boolean;
+        nominal_start: number;
+        nominal_end: number;
+        observed_start: number;
+        observed_end: number;
+        stoppage_seconds: number;
+        event_count: number;
+      }[];
+      shootout_clock?: {
+        period: number;
+        start_clock: number;
+        end_clock: number;
+        kick_count: number;
+        kicks_by_team: Record<string, number>;
+        goals_by_team: Record<string, number>;
+        clock_note: string;
+      } | null;
+      clock_version?: string;
       continuous_coverage: boolean;
       completeness_status?: string | null;
       dataset_revision?: string | null;
       partial_notice?: string | null;
       provenance_kind?: string;
     };
+  };
+  score_verification: {
+    status: "verified" | "mismatch" | "not_available";
+    recorded: { H: number; N: number };
+    provider_declared: { H: number; N: number } | null;
+    shootout: { H: number; N: number };
+    consistent: boolean;
+    note: string;
+    basis: string;
   };
   lineups: {
     home_team: string;
@@ -72,7 +109,12 @@ type MatchDetail = {
     density_top_zones: { cell_id: string; name: string; home_actions_count: number; away_actions_count: number; delta_density: number; advantage: string }[];
     sequence_count: number;
   };
-  events_summary: { total: number; by_action_type: Record<string, number>; full_events_endpoint: string };
+  events_summary: {
+    total: number;
+    by_action_type: Record<string, number>;
+    public_events_endpoint: string;
+    raw_event_export: string;
+  };
   ai_insights: {
     saved_investigations: { investigation_id: string; state: string; focus_type: string; focus_id?: string | null; question: string; gate_status: string }[];
     story_endpoint: string;
@@ -90,6 +132,9 @@ type ProfileMatchRow = {
   continuous_coverage: boolean;
   provenance_kind: string;
   clock_bounded_at_duration: boolean;
+  nominal_duration?: number;
+  replayable_end?: number;
+  stoppage_seconds?: number;
   metrics: Record<string, { value: number | null; status: string; unit: string; event_count: number }>;
 };
 
@@ -170,12 +215,21 @@ type CompareResponse = {
     comparable: boolean;
     warnings: string[];
     comparability_note: string;
+    sample_selection_note?: string;
     metric_version: string;
   };
 };
 
 /** Cross-match compare entry: same corpus, raw totals + gated per-90 rates. */
-const CompareView = ({ matchId, isZh }: { matchId: string; isZh: boolean }) => {
+const CompareView = ({
+  matchId,
+  isZh,
+  onInvestigate,
+}: {
+  matchId: string;
+  isZh: boolean;
+  onInvestigate?: (otherMatchId: string) => void;
+}) => {
   const [matches, setMatches] = useState<{ match_id: string; label: string; provenance_kind?: string }[]>([]);
   const [other, setOther] = useState("");
   const [result, setResult] = useState<CompareResponse | null>(null);
@@ -184,7 +238,7 @@ const CompareView = ({ matchId, isZh }: { matchId: string; isZh: boolean }) => {
 
   useEffect(() => {
     let active = true;
-    fetch("/api/matches")
+    fetch("/api/matches", { signal: AbortSignal.timeout(30_000) })
       .then((res) => res.json())
       .then((d) => {
         if (active) setMatches(d.matches || []);
@@ -200,7 +254,7 @@ const CompareView = ({ matchId, isZh }: { matchId: string; isZh: boolean }) => {
     setLoading(true);
     setError("");
     setResult(null);
-    fetch(`/api/matches/compare?match_ids=${encodeURIComponent(matchId)},${encodeURIComponent(other)}`)
+    fetch(`/api/matches/compare?match_ids=${encodeURIComponent(matchId)},${encodeURIComponent(other)}`, { signal: AbortSignal.timeout(30_000) })
       .then(async (res) => {
         if (!res.ok) throw new Error(`Compare failed (${res.status})`);
         return res.json();
@@ -232,6 +286,20 @@ const CompareView = ({ matchId, isZh }: { matchId: string; isZh: boolean }) => {
         <button type="button" className="mz-btn" disabled={!other || loading} onClick={runCompare}>
           {isZh ? "对比" : "Compare"}
         </button>
+        <button
+          type="button"
+          className="mz-btn"
+          data-testid="compare-investigate"
+          disabled={!other || !onInvestigate}
+          onClick={() => other && onInvestigate?.(other)}
+          title={
+            isZh
+              ? "用调查工作台检查两场比赛的差异，并保留证据链"
+              : "Open the investigation workbench on the difference, with its evidence chain"
+          }
+        >
+          {isZh ? "调查差异" : "Investigate difference"}
+        </button>
       </div>
       {loading && <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{isZh ? "对比中..." : "Comparing..."}</div>}
       {error && <div role="alert" style={{ fontSize: 12, color: "var(--red-11)" }}>{error}</div>}
@@ -242,6 +310,11 @@ const CompareView = ({ matchId, isZh }: { matchId: string; isZh: boolean }) => {
           </div>
           {result.batch_summary.warnings.length > 0 && (
             <div style={{ fontSize: 12, color: "var(--text-gold)" }}>{result.batch_summary.warnings.join(" · ")}</div>
+          )}
+          {result.batch_summary.sample_selection_note && (
+            <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+              {result.batch_summary.sample_selection_note}
+            </div>
           )}
           <table className="tactical-table mz-table">
             <thead>
@@ -409,7 +482,7 @@ const ProfileView = ({ detail, isZh }: { detail: MatchDetail; isZh: boolean }) =
     setError("");
     setProfile(null);
     setPlayerProfile(null);
-    fetch(`/api/profiles/team?team=${encodeURIComponent(team)}`)
+    fetch(`/api/profiles/team?team=${encodeURIComponent(team)}`, { signal: AbortSignal.timeout(30_000) })
       .then(async (res) => {
         if (!res.ok) throw new Error(await res.text() || `Profile failed (${res.status})`);
         return res.json();
@@ -435,7 +508,7 @@ const ProfileView = ({ detail, isZh }: { detail: MatchDetail; isZh: boolean }) =
     setPlayerProfile(null);
     try {
       const matchIds = profile.matches.map((m) => m.match_id).join(",");
-      const res = await fetch(`/api/profiles/player?player_id=${encodeURIComponent(playerId)}&match_ids=${encodeURIComponent(matchIds)}`);
+      const res = await fetch(`/api/profiles/player?player_id=${encodeURIComponent(playerId)}&match_ids=${encodeURIComponent(matchIds)}`, { signal: AbortSignal.timeout(30_000) });
       if (!res.ok) throw new Error(await res.text() || `Player profile failed (${res.status})`);
       setPlayerProfile(await res.json());
     } catch (e) {
@@ -454,7 +527,7 @@ const ProfileView = ({ detail, isZh }: { detail: MatchDetail; isZh: boolean }) =
     const matchIds = profile?.matches.map((m) => m.match_id).join(",");
     setPlayers(null);
     if (!matchIds) return;
-    fetch(`/api/profiles/players?match_ids=${encodeURIComponent(matchIds)}&limit=12`)
+    fetch(`/api/profiles/players?match_ids=${encodeURIComponent(matchIds)}&limit=12`, { signal: AbortSignal.timeout(30_000) })
       .then((res) => (res.ok ? res.json() : null))
       .then((d) => {
         if (active && d) setPlayers(d.players || []);
@@ -521,9 +594,16 @@ const ProfileView = ({ detail, isZh }: { detail: MatchDetail; isZh: boolean }) =
                   <span style={{ color: m.continuous_coverage ? "var(--text-emerald)" : "var(--text-gold)" }}>
                     {m.continuous_coverage ? (isZh ? "覆盖完整" : "complete") : (isZh ? "部分覆盖" : "partial")}
                   </span>
-                  {m.clock_bounded_at_duration && (
-                    <span style={{ color: "var(--text-gold)" }} title={isZh ? "快照冻结于名义时长，加时/补时未计入" : "frozen at nominal duration; ET/stoppage excluded"}>
-                      {isZh ? "时钟有界" : "clock bounded"}
+                  {(m.replayable_end ?? 0) > (m.nominal_duration ?? 0) && (
+                    <span
+                      style={{ color: "var(--text-gold)" }}
+                      title={
+                        isZh
+                          ? `补时/加时已计入，可回放至 ${Math.round(m.replayable_end ?? 0)}s`
+                          : `Stoppage/extra time included; replay reaches ${Math.round(m.replayable_end ?? 0)}s`
+                      }
+                    >
+                      {isZh ? "含补时" : "incl. stoppage"}
                     </span>
                   )}
                 </summary>
@@ -564,7 +644,7 @@ const InvestigationsView = ({ matchId, isZh }: { matchId: string; isZh: boolean 
   const [error, setError] = useState("");
   useEffect(() => {
     let active = true;
-    fetch(`/api/investigations?match_id=${encodeURIComponent(matchId)}&limit=50`)
+    fetch(`/api/investigations?match_id=${encodeURIComponent(matchId)}&limit=50`, { signal: AbortSignal.timeout(30_000) })
       .then(async (res) => {
         if (!res.ok) throw new Error(`Failed (${res.status})`);
         return res.json();
@@ -614,9 +694,18 @@ interface MatchDetailPanelProps {
   locale?: Locale;
   onOpenMatch: (matchId: string) => void;
   onClose: () => void;
+  onInvestigateShot?: (input: { matchId: string; eventId: string; team: "H" | "N"; at: number }) => void;
+  onInvestigateCrossMatch?: (input: { matchId: string; otherMatchId: string }) => void;
 }
 
-export const MatchDetailPanel: React.FC<MatchDetailPanelProps> = ({ matchId, locale = "zh", onOpenMatch, onClose }) => {
+export const MatchDetailPanel: React.FC<MatchDetailPanelProps> = ({
+  matchId,
+  locale = "zh",
+  onOpenMatch,
+  onClose,
+  onInvestigateShot,
+  onInvestigateCrossMatch,
+}) => {
   const isZh = locale === "zh";
   const [detail, setDetail] = useState<MatchDetail | null>(null);
   const [error, setError] = useState("");
@@ -627,9 +716,17 @@ export const MatchDetailPanel: React.FC<MatchDetailPanelProps> = ({ matchId, loc
     setDetail(null);
     setError("");
     setTab("overview");
-    fetch(`/api/matches/${encodeURIComponent(matchId)}/detail`)
+    fetch(`/api/matches/${encodeURIComponent(matchId)}/detail`, { signal: AbortSignal.timeout(30_000) })
       .then(async (res) => {
-        if (!res.ok) throw new Error(await res.text() || `Detail failed (${res.status})`);
+        if (!res.ok) {
+          const body = await res.json().catch(() => null);
+          const detail = body?.detail;
+          const reason =
+            typeof detail === "string"
+              ? detail
+              : detail?.reason || detail?.code || `Detail failed (${res.status})`;
+          throw new Error(reason);
+        }
         return res.json();
       })
       .then((d) => {
@@ -701,8 +798,33 @@ export const MatchDetailPanel: React.FC<MatchDetailPanelProps> = ({ matchId, loc
                 {ctx.continuous_coverage ? (isZh ? "覆盖已验证" : "coverage verified") : (ctx.completeness_status || "partial")}
               </span>
               <span style={chipStyle}>
-                {isZh ? "观测至" : "observed to"} {Math.round(ctx.observed_end)}s / {ctx.duration}s
+                {isZh ? "观测至" : "observed to"} {Math.round(ctx.observed_end)}s / {Math.round(ctx.nominal_duration ?? ctx.duration)}s
               </span>
+              {(ctx.replayable_end ?? ctx.observed_end) > (ctx.nominal_duration ?? ctx.duration) && (
+                <span
+                  style={chipStyle}
+                  title={
+                    isZh
+                      ? `名义时长后的补时仍可回放至 ${Math.round(ctx.replayable_end ?? ctx.observed_end)}s`
+                      : `Recorded stoppage time is replayable through ${Math.round(ctx.replayable_end ?? ctx.observed_end)}s`
+                  }
+                >
+                  {isZh ? "可回放至" : "replay to"} {Math.round(ctx.replayable_end ?? ctx.observed_end)}s
+                </span>
+              )}
+              {(ctx.stoppage_time ?? 0) > 0 && (
+                <span style={chipStyle}>
+                  {isZh ? "补时" : "stoppage"} {Math.round(ctx.stoppage_time ?? 0)}s
+                </span>
+              )}
+              {ctx.shootout_clock && (
+                <span
+                  style={chipStyle}
+                  title={ctx.shootout_clock.clock_note}
+                >
+                  {isZh ? "点球大战" : "shoot-out"} · {ctx.shootout_clock.kick_count} kicks
+                </span>
+              )}
               <span style={chipStyle}>{detail.events_summary.total} {isZh ? "事件" : "events"}</span>
               <span style={chipStyle} title={ctx.dataset_revision || ""}>
                 {isZh ? "数据版本" : "revision"}: {(ctx.dataset_revision || "—").slice(0, 12)}…
@@ -720,6 +842,23 @@ export const MatchDetailPanel: React.FC<MatchDetailPanelProps> = ({ matchId, loc
                   <span>{isZh ? "数据来源" : "Data provider"}: {meta.data_provider} ({meta.provenance_kind})</span>
                   <span>{isZh ? "完整度" : "Completeness"}: {ctx.completeness_status || "—"}</span>
                   <span>{isZh ? "License" : "License"}: {meta.license_ref}</span>
+                  <span
+                    data-testid="score-verification"
+                    data-status={detail.score_verification.status}
+                    title={detail.score_verification.note}
+                  >
+                    {isZh ? "比分核验" : "Score verification"}:{" "}
+                    {detail.score_verification.recorded.H}:{detail.score_verification.recorded.N}
+                    {detail.score_verification.provider_declared && (
+                      <> / {detail.score_verification.provider_declared.H}:{detail.score_verification.provider_declared.N}</>
+                    )}{" "}
+                    ({detail.score_verification.status})
+                  </span>
+                  {(detail.score_verification.shootout.H > 0 || detail.score_verification.shootout.N > 0) && (
+                    <span>
+                      {isZh ? "点球" : "shoot-out"}: {detail.score_verification.shootout.H}:{detail.score_verification.shootout.N}
+                    </span>
+                  )}
                 </div>
               </Section>
             )}
@@ -733,13 +872,21 @@ export const MatchDetailPanel: React.FC<MatchDetailPanelProps> = ({ matchId, loc
                     {detail.lineups.starters[side].map((p) => (
                       <div key={p.player_id} style={{ display: "flex", justifyContent: "space-between", gap: 6, fontSize: 12 }}>
                         <span>{p.jersey_number ? `${p.jersey_number}. ` : ""}{p.player_name}</span>
-                        <span style={{ color: "var(--text-tertiary)" }}>{p.position || ""}</span>
+                        <span style={{ color: "var(--text-tertiary)" }}>
+                          {p.position || ""}
+                          {typeof p.minutes_seconds === "number"
+                            ? ` · ${Math.round(p.minutes_seconds / 60)}'`
+                            : ""}
+                        </span>
                       </div>
                     ))}
                     <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 4 }}>{isZh ? "替补" : "Substitutes"}</div>
                     {detail.lineups.substitutes[side].map((p) => (
                       <div key={p.player_id} style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                         {p.jersey_number ? `${p.jersey_number}. ` : ""}{p.player_name}
+                        {typeof p.minutes_seconds === "number" && p.minutes_seconds > 0
+                          ? ` · ${Math.round(p.minutes_seconds / 60)}'`
+                          : ""}
                       </div>
                     ))}
                   </div>
@@ -780,6 +927,7 @@ export const MatchDetailPanel: React.FC<MatchDetailPanelProps> = ({ matchId, loc
                         <th style={{ padding: "4px 6px" }}>{isZh ? "结果" : "Outcome"}</th>
                         <th style={{ padding: "4px 6px" }}>(x, y)</th>
                         <th style={{ padding: "4px 6px" }}>{isZh ? "几何 xG*" : "Geom. xG*"}</th>
+                        <th style={{ padding: "4px 6px" }} />
                       </tr>
                     </thead>
                     <tbody>
@@ -791,6 +939,24 @@ export const MatchDetailPanel: React.FC<MatchDetailPanelProps> = ({ matchId, loc
                           <td style={{ padding: "4px 6px", color: s.outcome === "goal" ? "var(--text-emerald)" : "var(--text-secondary)" }}>{s.outcome || "—"}</td>
                           <td style={{ padding: "4px 6px", fontFamily: "var(--font-mono)" }}>{s.x != null ? `(${s.x}, ${s.y})` : "—"}</td>
                           <td style={{ padding: "4px 6px", fontFamily: "var(--font-mono)" }}>{s.pre_shot_xg_heuristic ?? "—"}</td>
+                          <td style={{ padding: "4px 6px" }}>
+                            <button
+                              type="button"
+                              className="mz-btn"
+                              data-testid="shot-investigate"
+                              disabled={!onInvestigateShot}
+                              onClick={() =>
+                                onInvestigateShot?.({
+                                  matchId: detail.match_id,
+                                  eventId: s.event_id,
+                                  team: s.team === "N" ? "N" : "H",
+                                  at: Math.max(0, Math.round(s.t ?? (s.minute ?? 0) * 60)),
+                                })
+                              }
+                            >
+                              {isZh ? "调查" : "Investigate"}
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -847,7 +1013,11 @@ export const MatchDetailPanel: React.FC<MatchDetailPanelProps> = ({ matchId, loc
                   title={isZh ? "跨场对比" : "Cross-match compare"}
                   note={isZh ? "原始总量始终列出；per-90 仅在覆盖与时长可比时给出。" : "Raw totals always shown; per-90 only when coverage and duration align."}
                 >
-                  <CompareView matchId={detail.match_id} isZh={isZh} />
+                  <CompareView
+                    matchId={detail.match_id}
+                    isZh={isZh}
+                    onInvestigate={onInvestigateCrossMatch ? (other) => onInvestigateCrossMatch({ matchId: detail.match_id, otherMatchId: other }) : undefined}
+                  />
                 </Section>
               </div>
             )}

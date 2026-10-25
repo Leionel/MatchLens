@@ -63,6 +63,15 @@ export const MatchLibraryDetail: React.FC<MatchLibraryDetailProps> = ({
   const provenance = provenanceLabel(match.provenance_kind, isZh);
   const report = match.completeness ?? null;
   const isCurrent = match.match_id === currentMatchId;
+  const canAnalyze = match.analysis_ready !== false;
+  const availabilityLabel = canAnalyze
+    ? isZh ? "可分析" : "Analysis ready"
+    : match.availability_status === "MATERIALIZED"
+      ? isZh ? "已安装 · 待验证" : "Installed · not ready"
+      : isZh ? "仅目录 · 未安装" : "Catalogued · not installed";
+  const availabilityDetail = canAnalyze
+    ? match.verification_basis || "verified"
+    : [match.availability_reason, match.install_hint].filter(Boolean).join(" · ");
 
   const copyLink = async () => {
     const url = `${window.location.origin}/?workspace=match_center&match=${encodeURIComponent(match.match_id)}&at=0`;
@@ -105,6 +114,14 @@ export const MatchLibraryDetail: React.FC<MatchLibraryDetailProps> = ({
           <span className={`rail-chip ${complete ? "verified" : "unknown"}`}>
             {match.completeness_status || match.coverage_level}
           </span>
+          <span
+            className={`rail-chip ${canAnalyze ? "verified" : "unknown"}`}
+            data-testid="match-library-availability"
+            data-availability-status={match.availability_status || (canAnalyze ? "ANALYSIS_READY" : "CATALOGUED")}
+            title={availabilityDetail || undefined}
+          >
+            {availabilityLabel}
+          </span>
           {match.match_date && <span className="ml-detail-date">{match.match_date}</span>}
         </div>
       </header>
@@ -133,7 +150,7 @@ export const MatchLibraryDetail: React.FC<MatchLibraryDetailProps> = ({
               value={`${match.events_count ?? 0}`}
             />
             <Row
-              label={isZh ? "标称时长" : "Nominal length"}
+              label={isZh ? "提供方格式时长" : "Declared format length"}
               value={formatClock(match.format_seconds)}
             />
             {match.official_score_note && (
@@ -266,22 +283,36 @@ export const MatchLibraryDetail: React.FC<MatchLibraryDetailProps> = ({
         )}
       </div>
 
+      {!canAnalyze && (
+        <p className="ml-detail-note" data-testid="match-library-missing-data">
+          {isZh
+            ? "该比赛只有元数据。完整事件载荷未安装，分析入口已关闭；不会用合成数据代替。"
+            : "Only metadata is available. The provider payload is not installed, so analysis is closed; synthetic data is never substituted."}
+          {match.install_hint ? ` ${match.install_hint}` : ""}
+        </p>
+      )}
+
       <footer className="ml-detail-actions">
         <button
           type="button"
           className="ml-primary-action"
           data-testid="match-library-enter"
-          disabled={isCurrent}
+          disabled={isCurrent || !canAnalyze}
+          title={!canAnalyze ? match.availability_reason || undefined : undefined}
           onClick={() => onEnter(match.match_id)}
         >
           {isCurrent
             ? isZh ? "当前比赛" : "Current match"
-            : isZh ? "进入分析" : "Open in analysis"}
+            : canAnalyze
+              ? isZh ? "进入分析" : "Open in analysis"
+              : isZh ? "未安装数据" : "Data not installed"}
         </button>
         <button
           type="button"
           className="ml-secondary-action"
           data-testid="match-library-detail-toggle"
+          disabled={!canAnalyze}
+          title={!canAnalyze ? match.availability_reason || undefined : undefined}
           onClick={() => onOpenDetail(match.match_id)}
         >
           {isZh ? "详情 / 画像 / 对比" : "Detail / profiles / compare"}

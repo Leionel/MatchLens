@@ -266,7 +266,11 @@ export default function MatchLensCockpit() {
     }
   };
 
-  const selectMatch = async (matchId: string, workspace?: WorkspaceId) => {
+  const selectMatch = async (
+    matchId: string,
+    workspace?: WorkspaceId,
+    options?: { preserveSeed?: boolean },
+  ) => {
     setError("");
     setBusy(true);
     try {
@@ -277,7 +281,7 @@ export default function MatchLensCockpit() {
       setSelectedSeqId("");
       setSelectedPlayerId(null);
       setSelectedZoneId(null);
-      setInvestigationSeed(null);
+      if (!options?.preserveSeed) setInvestigationSeed(null);
       try {
         const url = new URL(window.location.href);
         url.searchParams.set("workspace", workspace || "match_center");
@@ -316,6 +320,64 @@ export default function MatchLensCockpit() {
       question: locale === "zh" ? "为什么这个时刻的进攻活动发生变化？" : "What produced this attacking activity change?",
     });
     setActiveWorkspace("story_agent");
+  };
+
+  /**
+   * Switch to the investigation workbench only after the session clock has
+   * reached the evidence moment. Otherwise the plan would be computed at a
+   * different snapshot than the replay the analyst is looking at.
+   */
+  const openInvestigation = async (seed: InvestigationSeed) => {
+    setError("");
+    try {
+      if (state?.match_id !== seed.matchId) {
+        await selectMatch(seed.matchId, "story_agent", { preserveSeed: true });
+      }
+      await control({ action: "seek", at: seed.at });
+      setInvestigationSeed(seed);
+      setActiveWorkspace("story_agent");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const investigateShot = (payload: {
+    matchId: string;
+    eventId: string;
+    team: "H" | "N";
+    at: number;
+  }) => {
+    void openInvestigation({
+      requestId: `shot-${payload.eventId}-${Date.now()}`,
+      matchId: payload.matchId,
+      team: payload.team,
+      at: payload.at,
+      focusType: "shot_location",
+      focusId: `evt:${payload.eventId}`,
+      question:
+        locale === "zh"
+          ? "这次射门来自怎样的进攻序列？请只陈述已记录证据。"
+          : "What recorded attacking sequence produced this shot?",
+    });
+  };
+
+  const investigateCrossMatch = (payload: {
+    matchId: string;
+    otherMatchId: string;
+  }) => {
+    void openInvestigation({
+      requestId: `cross-${payload.matchId}-${payload.otherMatchId}-${Date.now()}`,
+      matchId: payload.matchId,
+      team: "H",
+      at: state?.snapshot_as_of ?? state?.at ?? 0,
+      focusType: "cross_match_diff",
+      focusId: "shots",
+      compareMatchIds: [payload.otherMatchId],
+      question:
+        locale === "zh"
+          ? "这两场比赛的射门活动差异有哪些证据支持？"
+          : "What evidence supports the difference in shot activity between these matches?",
+    });
   };
 
   // Restore workspace, match, clock and selection from a deep link once the
@@ -541,6 +603,8 @@ export default function MatchLensCockpit() {
                 currentMatchId={state.match_id}
                 locale={locale}
                 onSelectMatch={(matchId) => void selectMatch(matchId)}
+                onInvestigateShot={investigateShot}
+                onInvestigateCrossMatch={investigateCrossMatch}
               />
             )}
 

@@ -11,8 +11,19 @@ export type InvestigationSeed = {
   matchId: string;
   team: "H" | "N";
   at: number;
-  focusType: "moment" | "oaai_point" | "event" | "metric" | "sequence" | "player" | "zone" | "chart";
+  focusType:
+    | "moment"
+    | "oaai_point"
+    | "event"
+    | "metric"
+    | "sequence"
+    | "player"
+    | "zone"
+    | "chart"
+    | "shot_location"
+    | "cross_match_diff";
   focusId: string | null;
+  compareMatchIds?: string[];
   question?: string;
 };
 
@@ -118,6 +129,11 @@ export type Evidence = {
   snapshot_id: string;
   as_of: number;
   events: FootballEvent[];
+  total_event_count?: number;
+  provider_data_boundary?: {
+    access_tier: string;
+    state_window?: { window_seconds: number; total_events_observed: number } | null;
+  } | null;
   receipts: Record<string, Receipt>;
   limitations: string[];
 };
@@ -214,6 +230,20 @@ export type CockpitState = {
     confidence?: number;
     known_missing_segments?: string[];
     coverage_by_period?: any[];
+  } | null;
+  provider_data_boundary?: {
+    access_tier: string;
+    state_window?: {
+      start: number;
+      end: number;
+      window_seconds: number;
+      events_in_window: number;
+      events_returned: number;
+      events_truncated: number;
+      total_events_observed: number;
+    } | null;
+    full_event_access?: string;
+    [key: string]: unknown;
   } | null;
   coverage?: {
     format_seconds: number;

@@ -20,7 +20,9 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
   const t = getTranslation(locale);
   const isZh = locale === "zh";
 
-  const eventCount = state.events?.length || 0;
+  // The public provider state is a bounded replay window; the coverage total
+  // is the observed event count the match actually has.
+  const eventCount = state.coverage?.event_count ?? state.events?.length ?? 0;
   const sequenceCount = state.sequences?.length || 0;
   const claimsCount = (state.result?.accepted?.length || 0) + (state.history?.length || 0);
 

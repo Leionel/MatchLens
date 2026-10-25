@@ -134,37 +134,97 @@ test.describe("match library", () => {
     await openCockpit(page);
 
     // The catalog is fetched after the cockpit mounts, so the rows have to be
-    // waited for before the corpus can be counted.
+    // waited for before the corpus can be counted. The suite runs against a
+    // clean checkout with one real match, never the developer's full corpus,
+    // so the expected season is derived from the catalog instead of hardcoded.
     await expect(page.getByTestId("match-card").first()).toBeVisible();
     const total = await page.getByTestId("match-card").count();
     expect(total).toBeGreaterThan(0);
 
-    const euro = page.locator(`[data-testid="match-library-competition"][data-competition="UEFA Euro"]`);
-    await expect(euro).toBeVisible();
-    await euro.click();
+    const catalogResponse = await page.request.get("/api/matches");
+    expect(catalogResponse.ok()).toBeTruthy();
+    const catalog = (await catalogResponse.json()).matches as Array<{
+      match_id: string;
+      competition: string;
+      season: string;
+    }>;
 
-    const euroRows = page.getByTestId("match-card");
-    await expect(euroRows.first()).toBeVisible();
-    const shown = await euroRows.count();
-    expect(shown).toBeGreaterThan(0);
-    expect(shown).toBeLessThan(total);
+    const competition = catalog.find((m) => m.competition === "UEFA Euro")?.competition
+      ?? catalog.find((m) => !m.match_id.startsWith("syn_"))?.competition
+      ?? catalog[0].competition;
+    const expectedIds = catalog.filter((m) => m.competition === competition).map((m) => m.match_id);
+    expect(expectedIds.length).toBeGreaterThan(0);
+
+    const competitionButton = page.locator(
+      `[data-testid="match-library-competition"][data-competition="${competition}"]`,
+    );
+    await expect(competitionButton).toBeVisible();
+    await competitionButton.click();
+
+    const competitionRows = page.getByTestId("match-card");
+    await expect(competitionRows.first()).toBeVisible();
+    const shown = await competitionRows.count();
+    expect(shown).toBe(expectedIds.length);
     await expect(page.getByTestId("match-hub-count")).toContainText(`${shown} of ${total}`);
 
-    // Every remaining row belongs to the selected competition.
-    const competitions = await euroRows.evaluateAll((nodes) =>
+    const shownIds = await competitionRows.evaluateAll((nodes) =>
       nodes.map((node) => node.getAttribute("data-match-id") ?? ""),
     );
-    expect(competitions.length).toBe(shown);
+    expect(new Set(shownIds)).toEqual(new Set(expectedIds));
 
-    // The season chips narrow the same competition further.
-    const season = page.locator(`[data-testid="match-library-season"][data-season="2024"]`);
-    await expect(season).toBeVisible();
-    await season.click();
+    // The season chips narrow the selected competition. With the minimum CI
+    // corpus a competition may have a single season; the assertion then proves
+    // the filter stays consistent instead of pretending a second season exists.
+    const competitionSeasons = Array.from(
+      new Set(catalog.filter((m) => m.competition === competition).map((m) => m.season)),
+    );
+    const season = competitionSeasons[0];
+    const expectedSeasonIds = catalog
+      .filter((m) => m.competition === competition && m.season === season)
+      .map((m) => m.match_id);
+    const seasonChip = page.locator(
+      `[data-testid="match-library-season"][data-season="${season}"]`,
+    );
+    await expect(seasonChip).toBeVisible();
+    await seasonChip.click();
     await expect(page.getByTestId("match-card").first()).toBeVisible();
     const seasonRows = await page.getByTestId("match-card").count();
-    expect(seasonRows).toBeGreaterThan(0);
-    expect(seasonRows).toBeLessThan(shown);
+    expect(seasonRows).toBe(expectedSeasonIds.length);
+    expect(seasonRows).toBeLessThanOrEqual(shown);
+    if (competitionSeasons.length > 1) expect(seasonRows).toBeLessThan(shown);
     await expect(page.getByTestId("match-hub-count")).toContainText(`${seasonRows} of ${total}`);
+  });
+
+  test("a catalogued-but-not-installed match keeps analysis disabled and says why", async ({ page }) => {
+    await openCockpit(page);
+    const response = await page.request.get("/api/matches");
+    const catalog = (await response.json()).matches as Array<{
+      match_id: string;
+      provenance_kind?: string;
+      dataset_installed?: boolean;
+      availability_status?: string;
+      availability_reason?: string | null;
+    }>;
+    const unavailable = catalog.find(
+      (match) =>
+        match.provenance_kind === "provider_payload" &&
+        match.dataset_installed === false,
+    );
+    test.skip(!unavailable, "every provider payload is installed in this checkout");
+
+    const card = page.locator(
+      `[data-testid="match-card"][data-match-id="${unavailable!.match_id}"]`,
+    );
+    await card.click();
+    const detail = page.getByTestId("match-library-detail");
+    await expect(detail.getByTestId("match-library-availability")).toHaveAttribute(
+      "data-availability-status",
+      "CATALOGUED",
+    );
+    await expect(detail.getByTestId("match-library-enter")).toBeDisabled();
+    await expect(detail.getByTestId("match-library-missing-data")).toContainText(
+      /synthetic data|合成数据/i,
+    );
   });
 
   test("the detail page reports the source and the coverage of the selected match", async ({ page }) => {
@@ -250,19 +310,62 @@ test.describe("real match journey", () => {
     expect(context.period).toBe(4);
     expect(context.match_clock_basis).toBe("match_elapsed");
 
-    // The provider clock keeps running through the accumulated stoppage time, so
-    // the recorded stream reaches past the nominal match clock. The clock the
-    // cockpit exposes is the nominal one: a read that asks for a clock past it is
-    // refused instead of silently answering about a different match. Asserted on
-    // a read endpoint rather than through the clock, because freezing a full
-    // provider match is a real computation and the control plane only clamps.
+    // The provider clock keeps running through accumulated stoppage time. The
+    // replayable end is therefore the last recorded event, not the nominal
+    // 120:00 whistle: recorded stoppage is accessible, and one second beyond
+    // the observed stream is refused rather than invented.
     expect(context.observed_end).toBeGreaterThan(context.duration);
+    expect(context.replayable_end).toBeCloseTo(context.observed_end, 3);
+    expect(context.as_of).toBeCloseTo(context.replayable_end, 3);
+    expect(context.stoppage_time).toBeGreaterThan(0);
 
+    const replayable = Math.ceil(context.observed_end);
     const past = await page.request.get(
-      `/api/matches/${REAL_MATCH}/evidence-graph?at=${Math.ceil(context.observed_end)}`,
+      `/api/matches/${REAL_MATCH}/evidence-graph?at=${replayable}`,
     );
-    expect(past.status()).toBe(422);
-    expect(await past.text()).toContain("at_outside_match_context");
+    expect(past.ok()).toBeTruthy();
+    const graph = await past.json();
+    const snapshotNode = (graph.nodes as Array<{ type: string; as_of?: number }>).find(
+      (node) => node.type === "snapshot",
+    );
+    expect(snapshotNode?.as_of).toBe(replayable);
+
+    const beyond = await page.request.get(
+      `/api/matches/${REAL_MATCH}/evidence-graph?at=${replayable + 1}`,
+    );
+    expect(beyond.status()).toBe(422);
+    expect(await beyond.text()).toContain("at_outside_match_context");
+
+    // A seek into stoppage time must land on the requested clock and carry
+    // events recorded after the nominal 7200s end.
+    await seekClock(page, 7800);
+    await expect.poll(async () => (await readState(page)).at, { timeout: 20_000 }).toBe(7800);
+    const stoppageState = await readState(page);
+    expect(stoppageState.format_seconds).toBeGreaterThanOrEqual(replayable);
+    expect(stoppageState.events.length).toBeGreaterThan(0);
+  });
+
+  test("a shot in Match Detail opens a pre-seeded evidence investigation", async ({ page }) => {
+    await openCockpit(page);
+    const card = page.locator(`[data-testid="match-card"][data-match-id="${REAL_MATCH}"]`);
+    await card.click();
+    await page.getByTestId("match-library-detail-toggle").click();
+
+    const detail = page.getByTestId("match-detail-panel");
+    await expect(detail).toBeVisible();
+    await detail.getByTestId("detail-tab-shots").click();
+    await expect(detail.getByTestId("shot-investigate").first()).toBeVisible();
+    await detail.getByTestId("shot-investigate").first().click();
+
+    await expect(page.getByRole("tab", { name: new RegExp(WORKSPACE_TABS.storyAgent) })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(page.getByTestId("investigation-plan")).toContainText("shot_location", {
+      timeout: 90_000,
+    });
+    const state = await readState(page);
+    expect(state.match_id).toBe(REAL_MATCH);
   });
 
   test("a deep link restores the match, the workspace and the clock after a reload", async ({ page }) => {

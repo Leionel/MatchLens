@@ -148,7 +148,9 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
   const isZh = locale === "zh";
   const [question, setQuestion] = useState("");
   const [executionMode, setExecutionMode] = useState<"deterministic_planner" | "maf_agent">("deterministic_planner");
-  const [focusType, setFocusType] = useState<"moment" | "oaai_point" | "event" | "metric" | "sequence" | "player" | "zone">("moment");
+  const [focusType, setFocusType] = useState<
+    "moment" | "oaai_point" | "event" | "metric" | "sequence" | "player" | "zone" | "shot_location" | "cross_match_diff"
+  >("moment");
   const [focusId, setFocusId] = useState("");
   const [team, setTeam] = useState<"H" | "N">(state.focus_team ?? "H");
   const homeName = state.match_context?.home_team_name || (isZh ? "主队 (H)" : "Home (H)");
@@ -179,6 +181,7 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
             team: targetTeam,
             focus_type: targetType,
             focus_id: targetId,
+            compare_match_ids: useSeed?.compareMatchIds ?? [],
             question: useSeed?.question ?? question,
             execution_mode: executionMode,
           }),
@@ -313,6 +316,8 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
             <option value="sequence">{isZh ? "控球序列" : "Sequence"}</option>
             <option value="player">{isZh ? "球员" : "Player"}</option>
             <option value="zone">{isZh ? "球场区域" : "Zone"}</option>
+            <option value="shot_location">{isZh ? "射门位置" : "Shot location"}</option>
+            <option value="cross_match_diff">{isZh ? "跨场差异" : "Cross-match difference"}</option>
           </select>
         </label>
         <label style={{ display: "grid", gap: 4, fontSize: 12, color: "var(--text-secondary)" }}>

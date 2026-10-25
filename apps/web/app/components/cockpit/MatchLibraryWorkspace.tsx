@@ -16,12 +16,16 @@ interface MatchLibraryWorkspaceProps {
   currentMatchId?: string;
   locale?: Locale;
   onSelectMatch: (matchId: string) => void;
+  onInvestigateShot?: (input: { matchId: string; eventId: string; team: "H" | "N"; at: number }) => void;
+  onInvestigateCrossMatch?: (input: { matchId: string; otherMatchId: string }) => void;
 }
 
 export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
   currentMatchId,
   locale = "zh",
   onSelectMatch,
+  onInvestigateShot,
+  onInvestigateCrossMatch,
 }) => {
   const isZh = locale === "zh";
   const [matches, setMatches] = useState<LibraryMatch[]>([]);
@@ -274,6 +278,8 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
                 locale={locale}
                 onOpenMatch={(id) => void onSelectMatch(id)}
                 onClose={() => setDetailMatchId(null)}
+                onInvestigateShot={onInvestigateShot}
+                onInvestigateCrossMatch={onInvestigateCrossMatch}
               />
             </section>
           )}
@@ -281,8 +287,8 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
           <section className="ml-footnote">
             <p>
               {isZh
-                ? "“完整”= 通过来源声明、分 Period 覆盖与完整性校验；跨场画像与 per-90 只统计完整覆盖的真实 provider 场次。"
-                : "Complete = source declaration, period coverage and integrity checks all pass. Profiles and per-90 rates use complete-coverage provider matches only."}
+                ? "“完整”= 通过来源声明、分 Period 覆盖与完整性校验；跨场画像与 per-90 只统计完整覆盖的真实 provider 场次。精选语料是功能验收样本，不代表无偏足球总体。"
+                : "Complete = source declaration, period coverage and integrity checks all pass. Profiles and per-90 rates use complete-coverage provider matches only. The curated corpus is a functional-acceptance sample, not an unbiased football population."}
             </p>
           </section>
         </>

@@ -20,6 +20,14 @@ export type LibraryMatch = {
   attribution_text?: string | null;
   capabilities?: string[];
   continuous_coverage?: boolean;
+  availability_status?: "CATALOGUED" | "MATERIALIZED" | "ANALYSIS_READY" | null;
+  dataset_installed?: boolean;
+  analysis_ready?: boolean;
+  availability_reason?: string | null;
+  install_hint?: string | null;
+  verification_basis?: string | null;
+  dataset_sha256?: string | null;
+  dataset_path?: string | null;
   official_score_note?: string | null;
   score_reconciliation?: {
     provider_score?: string;

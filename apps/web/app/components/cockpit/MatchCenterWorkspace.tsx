@@ -87,10 +87,29 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
 
   // The period structure is read from the event stream, so a match that went
   // to extra time shows the extra time as its own stretch of momentum.
-  const periodBands = useMemo(
-    () => buildPeriodBands(state.events, isZh),
-    [state.events, isZh]
-  );
+  const periodBands = useMemo(() => {
+    // Provider state carries only a bounded replay window, so its events are
+    // not a complete period index. The match context owns the period clock.
+    const clockPeriods = state.match_context?.periods;
+    if (Array.isArray(clockPeriods) && clockPeriods.length > 0) {
+      const labels: Record<string, { zh: string; en: string }> = {
+        first_half: { zh: "上半场", en: "1st half" },
+        second_half: { zh: "下半场", en: "2nd half" },
+        extra_time_1: { zh: "加时上半场", en: "ET 1" },
+        extra_time_2: { zh: "加时下半场", en: "ET 2" },
+        shootout: { zh: "点球大战", en: "Shoot-out" },
+      };
+      return clockPeriods.map((period: any) => ({
+        period: Number(period.period),
+        start: Number(period.observed_start ?? 0),
+        end: Number(period.observed_end ?? 0),
+        label:
+          labels[String(period.label)]?.[isZh ? "zh" : "en"] ??
+          String(period.label ?? period.period),
+      }));
+    }
+    return buildPeriodBands(state.events, isZh);
+  }, [state.match_context?.periods, state.events, isZh]);
 
   // xG is shown only when a receipt actually exists. No per-shot 0.12 default.
   const receiptXgH = state.receipts?.["H.xg.cumulative"]?.value;
@@ -138,8 +157,16 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
             {state.receipts?.["H.goals.current"]?.value ?? "—"} / {state.receipts?.["N.goals.current"]?.value ?? "—"}
           </b>
         </span>
-        <span>
-          {isZh ? "事件" : "Events"} <b>{state.events?.length || 0}</b>
+        <span
+          title={
+            state.provider_data_boundary
+              ? isZh
+                ? `公开视图仅携带当前 ${state.provider_data_boundary.state_window?.window_seconds ?? 0}s 回放窗口；完整事件流需数据访问权限。`
+                : `Public view carries the current ${state.provider_data_boundary.state_window?.window_seconds ?? 0}s replay window; the full event stream requires data access.`
+              : undefined
+          }
+        >
+          {isZh ? "事件" : "Events"} <b>{state.coverage?.event_count ?? state.events?.length ?? 0}</b>
         </span>
         {(typeof receiptXgH === "number" || typeof receiptXgN === "number") && (
           <span>

@@ -15,8 +15,11 @@ export default defineConfig({
   timeout: 90_000,
   expect: { timeout: 20_000 },
   globalSetup: path.join(__dirname, "e2e", "global-setup.ts"),
+  // The HTML report must live outside the test-results folder: Playwright
+  // clears its output directory, which would delete the traces and screenshots
+  // that the CI artifact step uploads after a failure.
   reporter: process.env.CI
-    ? [["github"], ["html", { outputFolder: "e2e/.artifacts/report", open: "never" }]]
+    ? [["github"], ["html", { outputFolder: "e2e/.playwright-report", open: "never" }]]
     : [["list"]],
   use: {
     baseURL: BASE_URL,
