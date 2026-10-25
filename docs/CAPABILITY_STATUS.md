@@ -22,7 +22,8 @@ plan, a passing schema test alone, or an API returning 200 is not completion.
 Last executed verification at this baseline (2026-10-25): **backend suite 346
 passed** (`services/api/.venv/Scripts/python.exe -m pytest services/api/tests/ -q`);
 **web typecheck and production build 0 errors**; **Playwright 37 passed / 1
-skipped locally** (the skip is the catalogued-but-not-installed case). The R6.1
+skipped locally** (the skip is the catalogued-but-not-installed case) and
+**38/38 passed in CI** (`40177063346`). The R6.1
 browser suite adds OAAI sign semantics, model-run status, cross-match clock
 alignment, server-confirmed cancellation, mobile section tabs and the phone
 tools menu. axe-core WCAG AA remains clean in light and dark themes on Match
