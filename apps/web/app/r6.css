@@ -433,5 +433,5 @@
 
 /* A closed fixed drawer translated off-canvas still widens the document in
    Chromium; remove it from layout until opened. */
-.inspector-drawer { display: none; transform: none; }
-.inspector-drawer.open { display: flex; transform: none; }
+body .inspector-drawer { display: none; transform: none; }
+body .inspector-drawer.open { display: flex; transform: none; }

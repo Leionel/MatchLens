@@ -143,6 +143,17 @@ test.describe("R6 interaction correctness", () => {
     await expect(page.getByTestId("match-detail-page")).not.toContainText("England");
   });
 
+
+  test("the contextual evidence drawer still opens after being removed from layout", async ({ page }) => {
+    await openCockpit(page);
+    await page.getByRole("button", { name: "Open evidence inspector" }).click();
+    const drawer = page.locator(".inspector-drawer.open");
+    await expect(drawer).toBeVisible();
+    await expect(drawer).toContainText(/Tactical Inspector|战术审计/i);
+    await drawer.getByRole("button", { name: /close/i }).click();
+    await expect(page.locator(".inspector-drawer.open")).toHaveCount(0);
+  });
+
   test("R6 screenshots at 1440, 1024, 768, 390 and 360 without horizontal overflow", async ({ page }) => {
     await openCockpit(page);
     await setMatch(page, "syn_default");
