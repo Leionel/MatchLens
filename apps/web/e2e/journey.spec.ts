@@ -78,8 +78,8 @@ function workspaceTabLabel(workspace: string): string {
  */
 async function registerDeterministicClaim(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Investigation", exact: true }).click();
-  await page.getByPlaceholder("What produced this attacking spell?").fill("What produced the attacking activity?");
-  await page.getByRole("button", { name: "Run investigation" }).click();
+  await page.getByPlaceholder("e.g. Why did attacking activity rise around 32'?").fill("What produced the attacking activity?");
+  await page.getByRole("button", { name: "Analyse" }).click();
 
   const plan = page.getByTestId("investigation-plan");
   await expect(plan).toBeVisible();
@@ -415,8 +415,8 @@ test.describe("real match journey", () => {
     await openWorkspace(page, "story_agent", REAL_MATCH, 1800);
 
     await page.getByRole("button", { name: "Investigation", exact: true }).click();
-    await page.getByPlaceholder("What produced this attacking spell?").fill("What produced this attacking spell?");
-    await page.getByRole("button", { name: "Run investigation" }).click();
+    await page.getByPlaceholder("e.g. Why did attacking activity rise around 32'?").fill("What produced this attacking spell?");
+    await page.getByRole("button", { name: "Analyse" }).click();
 
     const plan = page.getByTestId("investigation-plan");
     // A full provider payload runs the OAAI pipeline over every event, so the
@@ -465,9 +465,10 @@ test.describe("real match journey", () => {
     await page.getByRole("button", { name: "Investigation", exact: true }).click();
     // The throwaway E2E server has no provider key, so the agent request must
     // come back from the deterministic planner with the degradation recorded.
+    await page.getByTestId("investigation-advanced").locator("summary").click();
     await page.getByTestId("investigation-engine-select").selectOption("maf_agent");
-    await page.getByPlaceholder("What produced this attacking spell?").fill("Why did the attacking activity change?");
-    await page.getByRole("button", { name: "Run investigation" }).click();
+    await page.getByPlaceholder("e.g. Why did attacking activity rise around 32'?").fill("Why did the attacking activity change?");
+    await page.getByRole("button", { name: "Analyse" }).click();
 
     const plan = page.getByTestId("investigation-plan");
     await expect(plan).toBeVisible();
@@ -491,7 +492,7 @@ test.describe("claim lifecycle", () => {
     // The challenge modal must target a claim the registry actually knows.
     await page.getByRole("button", { name: "Deliberation", exact: true }).click();
     await page.getByRole("button", { name: /^Revisions/ }).click();
-    await page.getByRole("button", { name: /Challenge Current Insight/ }).click();
+    await page.getByRole("button", { name: /Challenge current insight/i }).click();
 
     const modal = page.getByRole("dialog");
     await expect(modal).toBeVisible();
@@ -501,8 +502,8 @@ test.describe("claim lifecycle", () => {
     expect(options.length).toBeGreaterThan(0);
     expect(options.join(" ")).not.toContain("claim-current");
 
-    await modal.getByText("6. Withdraw This Claim").click();
-    await modal.getByRole("button", { name: /Execute Adversarial Challenge/ }).click();
+    await modal.getByText("Withdraw this claim").click();
+    await modal.getByRole("button", { name: /execute adversarial challenge/i }).click();
 
     await expect(modal).toBeHidden();
     await expect(page.getByText("WITHDRAWN").first()).toBeVisible();

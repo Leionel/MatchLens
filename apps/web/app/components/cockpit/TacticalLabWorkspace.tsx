@@ -7,6 +7,8 @@ import { MatchStage } from "../MatchStage";
 import { ActionDensityDifferential } from "../ActionDensityDifferential";
 import { QuickRecoveryAnalysis } from "../QuickRecoveryAnalysis";
 import { MetricComparison } from "../MetricComparison";
+import { ReplayDock } from "./ReplayDock";
+import { EvidenceRail } from "./EvidenceRail";
 
 export interface TacticalLabWorkspaceProps {
   state: CockpitState;
@@ -16,6 +18,15 @@ export interface TacticalLabWorkspaceProps {
   selectedPlayerId: string | null;
   selectedZoneId: string | null;
   locale?: Locale;
+  busy?: boolean;
+  onSeek: (t: number) => void;
+  onControl: (body: object) => void;
+  onInvestigateFocus: (input: {
+    focusType: "sequence" | "event";
+    focusId: string;
+    at: number;
+    team: "H" | "N";
+  }) => void;
   onSelectEvent: (id: string) => void;
   onSelectSequence: (seqId: string) => void;
   onSelectPlayer: (pid: string | null) => void;
@@ -40,6 +51,10 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
   selectedPlayerId,
   selectedZoneId,
   locale = "zh",
+  busy = false,
+  onSeek,
+  onControl,
+  onInvestigateFocus,
   onSelectEvent,
   onSelectSequence,
   onSelectPlayer,
@@ -107,7 +122,50 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
   });
 
   return (
-    <div className="workspace-pane-fade" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="workspace-pane-fade r6-tactical-page" data-testid="tactical-explorer-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <header className="r6-page-head">
+        <div>
+          <span className="r6-kicker">{isZh ? "战术探索" : "Tactical explorer"}</span>
+          <h1>{isZh ? "从空间到证据" : "From space to evidence"}</h1>
+          <p>
+            {isZh
+              ? "球场、序列与区域共享当前比赛、时间与选中上下文；每一层都能回到原始事件。"
+              : "Pitch, sequences and zones share the current match, clock and selection; every layer returns to recorded events."}
+          </p>
+        </div>
+        <div className="r6-page-actions">
+          {selectedSeqId || selectedEventId ? (
+            <button
+              type="button"
+              className="r6-primary-action"
+              onClick={() => {
+                if (selectedSeqId) {
+                  onInvestigateFocus({
+                    focusType: "sequence",
+                    focusId: selectedSeqId,
+                    at: state.snapshot_as_of ?? state.at,
+                    team: (state.focus_team || "H") as "H" | "N",
+                  });
+                } else if (selectedEventId) {
+                  onInvestigateFocus({
+                    focusType: "event",
+                    focusId: selectedEventId,
+                    at: state.snapshot_as_of ?? state.at,
+                    team: (state.focus_team || "H") as "H" | "N",
+                  });
+                }
+              }}
+            >
+              {isZh ? "调查当前选中" : "Investigate selection"}
+            </button>
+          ) : (
+            <span className="r6-status-pill">{isZh ? "先选择一个序列或事件" : "Select a sequence or event"}</span>
+          )}
+        </div>
+      </header>
+
+      <ReplayDock state={state} busy={busy} locale={locale} onSeek={onSeek} onControl={onControl} />
+
       {/* Top Banner: Spatial & Tactical Mode Header */}
       <div
         style={{
@@ -622,6 +680,11 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
           />
         </div>
       </div>
+
+      <details className="r6-evidence-details r6-tactical-evidence">
+        <summary>{isZh ? "证据与数据版本" : "Evidence & data version"}</summary>
+        <EvidenceRail state={state} locale={locale} />
+      </details>
     </div>
   );
 };

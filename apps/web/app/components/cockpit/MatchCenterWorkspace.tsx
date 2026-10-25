@@ -8,6 +8,9 @@ import { MatchStage } from "../MatchStage";
 import { EventFeed } from "../EventFeed";
 import { AttackingChannelAnalysis } from "../AttackingChannelAnalysis";
 import { HighlightLocator } from "../HighlightLocator";
+import { MatchRecap } from "../MatchRecap";
+import { ReplayDock } from "./ReplayDock";
+import { MatchInsightRail } from "./MatchInsightRail";
 import { Locale, getTranslation } from "../../lib/i18n";
 
 interface MatchCenterWorkspaceProps {
@@ -21,7 +24,9 @@ interface MatchCenterWorkspaceProps {
   selectedChannel: string | null;
   activeSmoothingMode: "causal" | "bilateral";
   locale?: Locale;
+  busy?: boolean;
   onSeek: (t: number) => void;
+  onControl: (body: object) => void;
   onSelectEvent: (id: string) => void;
   onSelectSequence: (seqId: string) => void;
   onSelectPlayer: (pid: string | null) => void;
@@ -30,6 +35,9 @@ interface MatchCenterWorkspaceProps {
   onSelectChannel: (ch: string | null) => void;
   onToggleSmoothingMode: (mode: "causal" | "bilateral") => void;
   onOpenInspector: (payload: InspectorPayload) => void;
+  onSelectPerspective: (perspective: PerspectiveId) => void;
+  onOpenIntelligence: () => void;
+  onInspectReceipt: (receiptId: string, snapshotId?: string) => void;
   onInvestigateMoment: (payload: {
     focus_type: "oaai_point";
     focus_id: string;
@@ -56,7 +64,9 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
   selectedChannel,
   activeSmoothingMode,
   locale = "zh",
+  busy = false,
   onSeek,
+  onControl,
   onSelectEvent,
   onSelectSequence,
   onSelectPlayer,
@@ -65,6 +75,9 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
   onSelectChannel,
   onToggleSmoothingMode,
   onOpenInspector,
+  onSelectPerspective,
+  onOpenIntelligence,
+  onInspectReceipt,
   onInvestigateMoment,
 }) => {
   const t = getTranslation(locale);
@@ -118,9 +131,42 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
   const xgN = typeof receiptXgN === "number" ? receiptXgN.toFixed(2) : "—";
 
   return (
-    <div className="workspace-pane-fade" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="workspace-pane-fade r6-detail-page" data-testid="match-detail-page" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <header className="r6-page-head">
+        <div>
+          <span className="r6-kicker">{isZh ? "比赛详情" : "Match detail"}</span>
+          <h1>
+            {homeTeam} <span>vs</span> {awayTeam}
+          </h1>
+          <p>
+            {state.match_context?.competition || (isZh ? "比赛" : "Match")}
+            {state.match_context?.season ? ` · ${state.match_context.season}` : ""}
+            {" · "}
+            {isZh ? "比分、活动趋势与可按证据展开的 AI 洞察" : "Score, activity trend and evidence-led AI insight"}
+          </p>
+        </div>
+        <div className="r6-page-actions">
+          <label className="r6-perspective">
+            <span>{isZh ? "叙述视角" : "Perspective"}</span>
+            <select value={perspective} onChange={(event) => onSelectPerspective(event.target.value as PerspectiveId)}>
+              <option value="coach">{isZh ? "教练" : "Coach"}</option>
+              <option value="media">{isZh ? "转播" : "Media"}</option>
+              <option value="fan">{isZh ? "球迷" : "Fan"}</option>
+            </select>
+          </label>
+          <span className={`r6-status-pill ${state.coverage?.continuous ? "ok" : "warn"}`}>
+            {state.coverage?.continuous ? (isZh ? "覆盖已验证" : "Coverage verified") : state.match_context?.completeness_status || (isZh ? "部分覆盖" : "Partial")}
+          </span>
+          <button type="button" className="r6-primary-action" onClick={onOpenIntelligence}>
+            {isZh ? "询问这场比赛" : "Ask about this match"}
+          </button>
+        </div>
+      </header>
+
+      <ReplayDock state={state} busy={busy} locale={locale} onSeek={onSeek} onControl={onControl} />
+
       {/* 1. Scoreboard Header Bar */}
-      <div className="glass-panel" style={{ padding: 12 }}>
+      <div className="glass-panel r6-score-shell" style={{ padding: 12 }}>
         <Scoreboard
           score={state.score}
           clock={clockText}
@@ -175,6 +221,8 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
         )}
       </div>
 
+      <div className="r6-detail-layout">
+        <div className="r6-detail-main">
       {/* 2. OAAI Momentum Wave Chart (Full Width Card) */}
       <OAAITimeline
         data={state.oaai}
@@ -311,6 +359,30 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
             }}
           />
         </div>
+      </div>
+
+      {state.ended && (
+        <div className="r6-recap-slot">
+          <MatchRecap
+            score={state.score}
+            homeTeam={homeTeam}
+            awayTeam={awayTeam}
+            history={state.history}
+            locale={locale}
+            onInspect={(receiptId, snapshotId) => onInspectReceipt(receiptId, snapshotId)}
+          />
+        </div>
+      )}
+        </div>
+
+        <MatchInsightRail
+          state={state}
+          locale={locale}
+          onInvestigateChangePoint={onInvestigateMoment}
+          onAsk={onOpenIntelligence}
+          onSelectEvent={onSelectEvent}
+          onOpenInspector={onOpenInspector}
+        />
       </div>
     </div>
   );

@@ -1,297 +1,166 @@
 "use client";
 
-import React from "react";
-import { CockpitState, PerspectiveId } from "./types";
+import React, { useRef, useState } from "react";
+import { CockpitState } from "./types";
 import { Locale, getTranslation } from "../../lib/i18n";
 
 interface TacticalHeaderProps {
   state: CockpitState;
-  busy: boolean;
-  perspective: PerspectiveId;
   connection: string;
   theme: "dark" | "light";
   isDrawerOpen: boolean;
   locale?: Locale;
+  onSearch: (query: string) => void;
+  onOpenHub: () => void;
+  onOpenMatch: () => void;
   onToggleDrawer: () => void;
   onToggleTheme: () => void;
   onToggleLocale?: () => void;
   onOpenGuide?: () => void;
-  onSelectPerspective: (p: PerspectiveId) => void;
-  onControl: (body: object) => void;
 }
 
-const clock = (s: number) =>
-  `${Math.floor(s / 60)
-    .toString()
-    .padStart(2, "0")}:${Math.floor(s % 60)
-    .toString()
-    .padStart(2, "0")}`;
+const clock = (value: number) => {
+  const safe = Math.max(0, Math.round(value));
+  return `${Math.floor(safe / 60).toString().padStart(2, "0")}:${(safe % 60).toString().padStart(2, "0")}`;
+};
 
+/**
+ * The global header answers three questions only: where am I, which match is
+ * loaded, and where do I search. Replay controls live on the pages that use a
+ * timeline, not in every workspace.
+ */
 export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
   state,
-  busy,
-  perspective,
   connection,
   theme,
   isDrawerOpen,
   locale = "zh",
+  onSearch,
+  onOpenHub,
+  onOpenMatch,
   onToggleDrawer,
   onToggleTheme,
   onToggleLocale,
   onOpenGuide,
-  onSelectPerspective,
-  onControl,
 }) => {
   const t = getTranslation(locale);
   const isZh = locale === "zh";
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const currentSeconds = state.at || 0;
-  const totalSeconds = state.format_seconds || 720;
-  const activeMoment = state.active_moment;
+  React.useEffect(() => {
+    try {
+      const q = new URLSearchParams(window.location.search).get("q");
+      if (q) setQuery(q);
+    } catch {}
+  }, []);
+
+  React.useEffect(() => {
+    const focusSearch = (event: KeyboardEvent) => {
+      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      event.preventDefault();
+      inputRef.current?.focus();
+    };
+    window.addEventListener("keydown", focusSearch);
+    return () => window.removeEventListener("keydown", focusSearch);
+  }, []);
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    onSearch(query.trim());
+  };
+
+  const home = state.teams?.H || "Home";
+  const away = state.teams?.N || "Away";
+  const connected = connection === "Connected" || connection === "Polling";
 
   return (
-    <header className="cockpit-header" role="banner">
-      <div className="cockpit-header-inner">
-        {/* Brand & System Badges */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <a href="/" className="cockpit-brand" aria-label={`${t.brandTitle} AI Home`}>
-            <svg
-              viewBox="0 0 32 32"
-              style={{
-                width: 26,
-                height: 26,
-                fill: "none",
-                stroke: "var(--turf-emerald)",
-                strokeWidth: 2.2,
-              }}
-              aria-hidden="true"
-            >
-              <circle cx="14" cy="14" r="10" />
-              <circle cx="14" cy="14" r="3" />
-              <path d="M21 21L29 29 M4 14H8 M20 14H24 M14 4V8 M14 20V24" />
+    <header className="r6-topbar" role="banner">
+      <div className="r6-topbar-inner">
+        <button type="button" className="r6-brand" onClick={onOpenHub} title={isZh ? "返回比赛库" : "Back to match hub"}>
+          <span className="r6-brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none">
+              <rect x="4" y="6" width="24" height="20" rx="4" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M16 6v20M4 16h24" stroke="currentColor" strokeWidth="1.4" opacity=".5" />
+              <circle cx="16" cy="16" r="4.4" stroke="currentColor" strokeWidth="1.8" />
             </svg>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-              <span style={{ fontSize: 18, fontWeight: 900, letterSpacing: -0.5, color: "var(--text-primary)" }}>
-                {t.brandTitle}
-              </span>
-              {" "}
-              <span style={{ fontSize: 12, fontWeight: 900, color: "var(--text-emerald)" }}>AI</span>
-            </div>
-          </a>
-
-          <span className="cockpit-brand-badge" title="Obsidian Tactical Multi-Pane Cockpit Engine">
-            <span className="pulse-indicator" />
-            <span>{t.cockpitVersion}</span>
           </span>
-        </div>
-
-        {/* Match switching lives in the Match Library workspace, which covers
-            the whole catalog with provenance and completeness metadata. */}
-
-        {/* Global Timeline Scrubber Cluster */}
-        <div className="header-scrubber-cluster" aria-label="Global Replay Scrubber">
-          <button
-            type="button"
-            className="header-play-btn"
-            disabled={busy || state.ended}
-            onClick={() => onControl({ action: state.paused ? "play" : "pause" })}
-            title={state.paused ? `${t.playMatch} (Space)` : `${t.pauseMatch} (Space)`}
-          >
-            {state.paused ? "▶" : "⏸"}
-          </button>
-
-          <button
-            type="button"
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "var(--text-secondary)",
-              cursor: "pointer",
-              fontSize: 14,
-              padding: "4px",
-              minHeight: "auto",
-            }}
-            disabled={busy}
-            onClick={() => onControl({ action: "restart" })}
-            title={t.restartKickoff}
-          >
-            ↺
-          </button>
-
-          <span className="header-clock-display">{clock(currentSeconds)}</span>
-
-          <input
-            type="range"
-            min={0}
-            max={totalSeconds}
-            value={currentSeconds}
-            disabled={busy}
-            onChange={(e) => onControl({ action: "seek", at: Number(e.target.value) })}
-            className="header-slider"
-            aria-label={isZh ? "回放时间轴" : "Replay timeline"}
-            aria-valuetext={`${clock(currentSeconds)} / ${clock(totalSeconds)}`}
-            title={`Seek: ${clock(currentSeconds)} / ${clock(totalSeconds)}`}
-          />
-
-          {/* Speed Pills */}
-          <div style={{ display: "flex", gap: 3 }}>
-            {([1, 6, 30] as const).map((spd) => (
-              <button
-                key={spd}
-                type="button"
-                className={`header-speed-pill ${state.speed === spd ? "active" : ""}`}
-                disabled={busy}
-                onClick={() => onControl({ action: "speed", speed: spd })}
-                title={`${t.playbackSpeed} ${spd}x`}
-              >
-                {spd}×
-              </button>
-            ))}
-          </div>
-
-          {activeMoment && (
-            <span
-              style={{
-                fontSize: 12,
-                fontWeight: 750,
-                color: "var(--text-gold)",
-                background: "color-mix(in srgb, var(--amber-9) 15%, transparent)",
-                padding: "2px 6px",
-                borderRadius: 4,
-                border: "0.5px solid color-mix(in srgb, var(--amber-9) 30%, transparent)",
-              }}
-            >
-              {activeMoment.badge}
+          <span className="r6-brand-copy">
+            <span className="r6-brand-word">
+              Match<span>Lens</span>
             </span>
-          )}
-        </div>
+            <span className="r6-brand-sub">FOOTBALL INTELLIGENCE</span>
+          </span>
+        </button>
 
-        {/* Perspective Switcher (Coach, Media, Fan) */}
-        <div className="perspective-segmented-ctrl" role="group" aria-label="User Perspective Profile">
-          <button
-            type="button"
-            className={`perspective-btn perspective-coach ${perspective === "coach" ? "active" : ""}`}
-            onClick={() => onSelectPerspective("coach")}
-            title={t.perspectiveCoachDesc}
-          >
-            <span className="perspective-key">C</span>
-            <span>{isZh ? "教练视角" : "Coach"}</span>
-          </button>
+        <form className="r6-search" role="search" onSubmit={submit}>
+          <span aria-hidden="true">⌕</span>
+          <input
+            ref={inputRef}
+            id="r6-global-search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={isZh ? "搜索比赛、球队、赛事…" : "Search matches, teams, competitions…"}
+            aria-label={isZh ? "搜索比赛" : "Search matches"}
+          />
+          <kbd>/</kbd>
+        </form>
 
-          <button
-            type="button"
-            className={`perspective-btn perspective-media ${perspective === "media" ? "active" : ""}`}
-            onClick={() => onSelectPerspective("media")}
-            title={t.perspectiveMediaDesc}
-          >
-            <span className="perspective-key">M</span>
-            <span>{isZh ? "转播视角" : "Media"}</span>
-          </button>
+        <button
+          type="button"
+          className="r6-current-match"
+          onClick={onOpenMatch}
+          data-testid="header-current-match"
+          title={isZh ? "打开当前比赛详情" : "Open current match detail"}
+        >
+          <span className="r6-current-comp">
+            {state.match_context?.competition || (isZh ? "当前比赛" : "Current match")}
+            {state.match_context?.season ? ` · ${state.match_context.season}` : ""}
+          </span>
+          <span className="r6-current-line">
+            <b>{home}</b>
+            <strong>
+              {state.score?.H ?? 0} – {state.score?.N ?? 0}
+            </strong>
+            <b>{away}</b>
+            <em>{clock(state.at ?? 0)}</em>
+          </span>
+          <span className="r6-current-status">
+            <i className={connected ? "ok" : "warn"} aria-hidden="true" />
+            {connected ? (isZh ? "实时回放" : "Live replay") : connection}
+          </span>
+        </button>
 
-          <button
-            type="button"
-            className={`perspective-btn perspective-fan ${perspective === "fan" ? "active" : ""}`}
-            onClick={() => onSelectPerspective("fan")}
-            title={t.perspectiveFanDesc}
-          >
-            <span className="perspective-key">F</span>
-            <span>{isZh ? "球迷视角" : "Deep Fan"}</span>
-          </button>
-        </div>
-
-        {/* Right Tools: Guide Modal Button, Language Switcher, Theme, Inspector Drawer Toggle */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* Tactical Guide / Help Docs Button */}
+        <div className="r6-top-actions">
           {onOpenGuide && (
-            <button
-              type="button"
-              onClick={onOpenGuide}
-              style={{
-                minHeight: 32,
-                padding: "4px 10px",
-                fontSize: 12,
-                fontWeight: 700,
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                borderRadius: 6,
-                background: "color-mix(in srgb, var(--amber-9) 12%, transparent)",
-                border: "0.5px solid color-mix(in srgb, var(--amber-9) 30%, transparent)",
-                color: "var(--text-gold)",
-                cursor: "pointer",
-              }}
-              title={isZh ? "打开指标与战术指南释义字典" : "Open Tactical Indicator Documentation"}
-            >
-              <span className="tool-key">i</span>
-              <span>{isZh ? "指标释义" : "Guide"}</span>
+            <button type="button" className="r6-icon-button" onClick={onOpenGuide} aria-label={isZh ? "指标释义" : "Indicator guide"} title={isZh ? "指标释义" : "Indicator guide"}>
+              i
             </button>
           )}
-
-          {/* Language Switcher Button (中 / EN) */}
           {onToggleLocale && (
-            <button
-              type="button"
-              onClick={onToggleLocale}
-              style={{
-                minHeight: 32,
-                padding: "4px 9px",
-                fontSize: 12,
-                fontWeight: 800,
-                borderRadius: 6,
-                background: "color-mix(in srgb, var(--cyan-9) 12%, transparent)",
-                border: "0.5px solid color-mix(in srgb, var(--cyan-9) 30%, transparent)",
-                color: "var(--text-cyan)",
-                cursor: "pointer",
-                letterSpacing: "0.5px",
-              }}
-              title={isZh ? "Switch to English" : "切换为中文"}
-            >
-              {isZh ? "EN" : "中文"}
+            <button type="button" className="r6-top-text" onClick={onToggleLocale} aria-label={isZh ? "切换语言" : "Switch language"}>
+              {locale === "zh" ? "EN" : "中"}
             </button>
           )}
-
-          {/* Theme Toggle */}
           <button
             type="button"
+            className="r6-top-text r6-theme-toggle"
             onClick={onToggleTheme}
-            style={{
-              minHeight: 32,
-              padding: "4px 8px",
-              fontSize: 12,
-              background: "transparent",
-              border: "0.5px solid var(--pitch-border)",
-              borderRadius: 6,
-              color: "var(--text-secondary)",
-              cursor: "pointer",
-            }}
-            title={theme === "dark" ? t.themeLight : t.themeDark}
+            aria-label={theme === "dark" ? "LIGHT" : "DARK"}
+            title={isZh ? "明暗主题" : "Theme"}
           >
-            {theme === "dark" ? "LIGHT" : "DARK"}
+            {theme === "dark" ? "☀ LIGHT" : "☾ DARK"}
           </button>
-
-          {/* Inspector Drawer Toggle */}
           <button
             type="button"
+            className={`r6-top-text ${isDrawerOpen ? "active" : ""}`}
             onClick={onToggleDrawer}
-            style={{
-              minHeight: 32,
-              padding: "4px 10px",
-              fontSize: 12,
-              fontWeight: 700,
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              borderRadius: 7,
-              background: isDrawerOpen ? "color-mix(in srgb, var(--cyan-9) 20%, transparent)" : "color-mix(in srgb, var(--slate-1) 80%, transparent)",
-              border: `0.5px solid ${isDrawerOpen ? "var(--tech-cyan)" : "var(--glass-border)"}`,
-              color: isDrawerOpen ? "var(--tech-cyan)" : "var(--text-primary)",
-              cursor: "pointer",
-            }}
-            title={t.inspectorDrawer}
+            aria-expanded={isDrawerOpen}
+            aria-label={isZh ? "打开证据检查器" : "Open evidence inspector"}
           >
-            
-            <span>{t.inspectorDrawer}</span>
-            {isDrawerOpen && <span style={{ fontSize: 12 }}>●</span>}
+            {isZh ? "证据" : "Evidence"}
           </button>
         </div>
       </div>

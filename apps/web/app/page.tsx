@@ -13,7 +13,6 @@ import {
 } from "./components/cockpit/types";
 import { TacticalHeader } from "./components/cockpit/TacticalHeader";
 import { WorkspaceTabs } from "./components/cockpit/WorkspaceTabs";
-import { EvidenceRail } from "./components/cockpit/EvidenceRail";
 import { MatchCenterWorkspace } from "./components/cockpit/MatchCenterWorkspace";
 import { TacticalLabWorkspace } from "./components/cockpit/TacticalLabWorkspace";
 import { StoryAgentWorkbench } from "./components/cockpit/StoryAgentWorkbench";
@@ -22,7 +21,6 @@ import { MatchLibraryWorkspace } from "./components/cockpit/MatchLibraryWorkspac
 import { ProducerWorkspace } from "./components/cockpit/ProducerWorkspace";
 import { InspectorDrawer } from "./components/cockpit/InspectorDrawer";
 import { TacticalGuideModal } from "./components/cockpit/TacticalGuideModal";
-import { MatchRecap } from "./components/MatchRecap";
 import { Locale, getTranslation } from "./lib/i18n";
 
 const WORKSPACE_IDS: WorkspaceId[] = [
@@ -80,9 +78,18 @@ export default function MatchLensCockpit() {
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
   const [activeSmoothingMode, setActiveSmoothingMode] = useState<"causal" | "bilateral">("causal");
   const [investigationSeed, setInvestigationSeed] = useState<InvestigationSeed | null>(null);
+  const [globalQuery, setGlobalQuery] = useState("");
   const urlRestored = useRef(false);
   const urlRestoring = useRef(false);
   const [urlRestoreToken, setUrlRestoreToken] = useState(0);
+  const seekRequest = useRef(0);
+  const smoothingRequest = useRef(0);
+  const recoveryRequest = useRef(0);
+  const stateRef = useRef<CockpitState | null>(null);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   // Collapsible Inspector Sidecar Drawer
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -156,11 +163,15 @@ export default function MatchLensCockpit() {
   // Keyboard shortcuts (Space = Play/Pause, Esc = Close Drawer)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "SELECT" || target.tagName === "TEXTAREA") {
-        return;
-      }
+      const target = e.target as HTMLElement | null;
+      // Space belongs to the focused control first. Only a page-level Space
+      // (no interactive target, no dialog) is a replay shortcut.
+      const interactive = target?.closest(
+        "input, textarea, select, button, a, [role='button'], [role='tab'], [role='menuitem'], [contenteditable='true']",
+      );
+      const dialogOpen = Boolean(document.querySelector("[role='dialog'], [aria-modal='true']"));
       if (e.code === "Space") {
+        if (interactive || dialogOpen || e.repeat || e.defaultPrevented) return;
         e.preventDefault();
         if (state && !busy && !state.ended) {
           control({ action: state.paused ? "play" : "pause" });
@@ -254,6 +265,27 @@ export default function MatchLensCockpit() {
     }
   };
 
+  /**
+   * One seek at a time. The dock commits on release, so this is also the guard
+   * that drops a late response belonging to an older match or clock request.
+   */
+  const seekTo = async (at: number) => {
+    const token = ++seekRequest.current;
+    const matchId = stateRef.current?.match_id;
+    setError("");
+    setBusy(true);
+    try {
+      const next = await api<CockpitState>("control", { action: "seek", at });
+      if (token !== seekRequest.current) return;
+      if (matchId && next.match_id !== matchId) return;
+      commit(next);
+    } catch (e) {
+      if (token === seekRequest.current) setError((e as Error).message);
+    } finally {
+      if (token === seekRequest.current) setBusy(false);
+    }
+  };
+
   const analyse = async () => {
     setError("");
     setBusy(true);
@@ -269,25 +301,30 @@ export default function MatchLensCockpit() {
   const selectMatch = async (
     matchId: string,
     workspace?: WorkspaceId,
-    options?: { preserveSeed?: boolean },
+    options?: { preserveSeed?: boolean; history?: "push" | "replace" | "none" },
   ) => {
     setError("");
     setBusy(true);
     try {
       const next = await api<CockpitState>("control", { action: "set_match", match_id: matchId });
       commit(next);
+      stateRef.current = next;
       setActiveWorkspace(workspace || "match_center");
       setSelectedEventId("");
       setSelectedSeqId("");
       setSelectedPlayerId(null);
       setSelectedZoneId(null);
       if (!options?.preserveSeed) setInvestigationSeed(null);
-      try {
-        const url = new URL(window.location.href);
-        url.searchParams.set("workspace", workspace || "match_center");
-        url.searchParams.set("match", matchId);
-        window.history.pushState({}, "", url);
-      } catch {}
+      if (options?.history !== "none") {
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set("workspace", workspace || "match_center");
+          url.searchParams.set("match", matchId);
+          url.searchParams.delete("event");
+          url.searchParams.delete("sequence");
+          window.history[options?.history === "replace" ? "replaceState" : "pushState"]({}, "", url);
+        } catch {}
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -295,13 +332,40 @@ export default function MatchLensCockpit() {
     }
   };
 
-  const selectWorkspace = (workspace: WorkspaceId) => {
+  const selectWorkspace = (
+    workspace: WorkspaceId,
+    options?: { history?: "push" | "replace" | "none"; query?: string },
+  ) => {
     setActiveWorkspace(workspace);
+    if (options?.history === "none") return;
     try {
       const url = new URL(window.location.href);
       url.searchParams.set("workspace", workspace);
-      window.history.pushState({}, "", url);
+      if (options?.query !== undefined) {
+        if (options.query) url.searchParams.set("q", options.query);
+        else url.searchParams.delete("q");
+      }
+      window.history[options?.history === "replace" ? "replaceState" : "pushState"]({}, "", url);
     } catch {}
+  };
+
+  const handleSearch = (query: string) => {
+    setGlobalQuery(query);
+    selectWorkspace("match_hub", { query });
+  };
+
+  const openIntelligence = () => {
+    const current = stateRef.current;
+    if (!current) return;
+    void openInvestigation({
+      requestId: `ask-${Date.now()}`,
+      matchId: current.match_id || "syn_default",
+      team: current.focus_team === "N" ? "N" : "H",
+      at: current.snapshot_as_of ?? current.at ?? 0,
+      focusType: "moment",
+      focusId: null,
+      question: "",
+    });
   };
 
   const investigateMoment = (payload: {
@@ -310,32 +374,47 @@ export default function MatchLensCockpit() {
     at: number;
     team: "H" | "N";
   }) => {
-    setInvestigationSeed({
+    void openInvestigation({
       requestId: `chart-${payload.focus_id}-${Date.now()}`,
-      matchId: state?.match_id || "syn_default",
+      matchId: stateRef.current?.match_id || "syn_default",
       team: payload.team,
       at: payload.at,
       focusType: "oaai_point",
       focusId: payload.focus_id,
       question: locale === "zh" ? "为什么这个时刻的进攻活动发生变化？" : "What produced this attacking activity change?",
     });
-    setActiveWorkspace("story_agent");
   };
 
   /**
-   * Switch to the investigation workbench only after the session clock has
+   * Switch to the intelligence workspace only after the session clock has
    * reached the evidence moment. Otherwise the plan would be computed at a
    * different snapshot than the replay the analyst is looking at.
    */
   const openInvestigation = async (seed: InvestigationSeed) => {
     setError("");
     try {
-      if (state?.match_id !== seed.matchId) {
-        await selectMatch(seed.matchId, "story_agent", { preserveSeed: true });
+      const current = stateRef.current;
+      if (current?.match_id !== seed.matchId) {
+        await selectMatch(seed.matchId, "story_agent", {
+          preserveSeed: true,
+          history: "none",
+        });
+        if (stateRef.current?.match_id !== seed.matchId) {
+          setError(locale === "zh" ? "比赛数据不可用，无法发起调查。" : "Match data is unavailable; the investigation was not started.");
+          return;
+        }
+      } else if (Math.abs(Number(current?.snapshot_as_of ?? current?.at ?? 0) - seed.at) > 1) {
+        await seekTo(seed.at);
       }
-      await control({ action: "seek", at: seed.at });
       setInvestigationSeed(seed);
       setActiveWorkspace("story_agent");
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set("workspace", "story_agent");
+        url.searchParams.set("match", seed.matchId);
+        url.searchParams.set("at", String(Math.round(seed.at)));
+        window.history.pushState({}, "", url);
+      } catch {}
     } catch (e) {
       setError((e as Error).message);
     }
@@ -394,14 +473,16 @@ export default function MatchLensCockpit() {
     const at = params.get("at");
     const event = params.get("event");
     const sequence = params.get("sequence");
+    const query = params.get("q") || "";
+    if (query) setGlobalQuery(query);
     const restore = async () => {
       urlRestoring.current = true;
       try {
         if (match && match !== state.match_id) {
-          await selectMatch(match, workspace || "match_center");
+          await selectMatch(match, workspace || "match_center", { history: "none" });
         }
-        if (at && Number.isFinite(Number(at))) {
-          await control({ action: "seek", at: Number(at) });
+        if (at !== null && Number.isFinite(Number(at))) {
+          await seekTo(Number(at));
         }
         if (event) setSelectedEventId(event);
         if (sequence) setSelectedSeqId(sequence);
@@ -426,34 +507,50 @@ export default function MatchLensCockpit() {
     else url.searchParams.delete("event");
     if (selectedSeqId) url.searchParams.set("sequence", selectedSeqId);
     else url.searchParams.delete("sequence");
+    if (globalQuery) url.searchParams.set("q", globalQuery);
+    else url.searchParams.delete("q");
     window.history.replaceState({}, "", url);
-  }, [activeWorkspace, state?.match_id, state?.at, state?.paused, state?.snapshot_as_of, selectedEventId, selectedSeqId, urlRestoreToken]);
+  }, [activeWorkspace, state?.match_id, state?.at, state?.paused, state?.snapshot_as_of, selectedEventId, selectedSeqId, globalQuery, urlRestoreToken]);
 
   useEffect(() => {
     const onPopState = () => {
+      // A popstate handler must never push another entry. Apply the popped URL
+      // directly and let the URL-sync effect replace (not push) afterwards.
       const params = new URLSearchParams(window.location.search);
       const workspace = workspaceFromSearch(window.location.search);
-      if (workspace) {
-        setActiveWorkspace(workspace);
-      }
       const match = params.get("match");
-      if (match && state && match !== state.match_id) {
-        void selectMatch(match, workspace || "match_center");
-      }
       const at = params.get("at");
-      if (at && Number.isFinite(Number(at))) {
-        void control({ action: "seek", at: Number(at) });
-      }
-      setSelectedEventId(params.get("event") || "");
-      setSelectedSeqId(params.get("sequence") || "");
+      const query = params.get("q") || "";
+      const apply = async () => {
+        urlRestoring.current = true;
+        try {
+          if (workspace) setActiveWorkspace(workspace);
+          setGlobalQuery(query);
+          if (match && match !== stateRef.current?.match_id) {
+            await selectMatch(match, workspace || "match_center", { history: "none" });
+          }
+          if (at !== null && Number.isFinite(Number(at))) {
+            await seekTo(Number(at));
+          }
+          setSelectedEventId(params.get("event") || "");
+          setSelectedSeqId(params.get("sequence") || "");
+        } finally {
+          urlRestoring.current = false;
+          setUrlRestoreToken((token) => token + 1);
+        }
+      };
+      void apply();
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [state?.match_id]);
+    // seekTo/selectMatch use refs for the live session and match.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const inspect = async (id: string, snapshotId?: string) => {
     const request = ++inspectionRequest.current;
-    const target = snapshotId || state?.snapshot_id;
+    const matchId = stateRef.current?.match_id;
+    const target = snapshotId || stateRef.current?.snapshot_id;
     if (!target) return;
     setError("");
     try {
@@ -462,8 +559,9 @@ export default function MatchLensCockpit() {
           ? evidence
           : await api<Evidence>(`evidence/${target}`);
       if (request !== inspectionRequest.current) return;
+      if (matchId && stateRef.current?.match_id !== matchId) return;
       setEvidence(data);
-      const rec = data.receipts[id] || state?.receipts[id] || null;
+      const rec = data.receipts[id] || stateRef.current?.receipts[id] || null;
       setInspectorPayload({
         type: "receipt",
         receiptId: id,
@@ -480,12 +578,22 @@ export default function MatchLensCockpit() {
   };
 
   const handleToggleSmoothingMode = async (smoothingMode: "causal" | "bilateral") => {
+    const token = ++smoothingRequest.current;
+    const matchId = stateRef.current?.match_id;
+    const epoch = stateRef.current?.epoch;
+    const at = stateRef.current?.snapshot_as_of ?? stateRef.current?.at;
     setActiveSmoothingMode(smoothingMode);
     try {
       const updated = await api<any>(`exploration/oaai?smoothing_mode=${smoothingMode}`);
+      if (token !== smoothingRequest.current) return;
       if (updated) {
         setState((prev) =>
-          prev && updated.match_id === prev.match_id && updated.epoch === prev.epoch
+          prev &&
+          updated.match_id === prev.match_id &&
+          updated.match_id === matchId &&
+          updated.epoch === epoch &&
+          prev.epoch === epoch &&
+          (prev.snapshot_as_of ?? prev.at) === at
             ? { ...prev, oaai: updated }
             : prev
         );
@@ -494,11 +602,21 @@ export default function MatchLensCockpit() {
   };
 
   const handleWindowChange = async (newWindow: number) => {
+    const token = ++recoveryRequest.current;
+    const matchId = stateRef.current?.match_id;
+    const epoch = stateRef.current?.epoch;
+    const at = stateRef.current?.snapshot_as_of ?? stateRef.current?.at;
     try {
       const updated = await api<any>(`exploration/recoveries?window_seconds=${newWindow}`);
+      if (token !== recoveryRequest.current) return;
       if (updated) {
         setState((prev) =>
-          prev && updated.match_id === prev.match_id && updated.epoch === prev.epoch
+          prev &&
+          updated.match_id === prev.match_id &&
+          updated.match_id === matchId &&
+          updated.epoch === epoch &&
+          prev.epoch === epoch &&
+          (prev.snapshot_as_of ?? prev.at) === at
             ? { ...prev, quick_recoveries: updated }
             : prev
         );
@@ -518,35 +636,32 @@ export default function MatchLensCockpit() {
       {state && (
         <TacticalHeader
           state={state}
-          busy={busy}
-          perspective={perspective}
           connection={connection}
           theme={theme}
           isDrawerOpen={isDrawerOpen}
           locale={locale}
+          onSearch={handleSearch}
+          onOpenHub={() => selectWorkspace("match_hub")}
+          onOpenMatch={() => selectWorkspace("match_center")}
           onToggleDrawer={() => setIsDrawerOpen(!isDrawerOpen)}
           onToggleTheme={toggleTheme}
           onToggleLocale={toggleLocale}
           onOpenGuide={() => setIsGuideOpen(true)}
-          onSelectPerspective={(p) => setPerspective(p)}
-          onControl={control}
         />
       )}
 
-      {/* 2. Workspace Tabs Navigation */}
+      {/* 2. Product navigation (public workspaces + professional tools) */}
       {state && (
         <WorkspaceTabs
           activeWorkspace={activeWorkspace}
-          onSelectWorkspace={selectWorkspace}
+          onSelectWorkspace={(workspace) => selectWorkspace(workspace)}
           state={state}
           locale={locale}
         />
       )}
 
-      {state && <EvidenceRail state={state} locale={locale} />}
-
-      {/* 3. Cockpit Main Layout Area */}
-      <div className="cockpit-main-layout">
+      {/* 3. Product Main Layout Area */}
+      <div className="cockpit-main-layout r6-main-layout">
         {/* Global Error Toast */}
         {error && (
           <div className="cockpit-toast-bar" role="alert">
@@ -598,10 +713,33 @@ export default function MatchLensCockpit() {
           </div>
         ) : (
           <>
+            {(activeWorkspace === "producer" || activeWorkspace === "validation_lab") && (
+              <section className="r6-pro-banner" aria-label={locale === "zh" ? "专业工具" : "Professional tools"}>
+                <div>
+                  <span className="r6-kicker">{locale === "zh" ? "专业工具" : "Professional tools"}</span>
+                  <h1>{activeWorkspace === "producer" ? (locale === "zh" ? "转播制作" : "Producer") : locale === "zh" ? "研究与评测" : "Research Lab"}</h1>
+                  <p>
+                    {activeWorkspace === "producer"
+                      ? locale === "zh"
+                        ? "审核已过门禁的结论，建立 Rundown，预览并导出可追溯 Manifest。"
+                        : "Review gate-approved claims, build a rundown, preview and export a traceable manifest."
+                      : locale === "zh"
+                        ? "xT 网格、确定性基准与反事实沙盘。研究结论与产品结论严格分层。"
+                        : "xT grids, deterministic benchmarks and counterfactual sandbox. Research remains separate from product claims."}
+                  </p>
+                </div>
+                <button type="button" className="r6-text-action" onClick={() => selectWorkspace("match_center")}>
+                  {locale === "zh" ? "返回比赛详情 →" : "Back to match detail →"}
+                </button>
+              </section>
+            )}
+
             {activeWorkspace === "match_hub" && (
               <MatchLibraryWorkspace
                 currentMatchId={state.match_id}
                 locale={locale}
+                initialQuery={globalQuery}
+                onQueryChange={setGlobalQuery}
                 onSelectMatch={(matchId) => void selectMatch(matchId)}
                 onInvestigateShot={investigateShot}
                 onInvestigateCrossMatch={investigateCrossMatch}
@@ -621,7 +759,9 @@ export default function MatchLensCockpit() {
                 selectedChannel={selectedChannel}
                 activeSmoothingMode={activeSmoothingMode}
                 locale={locale}
-                onSeek={(t) => control({ action: "seek", at: t })}
+                busy={busy}
+                onSeek={seekTo}
+                onControl={control}
                 onSelectEvent={(id) => setSelectedEventId(id)}
                 onSelectSequence={(seqId) => setSelectedSeqId(seqId)}
                 onSelectPlayer={(pid) => setSelectedPlayerId(pid)}
@@ -630,6 +770,9 @@ export default function MatchLensCockpit() {
                 onSelectChannel={(ch) => setSelectedChannel(ch)}
                 onToggleSmoothingMode={handleToggleSmoothingMode}
                 onOpenInspector={handleOpenInspector}
+                onSelectPerspective={setPerspective}
+                onOpenIntelligence={openIntelligence}
+                onInspectReceipt={(receiptId, snapshotId) => inspect(receiptId, snapshotId)}
                 onInvestigateMoment={investigateMoment}
               />
             )}
@@ -644,6 +787,27 @@ export default function MatchLensCockpit() {
                 selectedPlayerId={selectedPlayerId}
                 selectedZoneId={selectedZoneId}
                 locale={locale}
+                busy={busy}
+                onSeek={seekTo}
+                onControl={control}
+                onInvestigateFocus={(input) => {
+                  void openInvestigation({
+                    requestId: `${input.focusType}-${input.focusId}-${Date.now()}`,
+                    matchId: state.match_id || "syn_default",
+                    team: input.team,
+                    at: input.at,
+                    focusType: input.focusType,
+                    focusId: input.focusId,
+                    question:
+                      input.focusType === "sequence"
+                        ? locale === "zh"
+                          ? "这波控球序列由哪些已记录动作构成？"
+                          : "Which recorded actions make up this possession sequence?"
+                        : locale === "zh"
+                          ? "这次事件前后发生了什么？请只陈述已记录证据。"
+                          : "What happened around this recorded event?",
+                  });
+                }}
                 onSelectEvent={(id: string) => setSelectedEventId(id)}
                 onSelectSequence={(seqId: string) => setSelectedSeqId(seqId)}
                 onSelectPlayer={(pid: string | null) => setSelectedPlayerId(pid)}
@@ -685,17 +849,7 @@ export default function MatchLensCockpit() {
               />
             )}
 
-            {/* Full-Time Dossier when match finishes */}
-            {state.ended && (
-              <div style={{ marginTop: 24 }}>
-                <MatchRecap
-                  score={state.score}
-                  history={state.history}
-                  locale={locale}
-                  onInspect={(rId, sId) => inspect(rId, sId)}
-                />
-              </div>
-            )}
+            {/* Full-time recap lives inside Match Detail, never in unrelated workspaces. */}
           </>
         )}
 
@@ -720,14 +874,14 @@ export default function MatchLensCockpit() {
         />
 
         {/* Cockpit Footer */}
-        <footer className="cockpit-footer" role="contentinfo">
+        <footer className="cockpit-footer r6-footer" role="contentinfo">
           <div>
-            <b style={{ color: "var(--text-primary)" }}>MatchLens AI Cockpit 4.0</b> {locale === "zh" ? "黑曜石战术暗夜架构" : "Obsidian Tactical Dark Architecture"}
+            <b>MatchLens</b> · {locale === "zh" ? "足球智能分析" : "Football Intelligence"}
           </div>
           <div>
             {locale === "zh"
-              ? "确定性事件流。内容哈希证据凭证。双智能体与确定性工具。发布门禁。"
-              : "Deterministic event stream. Content-hashed receipts. Two agents and deterministic tools. Publication gate."}
+              ? "每个结论都可回到记录事件与指标收据；无球阵型与战术因果不会被臆测。"
+              : "Every insight returns to recorded events and metric receipts; off-ball shape and tactical cause are never inferred."}
           </div>
         </footer>
       </div>

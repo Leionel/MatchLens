@@ -245,6 +245,7 @@ export type CockpitState = {
     full_event_access?: string;
     [key: string]: unknown;
   } | null;
+  nominal_duration?: number;
   coverage?: {
     format_seconds: number;
     observed_start: number | null;

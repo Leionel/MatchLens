@@ -1,4 +1,5 @@
 @import "./tokens.css";
+@import "./r6.css";
 
 * { box-sizing: border-box; }
 html { color-scheme: dark; scroll-behavior: smooth; }

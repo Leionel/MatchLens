@@ -15,6 +15,8 @@ import {
 interface MatchLibraryWorkspaceProps {
   currentMatchId?: string;
   locale?: Locale;
+  initialQuery?: string;
+  onQueryChange?: (query: string) => void;
   onSelectMatch: (matchId: string) => void;
   onInvestigateShot?: (input: { matchId: string; eventId: string; team: "H" | "N"; at: number }) => void;
   onInvestigateCrossMatch?: (input: { matchId: string; otherMatchId: string }) => void;
@@ -23,6 +25,8 @@ interface MatchLibraryWorkspaceProps {
 export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
   currentMatchId,
   locale = "zh",
+  initialQuery = "",
+  onQueryChange,
   onSelectMatch,
   onInvestigateShot,
   onInvestigateCrossMatch,
@@ -64,6 +68,11 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
       active = false;
     };
   }, []);
+
+  // The global header search lands here with its query already applied.
+  useEffect(() => {
+    setQuery(initialQuery);
+  }, [initialQuery]);
 
   // The detail page follows the match the session is holding, so a deep link
   // into a match opens on its own record.
@@ -123,14 +132,44 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
 
   return (
     <div className="workspace-pane-fade ml-shell">
-      <section className="ml-header">
+      <header className="r6-page-head r6-hub-head">
+        <div>
+          <span className="r6-kicker">{isZh ? "比赛库" : "Match Hub"}</span>
+          <h1>{isZh ? "从一场真实比赛开始" : "Start with a real match"}</h1>
+          <p>
+            {isZh
+              ? "先看比分、事件与活动趋势，再按需进入战术探索和带证据的 AI 调查。"
+              : "Read the score, events and activity trend first; then open tactical exploration or an evidence-led investigation."}
+          </p>
+        </div>
+        <div className="r6-hub-facts">
+          <span>
+            <b>{loading ? "—" : matches.filter((match) => match.analysis_ready !== false).length}</b>
+            <small>{isZh ? "可分析" : "analysis ready"}</small>
+          </span>
+          <span>
+            <b>{loading ? "—" : matches.length}</b>
+            <small>{isZh ? "已登记" : "catalogued"}</small>
+          </span>
+          {currentMatchId && (
+            <button type="button" className="r6-text-action" onClick={() => onSelectMatch(currentMatchId)}>
+              {isZh ? "继续当前比赛 →" : "Continue current match →"}
+            </button>
+          )}
+        </div>
+      </header>
+
+      <section className="ml-header r6-hub-tools">
         <div className="ml-header-text">
-          <h2 className="ml-title">{isZh ? "比赛库" : "Match Library"}</h2>
+          <h2 className="ml-title">{isZh ? "筛选与搜索" : "Filter and search"}</h2>
         </div>
         <label className="ml-search">
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              onQueryChange?.(e.target.value);
+            }}
             placeholder={isZh ? "例如 France 或 2022" : "e.g. France or 2022"}
             className="ml-search-input"
           />

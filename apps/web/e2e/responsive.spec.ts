@@ -39,6 +39,14 @@ test.describe("responsive acceptance", () => {
 
     await selectWorkspace(page, WORKSPACE_TABS.storyAgent);
     expect(await hasHorizontalOverflow(page)).toBe(false);
+
+    await selectWorkspace(page, WORKSPACE_TABS.matchCenter);
+    await expect(page.getByTestId("replay-dock")).toBeVisible();
+    expect(await hasHorizontalOverflow(page)).toBe(false);
+
+    await selectWorkspace(page, WORKSPACE_TABS.tacticalLab);
+    await expect(page.getByTestId("tactical-explorer-page")).toBeVisible();
+    expect(await hasHorizontalOverflow(page)).toBe(false);
   });
 
   test("the workspace tabs are reachable and operable with the keyboard", async ({ page }) => {
@@ -77,9 +85,20 @@ test.describe("responsive acceptance", () => {
           nodes: violation.nodes.length,
           targets: violation.nodes.slice(0, 4).map((node) => node.target.join(" ")),
           detail: violation.nodes[0]?.failureSummary?.split("\n").slice(0, 2).join(" | "),
+          html: violation.nodes.slice(0, 2).map((node) => node.html?.slice(0, 200)),
         }));
     };
 
+    expect(await scan()).toEqual([]);
+
+    // Match Detail and Intelligence Studio are the two product-critical
+    // surfaces; audit both rather than only the hub.
+    await selectWorkspace(page, WORKSPACE_TABS.matchCenter);
+    await expect(page.getByTestId("match-detail-page")).toBeVisible();
+    expect(await scan()).toEqual([]);
+
+    await selectWorkspace(page, WORKSPACE_TABS.storyAgent);
+    await expect(page.getByTestId("investigation-advanced")).toBeVisible();
     expect(await scan()).toEqual([]);
 
     // The light theme is a first-class surface, so it is audited as well.

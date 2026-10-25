@@ -2,12 +2,12 @@ import { Page, expect } from "@playwright/test";
 
 /** Tab labels of the cockpit workspace bar in English. */
 export const WORKSPACE_TABS = {
-  matchHub: "Match Library",
-  matchCenter: "Match Center",
-  tacticalLab: "Tactical & Spatial Lab",
-  storyAgent: "Story & Agent Workbench",
+  matchHub: "Match Hub",
+  matchCenter: "Match Detail",
+  tacticalLab: "Tactical Explorer",
+  storyAgent: "Intelligence Studio",
   producer: "Producer",
-  validationLab: "Validation & Research Lab",
+  validationLab: "Research Lab",
 } as const;
 
 /** Force the English locale before the app boots, so specs never assert on Chinese copy. */
@@ -21,9 +21,9 @@ export async function useEnglish(page: Page): Promise<void> {
   });
 }
 
-/** The workspace bar is one tablist among others, so it is addressed directly. */
+/** The product navigation is one tablist among others, so it is addressed directly. */
 export function workspaceTablist(page: Page) {
-  return page.locator(".workspace-tabs-container");
+  return page.locator(".r6-nav-tabs:visible, .r6-mobile-nav:visible");
 }
 
 /** Open the cockpit and wait until the session state has rendered. */
@@ -34,6 +34,12 @@ export async function openCockpit(page: Page, query = ""): Promise<void> {
 }
 
 export async function selectWorkspace(page: Page, label: string): Promise<void> {
+  const professional = label === WORKSPACE_TABS.producer || label === WORKSPACE_TABS.validationLab;
+  if (professional) {
+    await page.getByTestId("pro-tools-toggle").click();
+    await page.getByRole("menuitem", { name: new RegExp(label) }).click();
+    return;
+  }
   await page.getByRole("tab", { name: new RegExp(label) }).click();
   await expect(page.getByRole("tab", { name: new RegExp(label) })).toHaveAttribute("aria-selected", "true");
 }
