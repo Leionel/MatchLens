@@ -168,6 +168,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
 
       {/* Top Banner: Spatial & Tactical Mode Header */}
       <div
+        className="r6-tactical-banner"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -247,7 +248,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
         {/* Left Column: Full-featured 2D Pitch Stage */}
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div className="glass-panel" style={{ padding: 14 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div className="r6-canvas-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)" }}>
                   {isZh ? "交互式战术球场画板" : "INTERACTIVE TACTICAL CANVAS"}

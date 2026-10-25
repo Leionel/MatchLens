@@ -392,3 +392,15 @@
   .match-quickstats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; font-size: 12px; }
   .possession-gauge-wrap { margin-top: 8px; }
 }
+@media (max-width: 560px) {
+  .r6-tactical-banner { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+  .r6-tactical-banner > div { flex-wrap: wrap; min-width: 0; }
+  .r6-tactical-banner > div:last-child { justify-content: flex-start; }
+  .r6-canvas-head { flex-wrap: wrap; gap: 8px; }
+  .r6-canvas-head > div { flex-wrap: wrap; min-width: 0; }
+}
+@media (max-width: 560px) {
+  .stage-header { flex-wrap: wrap; gap: 6px; }
+  .zone-distribution-strip { flex-wrap: wrap; }
+  .tactical-layer-bar { flex-wrap: wrap; }
+}
