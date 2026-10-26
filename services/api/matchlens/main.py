@@ -5,6 +5,7 @@ import contextlib
 import hashlib
 import hmac
 import json
+import logging
 import math
 import os
 import secrets
@@ -14,6 +15,8 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlparse
+
+logger = logging.getLogger("matchlens.main")
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -313,6 +316,10 @@ class Engine:
         self.snapshot_cache_bytes = 0
         self.oaai_cache: OrderedDict[tuple, dict] = OrderedDict()
         self.oaai_cache_max_entries = 32
+        # Featured-investigation responses are pure catalog+OAAI derivations, so
+        # they are memoised per catalog signature for the process lifetime.
+        self.featured_cache: OrderedDict[str, dict] = OrderedDict()
+        self.featured_cache_max_entries = 4
         self.cache_stats = {
             "snapshot_hits": 0,
             "snapshot_misses": 0,
@@ -1897,6 +1904,185 @@ async def compare_matches(
         "matches": matches_meta,
         "batch_summary": summary,
     }
+
+
+@app.get("/api/featured")
+async def featured_investigation(request: Request):
+    """Deterministic first-visit recommendation for the Match Hub.
+
+    Selection algorithm, fully disclosed and model-free:
+    1. candidates = catalog matches with local data that are analysis ready;
+    2. rank provider payloads above synthetic fixtures, then by recorded
+       event count descending;
+    3. walk the ranking and take the first match whose OAAI change points
+       include one inside the replayable clock; feature its strongest such
+       change point (largest |amplitude|);
+    4. every narrative string is assembled from recorded values (team names,
+       the amplitude, contributor actions). Nothing here is a model output and
+       no claim is registered by this endpoint.
+    """
+    public_rate(request, "featured", 30)
+    from .catalog import MatchCatalog
+
+    eng = engine(request)
+    matches = MatchCatalog.list_matches()
+    candidates = [
+        m
+        for m in matches
+        if m.analysis_ready is not False and m.dataset_installed is not False
+    ]
+    signature = hashlib.sha256(
+        json.dumps(
+            sorted(
+                (m.match_id, m.provenance_kind or "synthetic", m.events_count or 0)
+                for m in candidates
+            ),
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()[:32]
+    cached = eng.featured_cache.get(signature)
+    if cached is not None:
+        eng.featured_cache.move_to_end(signature)
+        return dict(cached)
+
+    provenance_rank = {"provider_payload": 0, "provider_schema_excerpt": 1, "synthetic": 2}
+    ranked = sorted(
+        candidates,
+        key=lambda m: (
+            provenance_rank.get(m.provenance_kind or "synthetic", 2),
+            -(m.events_count or 0),
+        ),
+    )
+
+    featured: dict | None = None
+    fallback_reason = "no analysis-ready match with an in-clock OAAI change point"
+    considered = 0
+    for meta in ranked:
+        considered += 1
+        mid = meta.match_id
+        try:
+            ctx = MatchCatalog.get_match_context(mid)
+            events = MatchCatalog.load_normalized_events(mid)
+            if mid.startswith("syn_"):
+                events = generate_match(scenario=mid.replace("syn_", "", 1))
+            replayable = int(math.ceil(ctx.replayable_end))
+            result = compute_oaai(
+                events,
+                smoothing_mode="causal",
+                t_end=replayable,
+                xt_model=canonical_xt_model(),
+            )
+            points = [
+                cp
+                for cp in result.get("change_points", [])
+                if 0 < float(cp.get("at") or 0) <= replayable
+            ]
+            if not points:
+                fallback_reason = f"{mid}: no OAAI change point inside the replayable clock"
+                continue
+            strongest = max(points, key=lambda cp: abs(float(cp.get("oaai_amplitude") or 0)))
+            contributors = [
+                c
+                for c in (strongest.get("top_contributors") or [])
+                if c.get("event_id")
+            ]
+            lead = strongest.get("leading_team")
+            team_name = ctx.away_team_name if lead == "N" else ctx.home_team_name
+            if lead not in ("H", "N"):
+                fallback_reason = f"{mid}: strongest change point has no leading team"
+                continue
+            at = float(strongest.get("at") or 0)
+            amplitude = float(strongest.get("oaai_amplitude") or 0)
+            minute = max(1, int(at // 60) + 1)
+            surged = "surge" in str(strongest.get("change_type") or "")
+            home = meta.home_team
+            away = meta.away_team
+            lead_name = team_name or (home if lead == "H" else away)
+            featured = {
+                "match_id": mid,
+                "label": meta.label,
+                "competition": meta.competition,
+                "season": meta.season,
+                "stage": meta.stage,
+                "match_date": meta.match_date,
+                "home_team": home,
+                "away_team": away,
+                "home_score": meta.home_score,
+                "away_score": meta.away_score,
+                "provenance_kind": meta.provenance_kind or "synthetic",
+                "data_provider": meta.data_provider,
+                "attribution_text": meta.attribution_text,
+                "replayable_end": replayable,
+                "moment": {
+                    "change_point_id": strongest.get("change_point_id"),
+                    "at": at,
+                    "minute": minute,
+                    "leading_team": lead,
+                    "team_name": lead_name,
+                    "oaai_amplitude": amplitude,
+                    "change_type": strongest.get("change_type"),
+                    "claim_level": strongest.get("claim_level", 2),
+                    "disclaimer": strongest.get("disclaimer"),
+                },
+                "what_changed": (
+                    f"{lead_name}'s recorded attacking activity surged "
+                    f"(smoothed OAAI {amplitude:+.2f}; formula attribution, not causation)."
+                    if surged
+                    else (
+                        f"{lead_name} took the recorded activity advantage in this spell "
+                        f"(smoothed OAAI {amplitude:+.2f}; formula attribution, not causation)."
+                    )
+                ),
+                "why_investigate": (
+                    f"Strongest recorded swing on this match's activity curve inside the replayable clock, "
+                    f"backed by {len(contributors)} supporting recorded event(s)."
+                ),
+                "question": (
+                    f"What produced {lead_name}'s attacking activity change around {minute}'?"
+                ),
+                "supporting_events": [
+                    {
+                        "event_id": c.get("event_id"),
+                        "t": c.get("t"),
+                        "minute": max(1, int(float(c.get("t") or 0) // 60) + 1),
+                        "team": c.get("team"),
+                        "actor": c.get("actor"),
+                        "kind": c.get("kind"),
+                        "outcome": c.get("outcome"),
+                        "explanation": c.get("explanation"),
+                    }
+                    for c in contributors[:3]
+                ],
+                "source": (
+                    "MatchLens deterministic OAAI change points over the installed, "
+                    "analysis-ready match ranked first by provenance and recorded event count; "
+                    "no model was called and no claim was registered."
+                ),
+            }
+            break
+        except FileNotFoundError:
+            fallback_reason = f"{mid}: dataset not locally installed"
+            continue
+        except Exception as exc:  # noqa: BLE001 - one bad dataset must not 500 the hub
+            logger.warning("featured candidate %s failed: %s", mid, exc)
+            fallback_reason = f"{mid}: {type(exc).__name__}"
+            continue
+
+    response = {
+        "featured": featured,
+        "fallback": featured is None,
+        "fallback_reason": fallback_reason if featured is None else None,
+        "candidates_considered": considered,
+        "algorithm": (
+            "strongest |OAAI amplitude| change point within the replayable clock on the "
+            "analysis-ready match ranked by provider provenance then recorded event count; "
+            "deterministic, no model called"
+        ),
+    }
+    eng.featured_cache[signature] = response
+    while len(eng.featured_cache) > eng.featured_cache_max_entries:
+        eng.featured_cache.popitem(last=False)
+    return response
 
 
 # ---------------------------------------------------------------------------
