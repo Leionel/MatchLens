@@ -162,6 +162,12 @@ class InvestigationPlan(BaseModel):
     findings: list[Finding]
     explanations: list[CandidateExplanation]
     gate_preview: GatePreview
+    #: Who actually produced this plan and what each stage contributed. Derived
+    #: from the receipts and the verifier decision already on the plan, never a
+    #: new inference: the UI must be able to show the collaboration without
+    #: making the reader open a raw trace, and must never imply two agents ran
+    #: when only the deterministic planner did.
+    collaboration: dict[str, Any] | None = None
     not_inferable: list[str]
     unresolved: list[str]
     required_scope: list[str] = Field(default_factory=list)
@@ -266,6 +272,20 @@ class InvestigationPlanner:
 
         def finish(**kwargs: Any) -> InvestigationPlan:
             kwargs.setdefault("owner_session_id", owner_session_id)
+            # No model was called on this path, and the plan says so: the
+            # analyst/verifier stages are null rather than dressed up.
+            kwargs.setdefault(
+                "collaboration",
+                _collaboration_summary(
+                    mode="deterministic_planner",
+                    history=list(run.history),
+                    gate=kwargs["gate"],
+                    requests=0,
+                    model=None,
+                    analyst_registry=None,
+                    verifier_registry=None,
+                ),
+            )
             return cls._finish(**kwargs)
 
         receipts: list[ToolReceipt] = []
@@ -975,6 +995,7 @@ class InvestigationPlanner:
         state: str | None = None,
         ledger: dict[str, Any] | None = None,
         owner_session_id: str | None = None,
+        collaboration: dict[str, Any] | None = None,
     ) -> InvestigationPlan:
         final_state: InvestigationState = (state or run.state)  # type: ignore[assignment]
         not_inferable = [
@@ -1010,6 +1031,7 @@ class InvestigationPlanner:
             required_scope=required_scope,
             duration_ms=round((time.perf_counter() - started) * 1000, 3),
             owner_session_id=owner_session_id,
+            collaboration=collaboration,
         )
 
 
@@ -1020,6 +1042,84 @@ class AgentInvestigationError(Exception):
         super().__init__(code)
         self.run_id = run_id
         self.code = code
+
+
+def _stage_names(history: list[dict[str, Any]]) -> list[str]:
+    seen: list[str] = []
+    for entry in history:
+        name = str(entry.get("state") or "")
+        if name and name not in seen:
+            seen.append(name)
+    return seen
+
+
+def _tools_of(registry: Any, limit: int = 8) -> list[str]:
+    names: list[str] = []
+    for call in getattr(registry, "calls", []) or []:
+        name = str(getattr(call, "tool", ""))
+        if name and name not in names:
+            names.append(name)
+    return names[:limit]
+
+
+def _collaboration_summary(
+    *,
+    mode: str,
+    history: list[dict[str, Any]],
+    gate: "GatePreview",
+    requests: int = 0,
+    model: str | None = None,
+    analyst_registry: Any = None,
+    verifier_registry: Any = None,
+    draft: dict[str, Any] | None = None,
+    draft_sha256: str | None = None,
+    review: Any = None,
+) -> dict[str, Any]:
+    """What each stage actually did, from data already on the run.
+
+    Deterministic plans report `analyst`/`verifier` as null instead of dressing
+    the planner up as two agents. A model-backed plan reports the tool each
+    stage really called and the verifier's own per-claim decision, so the
+    collaboration can be shown without opening the raw trace.
+    """
+    summary: dict[str, Any] = {
+        "mode": mode,
+        "model": model,
+        "requests": int(requests or 0),
+        "stages": _stage_names(history),
+        "analyst": None,
+        "verifier": None,
+        "gate": {"status": gate.status, "violations": list(gate.violations)},
+    }
+    if analyst_registry is not None:
+        claims = (draft or {}).get("claims") or []
+        first = claims[0] if claims else {}
+        summary["analyst"] = {
+            "tool_calls": len(getattr(analyst_registry, "calls", []) or []),
+            "tools": _tools_of(analyst_registry),
+            "claim_id": first.get("id") or first.get("claim_id"),
+            "assertion": first.get("assertion"),
+            "draft_sha256": draft_sha256,
+        }
+    if verifier_registry is not None:
+        decisions = []
+        for decision in getattr(review, "decisions", []) or []:
+            decisions.append({
+                "claim_id": decision.claim_id,
+                "verdict": decision.verdict,
+                "selected_variant": decision.selected_variant,
+                "reason": decision.reason,
+                "limitations": list(decision.limitations),
+            })
+        tools = _tools_of(verifier_registry)
+        summary["verifier"] = {
+            "tool_calls": len(getattr(verifier_registry, "calls", []) or []),
+            "tools": tools,
+            # Only true when the verifier really queried opposing evidence.
+            "counterevidence_checked": "find_counterevidence" in tools,
+            "decisions": decisions,
+        }
+    return summary
 
 
 class InvestigationCancelled(asyncio.CancelledError):
@@ -1240,9 +1340,10 @@ async def run_maf_investigation(
             draft = WireDraft.model_validate_json(raw).canonical()
             validate_draft(draft, snapshot)
             maf_run.draft = draft.model_dump()
+            draft_sha256 = hashlib.sha256(json.dumps(maf_run.draft, sort_keys=True).encode()).hexdigest()
             maf_run.audit.append({"type": "handoff", "from": "Analyst", "to": "Verifier", "snapshot_id": snapshot.id,
                                   "claim_ids": [c.id for c in draft.claims],
-                                  "draft_sha256": hashlib.sha256(json.dumps(maf_run.draft, sort_keys=True).encode()).hexdigest()})
+                                  "draft_sha256": draft_sha256})
             run_store.attach(run_id, maf_run.audit, maf_run.requests)
             run_store.transition(run_id, "HANDOFF", "analyst draft accepted; verifier handoff")
 
@@ -1397,6 +1498,18 @@ async def run_maf_investigation(
         state=final_state,
         ledger=ledger,
         owner_session_id=owner_session_id,
+        collaboration=_collaboration_summary(
+            mode="maf_agent",
+            history=list(plan_run.history),
+            gate=gate,
+            requests=maf_run.requests,
+            model="deepseek-flash",
+            analyst_registry=analyst_registry,
+            verifier_registry=verifier_registry,
+            draft=maf_run.draft,
+            draft_sha256=draft_sha256,
+            review=review,
+        ),
     )
     plan.execution_mode = "maf_agent"
     plan.agent_status = "run"
