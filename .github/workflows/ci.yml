@@ -80,6 +80,7 @@ jobs:
       # Container contract without Docker: COPY sources, .dockerignore, the
       # entrypoint's line endings, railway.toml, and a volume-backed import.
       - name: Verify the single-container deployment contract
+        working-directory: .
         run: services/api/.venv/bin/python scripts/verify_deployment.py
 
       - name: Run provider integration tests
