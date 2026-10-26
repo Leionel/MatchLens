@@ -141,6 +141,34 @@ def _coords(ev: Any, point: str) -> list[float] | None:
     return value if isinstance(value, (list, tuple)) and len(value) >= 2 and value[0] is not None else None
 
 
+# ── One interval convention for chapters, metrics and citations ──────────────
+#
+# Every metric receipt is built from ``[e for e in events if start < e["t"] <= end]``
+# (see ``football._window_receipts``). Story chapters must publish the same
+# evidence set as the numbers they quote, so they use the same half-open
+# interval. Chapters then tile the match without overlapping: an event exactly
+# on a phase boundary belongs to exactly one chapter — the one that ends there —
+# and a claim observed on a boundary is cited by exactly one chapter.
+#
+# The kick-off instant (t == 0) sits before the first counted action, which is
+# why it is excluded from the counted set rather than silently added to the
+# opening chapter.
+
+def _in_phase(t: float, start: float, end: float) -> bool:
+    """Half-open membership: the interval every window receipt also uses."""
+    return float(start) < float(t) <= float(end)
+
+
+def _tiles(intervals: list[tuple[float, float]]) -> bool:
+    """True when sorted intervals tile their span with no gap and no overlap."""
+    if not intervals:
+        return True
+    ordered = sorted(intervals)
+    if any(end <= start for start, end in ordered):
+        return False
+    return all(abs(ordered[i][1] - ordered[i + 1][0]) < 1e-9 for i in range(len(ordered) - 1))
+
+
 def _observed_number(value: float | int | None) -> str:
     """Render an observed metric value.
 
@@ -290,6 +318,11 @@ class MatchStoryEngine:
                 (second, replayable, f"{round(second / 60)}'–{round(nominal / 60)}'{extra}"),
             ]
 
+        # Chapters must tile the match exactly: a gap would leave recorded
+        # events uncited, an overlap would cite the boundary twice.
+        if not _tiles([(start, end) for start, end, _ in phase_boundaries]):
+            raise ValueError("story_chapters_must_tile_the_match_without_overlap")
+
         # Every number quoted below is observed through the metric registry.
         # The story engine never recomputes a metric of its own.
         metric_snapshot = snapshot or _snapshot_for_metrics(events, snapshot_id, match_id, coverage)
@@ -299,7 +332,7 @@ class MatchStoryEngine:
         for idx, (start_t, end_t, span) in enumerate(phase_boundaries):
             phase_events = [
                 e for e in events
-                if start_t <= _event_time(e) <= end_t
+                if _in_phase(_event_time(e), start_t, end_t)
             ]
             # The phase covers the whole match, the snapshot is frozen at
             # `as_of`. A phase that runs past the frozen clock is observed up
@@ -430,9 +463,13 @@ class MatchStoryEngine:
                 )
                 tags = ["broadcast_factual", "recorded_events"]
 
+            # A claim is cited by the chapter that owns the instant it was
+            # observed. Overlap-based matching attached one claim to two
+            # chapters whenever its 180s window straddled a boundary, which
+            # double-counted the same evidence in two different narratives.
             refs = [
                 r.claim_id for r in gate_approved
-                if max(0, r.as_of - 180) <= end_t and r.as_of >= start_t
+                if _in_phase(r.as_of, start_t, end_t)
             ]
             chapters.append(StoryChapter(
                 chapter_id=f"chap-{idx+1}",
