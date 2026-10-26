@@ -83,6 +83,7 @@ jobs:
             tests/test_real_match_integration.py \
             tests/test_provider_publication.py \
             tests/test_provider_match_semantics.py \
+            tests/test_r6_2_boundaries.py \
             -v --tb=short
 
   full-corpus:
