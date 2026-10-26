@@ -359,6 +359,19 @@ export default function MatchLensCockpit() {
     selectWorkspace("match_hub", { query });
   };
 
+  /**
+   * The investigation was opened from a moment of this match. Returning puts
+   * the analyst back on that moment in Match Detail, not on an arbitrary clock,
+   * so the evidence they just read is still on screen.
+   */
+  const returnToMatchAt = (at: number) => {
+    void (async () => {
+      const aligned = await seekTo(at);
+      if (!aligned) return;
+      selectWorkspace("match_center");
+    })();
+  };
+
   const openIntelligence = () => {
     const current = stateRef.current;
     if (!current) return;
@@ -468,6 +481,50 @@ export default function MatchLensCockpit() {
         locale === "zh"
           ? "这次射门来自怎样的进攻序列？请只陈述已记录证据。"
           : "What recorded attacking sequence produced this shot?",
+    });
+  };
+
+  /**
+   * A player row in Match Detail opens an investigation about that player at
+   * the current moment. The player id is the focus, so the plan cites the same
+   * recorded events the card counts.
+   */
+  const investigatePlayer = (payload: {
+    player_id: string;
+    name: string;
+    team: "H" | "N";
+  }) => {
+    void openInvestigation({
+      requestId: `player-${payload.player_id}-${Date.now()}`,
+      matchId: stateRef.current?.match_id || "syn_default",
+      team: payload.team,
+      at: stateRef.current?.snapshot_as_of ?? stateRef.current?.at ?? 0,
+      focusType: "player",
+      focusId: payload.player_id,
+      question:
+        locale === "zh"
+          ? `${payload.name} 在这场比赛中的已记录动作说明了什么？`
+          : `What do ${payload.name}'s recorded actions show in this match?`,
+    });
+  };
+
+  /**
+   * An event row in Match Detail opens an investigation about that event. The
+   * replay is aligned to the event's own second first, so the plan cites the
+   * snapshot the analyst is looking at.
+   */
+  const investigateEvent = (payload: { event_id: string; at: number; team: "H" | "N" }) => {
+    void openInvestigation({
+      requestId: `event-${payload.event_id}-${Date.now()}`,
+      matchId: stateRef.current?.match_id || "syn_default",
+      team: payload.team,
+      at: payload.at,
+      focusType: "event",
+      focusId: payload.event_id,
+      question:
+        locale === "zh"
+          ? "这次事件前后有哪些已记录动作？请只陈述事件记录。"
+          : "Which recorded actions surround this event? State only what the event log records.",
     });
   };
 
@@ -806,6 +863,8 @@ export default function MatchLensCockpit() {
                 onOpenIntelligence={openIntelligence}
                 onInspectReceipt={(receiptId, snapshotId) => inspect(receiptId, snapshotId)}
                 onInvestigateMoment={investigateMoment}
+                onInvestigatePlayer={investigatePlayer}
+                onInvestigateEvent={investigateEvent}
               />
             )}
 
@@ -864,6 +923,7 @@ export default function MatchLensCockpit() {
                 onOpenInspector={handleOpenInspector}
                 onCommitState={(next) => commit(next)}
                 investigationSeed={investigationSeed}
+                onReturnToMatch={returnToMatchAt}
               />
             )}
 

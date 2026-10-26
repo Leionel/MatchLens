@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-import { CockpitState, PerspectiveId, InspectorPayload } from "./types";
+import React, { useMemo, useRef, useState } from "react";
+import { CockpitState, FootballEvent, PerspectiveId, InspectorPayload } from "./types";
 import { Scoreboard } from "../Scoreboard";
 import { OAAITimeline, buildPeriodBands } from "../OAAITimeline";
 import { MatchStage } from "../MatchStage";
@@ -13,7 +13,10 @@ import { ReplayDock } from "./ReplayDock";
 import { MatchInsightRail } from "./MatchInsightRail";
 import { MatchKeyEvents } from "./MatchKeyEvents";
 import { MobileTabs } from "./MobileTabs";
+import { MatchPlayerFocus } from "./MatchPlayerFocus";
 import { Locale, getTranslation } from "../../lib/i18n";
+import { countText, matchWindowLabel, percentText, readReceipt, windowLabel } from "../../lib/receipts";
+import { displayableEvents, drawableEvents } from "../../lib/eventValidity";
 
 interface MatchCenterWorkspaceProps {
   state: CockpitState;
@@ -46,6 +49,12 @@ interface MatchCenterWorkspaceProps {
     at: number;
     team: "H" | "N";
   }) => void;
+  onInvestigatePlayer: (player: {
+    player_id: string;
+    name: string;
+    team: "H" | "N";
+  }) => void;
+  onInvestigateEvent: (event: { event_id: string; at: number; team: "H" | "N" }) => void;
 }
 
 const clock = (s: number) =>
@@ -81,22 +90,42 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
   onOpenIntelligence,
   onInspectReceipt,
   onInvestigateMoment,
+  onInvestigatePlayer,
+  onInvestigateEvent,
 }) => {
   const t = getTranslation(locale);
   const isZh = locale === "zh";
   const [mobileSection, setMobileSection] = useState<"overview" | "tactical" | "events" | "more">("overview");
 
   const clockText = clock(state.at || 0);
-  const rawPossession = state.receipts?.["H.possession.current"]?.value;
-  const posValue =
-    typeof rawPossession === "number" && state.receipts?.["H.possession.current"]?.status !== "unobserved"
-      ? rawPossession
-      : null;
+  // Possession and count metrics exist in three windows. The scoreboard gauge
+  // is a live three-minute reading; the match totals row must never borrow it,
+  // or a quiet window would be published as the match's shot count.
+  const windowPossession = readReceipt(state.receipts, "H.possession.current");
+  const matchPossession = readReceipt(state.receipts, "H.possession.match");
+  const matchShotsH = readReceipt(state.receipts, "H.shots.match");
+  const matchShotsN = readReceipt(state.receipts, "N.shots.match");
+  const matchGoalsH = readReceipt(state.receipts, "H.goals.match");
+  const matchGoalsN = readReceipt(state.receipts, "N.goals.match");
+  const windowShotsH = readReceipt(state.receipts, "H.shots.current");
+  const windowShotsN = readReceipt(state.receipts, "N.shots.current");
+  const posValue = windowPossession.value;
+  const matchPossessionText = percentText(matchPossession, isZh ? "未观测" : "Unknown");
   const activeMoment = state.active_moment;
   const selectedEvent =
     state.events?.find((e) => e.id === selectedEventId) || null;
   const selectedSeq =
     state.sequences?.find((sq) => sq.sequence_id === selectedSeqId) || null;
+
+  /**
+   * A live tick can arrive with a window that no longer carries the event the
+   * analyst just clicked. The selection is an identity, not a membership test:
+   * keep the last resolved event so the context strip does not blink out of
+   * existence between ticks. It is dropped as soon as the id is cleared.
+   */
+  const lastEventRef = useRef<FootballEvent | null>(null);
+  if (selectedEvent) lastEventRef.current = selectedEvent;
+  const contextEvent = selectedEventId ? selectedEvent || lastEventRef.current : null;
 
   const homeTeam = state.teams?.H || "Harbor FC";
   const awayTeam = state.teams?.N || "Northbridge United";
@@ -194,40 +223,85 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
         />
       </div>
 
-      <div className="match-quickstats" data-mobile-panel="overview" role="group" aria-label={isZh ? "核心指标" : "Key metrics"}>
-        <span>
-          {t.possession}{" "}
-          <b>{posValue === null ? (isZh ? "未观测" : "Unknown") : `${posValue.toFixed(0)}%`}</b>
-        </span>
-        <span>
-          {isZh ? "射门" : "Shots"}{" "}
-          <b>
-            {state.receipts?.["H.shots.current"]?.value ?? "—"} / {state.receipts?.["N.shots.current"]?.value ?? "—"}
-          </b>
-        </span>
-        <span>
-          {isZh ? "进球" : "Goals"}{" "}
-          <b>
-            {state.receipts?.["H.goals.current"]?.value ?? "—"} / {state.receipts?.["N.goals.current"]?.value ?? "—"}
-          </b>
+      <section
+        className="match-quickstats r6-match-totals"
+        data-mobile-panel="overview"
+        role="group"
+        aria-label={isZh ? "全场统计" : "Match totals"}
+        data-testid="match-totals"
+      >
+        <span className="r6-totals-scope">{isZh ? "全场" : "Whole match"}</span>
+        <span title={matchWindowLabel(matchPossession, locale)} data-testid="match-stat-possession">
+          {t.possession} <b>{matchPossession.status === "ok" ? `${matchPossessionText} / ${(100 - matchPossession.value!).toFixed(0)}%` : matchPossessionText}</b>
         </span>
         <span
-          title={
-            state.provider_data_boundary
-              ? isZh
-                ? `公开视图仅携带当前 ${state.provider_data_boundary.state_window?.window_seconds ?? 0}s 回放窗口；完整事件流需数据访问权限。`
-                : `Public view carries the current ${state.provider_data_boundary.state_window?.window_seconds ?? 0}s replay window; the full event stream requires data access.`
-              : undefined
-          }
+          title={`${matchShotsH.definition || (isZh ? "所有射门事件，含被扑救与进球。" : "All shot events, including saved shots and goals.")} · ${matchWindowLabel(matchShotsH, locale)}`}
+          data-testid="match-stat-shots"
         >
-          {isZh ? "事件" : "Events"} <b>{state.coverage?.event_count ?? state.events?.length ?? 0}</b>
+          {isZh ? "射门" : "Shots"} <b>{countText(matchShotsH)} / {countText(matchShotsN)}</b>
+        </span>
+        <span
+          title={`${matchGoalsH.definition || (isZh ? "全场被记入比分的进球。" : "Credited goals over the match.")} · ${matchWindowLabel(matchGoalsH, locale)}`}
+          data-testid="match-stat-goals"
+        >
+          {isZh ? "进球" : "Goals"} <b>{countText(matchGoalsH)} / {countText(matchGoalsN)}</b>
         </span>
         {(typeof receiptXgH === "number" || typeof receiptXgN === "number") && (
-          <span>
+          <span data-testid="match-stat-xg">
             xG <b>{xgH} / {xgN}</b>
           </span>
         )}
-      </div>
+      </section>
+
+      {/* The live three-minute reading is a different measurement. It is shown
+          as its own line so it can never be mistaken for a match total. */}
+      {(windowShotsH.status === "ok" || windowPossession.status === "ok") && (
+        <div className="r6-window-strip" data-mobile-panel="overview" data-testid="match-window-strip">
+          <span className="r6-window-strip-label">
+            {isZh ? "最近 3 分钟" : "Last 3 min"}
+            <em>{windowLabel(windowShotsH, locale)}</em>
+          </span>
+          <span data-testid="match-window-shots">
+            {isZh ? "射门" : "Shots"} <b>{countText(windowShotsH)} / {countText(windowShotsN)}</b>
+          </span>
+          <span data-testid="match-window-possession">
+            {t.possession} <b>{percentText(windowPossession)}</b>
+          </span>
+        </div>
+      )}
+
+      {/* A selected event is a place to go deeper, not just a highlight. The
+          strip keeps the event's identity on screen and offers the two things a
+          reader actually wants: see it on the pitch, or investigate it. */}
+      {contextEvent && (
+        <div className="r6-event-context" data-testid="match-event-context">
+          <span className="r6-event-context-time">{clock(contextEvent.t)}</span>
+          <span className="r6-event-context-kind">
+            {contextEvent.team === "N" ? awayTeam : homeTeam} · {contextEvent.kind}
+            {contextEvent.outcome ? ` · ${contextEvent.outcome}` : ""}
+          </span>
+          <b>{contextEvent.actor_name || contextEvent.actor || "—"}</b>
+          <div className="r6-event-context-actions">
+            <button type="button" className="r6-text-action" onClick={() => onSeek(Math.round(contextEvent.t))}>
+              {isZh ? "定位到球场" : "Locate on pitch"}
+            </button>
+            <button
+              type="button"
+              className="r6-primary-action"
+              data-testid="match-event-investigate"
+              onClick={() =>
+                onInvestigateEvent({
+                  event_id: contextEvent.id,
+                  at: Math.round(contextEvent.t),
+                  team: contextEvent.team === "N" ? "N" : "H",
+                })
+              }
+            >
+              {isZh ? "调查这次事件" : "Investigate this event"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <MobileTabs
         tabs={[
@@ -291,6 +365,14 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
         onSelectEvent={onSelectEvent}
         onSeek={onSeek}
       />
+
+      <MatchPlayerFocus
+        state={state}
+        locale={locale}
+        selectedPlayerId={selectedPlayerId}
+        onSelectPlayer={onSelectPlayer}
+        onInvestigatePlayer={(player) => onInvestigatePlayer({ player_id: player.player_id, name: player.name, team: player.team })}
+      />
       </div>
 
       {/* 3. Core Match Stage & Event Stream Split */}
@@ -323,7 +405,7 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
             )}
 
             <MatchStage
-              events={state.events.filter((e) => e.start && e.end) as any}
+              events={drawableEvents(state.events) as any}
               selectedEvent={selectedEvent as any}
               selectedSequence={selectedSeq}
               ball={state.ball}
@@ -391,9 +473,10 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
             />
           )}
 
-          {/* Real-time Event Feed */}
+          {/* Real-time Event Feed. Every readable event is listed; only the
+              pitch requires coordinates. */}
           <EventFeed
-            events={state.events.filter((e) => e.start && e.end) as any}
+            events={displayableEvents(state.events) as any}
             teamNames={state.teams}
             selectedId={selectedEventId}
             players={state.players}
