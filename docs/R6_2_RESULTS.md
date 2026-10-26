@@ -157,8 +157,20 @@ suggestion-to-intent mapping in both languages. The file runs in the
 `real-match` CI job, which installs `sb_3795221`, so it is executed rather than
 skipped.
 
-Browser: `npx playwright test` → **46 passed, 1 skipped** (37 + 1 at baseline).
+Browser: `npx playwright test` → **47 passed, 1 skipped** (37 + 1 at baseline).
 Typecheck and production build: 0 errors.
+
+The demo path is itself a test (`apps/web/e2e/demo-path.spec.ts`): hub →
+real match → labelled totals → insight limit → investigation → conclusion and
+limits → back to the moment. It is also the capture run for the submission
+screenshots in `evidence/r6.2/`:
+
+| File | Surface |
+| --- | --- |
+| `browser-hub-1440.png` | Match Hub, real payloads first, `Real data` badges |
+| `browser-detail-1440.png` | Match Detail: 1:1, `WHOLE MATCH` 8/5 shots, `Last 3 min window 4020s–4200s` 0/0 |
+| `browser-detail-390.png` | the same page as a phone overview |
+| `browser-investigation-1440.png` | conclusion, evidence with event ids, limits, `Back to this moment` |
 
 Browser (`apps/web/e2e/r6-2.spec.ts`) runs the real corpus:
 
