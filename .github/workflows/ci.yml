@@ -145,6 +145,25 @@ jobs:
           done
           echo "no provider match became ready; bootstrap log follows"; docker logs matchlens-ci | tail -40; exit 1
 
+      # A Railway redeploy keeps the volume and starts a fresh container. The
+      # match must still be there, and must not be re-downloaded.
+      - name: The volume survives a restart
+        run: |
+          set -e
+          docker restart matchlens-ci >/dev/null
+          for i in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:8000/api/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          ready=$(curl -fsS http://127.0.0.1:8000/api/matches | python3 -c "
+          import json,sys
+          body=json.load(sys.stdin); items=body.get('matches') or body
+          print(len([m for m in items if m.get('analysis_ready') and m.get('provenance_kind')=='provider_payload']))
+          ")
+          echo "analysis-ready provider matches after restart: $ready"
+          test "$ready" -ge 1
+          docker logs matchlens-ci 2>&1 | tail -20
+
       - name: Container logs
         if: always()
         run: docker logs matchlens-ci | tail -60
