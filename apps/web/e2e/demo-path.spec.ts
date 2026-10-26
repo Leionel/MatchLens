@@ -76,4 +76,9 @@ test("a real match can be read, questioned and returned from without leaving the
     "true",
   );
   await expect(page.getByTestId("match-totals")).toBeVisible();
+
+  // The suite shares one server session, so leaving the provider match loaded
+  // would disable the library's "enter" action for the specs that follow and
+  // silently change what they are testing. Put the default fixture back.
+  await setMatch(page, "syn_default");
 });
