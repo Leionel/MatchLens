@@ -91,6 +91,63 @@ jobs:
             tests/test_r6_2_boundaries.py \
             -v --tb=short
 
+  container:
+    name: Container Build & Smoke (Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # The image is the deployment unit, so it is built and run here rather
+      # than trusted. No provider payloads are in the build context; the
+      # container fetches one match itself, which also exercises bootstrap.
+      - name: Build the image
+        run: docker build --tag matchlens:ci .
+
+      - name: Run the container with a volume
+        run: |
+          docker run --detach --name matchlens-ci -p 8000:8000             --volume matchlens-ci-data:/data/matchlens matchlens:ci
+
+      - name: Wait for the health probe
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8000/api/health >/dev/null 2>&1; then
+              echo "healthy after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "health check never passed"; docker logs matchlens-ci; exit 1
+
+      - name: Check the page and the API
+        run: |
+          set -e
+          curl -fsS http://127.0.0.1:8000/ | grep -qi "MatchLens"
+          total=$(curl -fsS http://127.0.0.1:8000/api/matches             | python3 -c "import json,sys; body=json.load(sys.stdin); print(len(body.get('matches') or body))")
+          echo "matches listed: $total"
+          test "$total" -ge 7
+          test "$(docker inspect --format '{{.State.Running}}' matchlens-ci)" = "true"
+
+      # Best effort: the provider fetch depends on outbound network. A failure
+      # here is reported, not fatal — the app is designed to keep working.
+      - name: Wait for the first-run real match (best effort)
+        continue-on-error: true
+        run: |
+          for i in $(seq 1 90); do
+            ready=$(curl -fsS http://127.0.0.1:8000/api/matches | python3 -c "
+          import json,sys
+          body=json.load(sys.stdin); items=body.get('matches') or body
+          print(len([m for m in items if m.get('analysis_ready') and m.get('provenance_kind')=='provider_payload']))
+          ")
+            if [ "$ready" -ge 1 ]; then echo "real match ready after ${i}s"; exit 0; fi
+            sleep 2
+          done
+          echo "no provider match became ready; bootstrap log follows"; docker logs matchlens-ci | tail -40; exit 1
+
+      - name: Container logs
+        if: always()
+        run: docker logs matchlens-ci | tail -60
+
   full-corpus:
     name: Full 80-Match Corpus (manual)
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.full_corpus }}
