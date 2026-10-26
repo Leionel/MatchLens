@@ -421,7 +421,7 @@ test.describe("R6 interaction correctness", () => {
     await capture(page, "intelligence-studio-390");
 
     await page.goto("/?workspace=match_hub&match=syn_default");
-    await expect(page.getByRole("heading", { name: "Start with a real match" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Football intelligence you can challenge." })).toBeVisible();
     expect(await hasHorizontalOverflow(page), await overflowingElements(page)).toBe(false);
     await capture(page, "match-hub-390");
     await page.getByTestId("match-hub-advanced").locator("summary").click();
