@@ -64,6 +64,12 @@ export default function MatchLensCockpit() {
   const [connection, setConnection] = useState("Connecting");
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [busy, setBusy] = useState(false);
+  // Boot recovery: the public deployment caps live sessions, so a first load
+  // can legitimately hit a 503. Retry with backoff instead of leaving the
+  // judge on a spinner, and offer an explicit Retry once attempts run out.
+  const [bootRetrying, setBootRetrying] = useState(false);
+  const [bootFailed, setBootFailed] = useState(false);
+  const [bootAttempt, setBootAttempt] = useState(0);
 
   // Multi-Pane Cockpit Navigation & Perspective
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>("match_hub");
@@ -191,73 +197,105 @@ export default function MatchLensCockpit() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [state, busy, isDrawerOpen]);
 
-  // SSE Stream and Session Lifecycle
+  // SSE Stream and Session Lifecycle. A failed boot is retried with backoff:
+  // the server caps concurrent sessions, so "demo server busy" is a temporary
+  // state a visitor can wait out — never a dead screen.
   useEffect(() => {
     let closed = false;
     let stream: EventSource | undefined;
     let poll: ReturnType<typeof setInterval> | undefined;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-    api<CockpitState>("sessions", {})
-      .then((initial) => {
-        if (closed) return;
-        commit(initial);
-        stream = new EventSource("/api/stream");
-        stream.onopen = () => {
-          if (!closed) setConnection("Connected");
-          if (poll) {
-            clearInterval(poll);
-            poll = undefined;
-          }
-        };
-        stream.addEventListener("state", (event: MessageEvent) => {
-          if (!closed) {
-            commit(JSON.parse(event.data));
-            setConnection("Connected");
-          }
-        });
-        stream.onerror = () => {
-          if (!closed) setConnection("Reconnecting");
-          if (!poll) {
-            poll = setInterval(() => {
-              api<CockpitState>("state")
-                .then((next) => {
-                  if (!closed) {
-                    commit(next);
-                    setConnection("Polling");
-                  }
-                })
-                .catch((e) => {
-                  if (!closed) {
-                    setError(e.message);
-                    if (e.status === 401) {
-                      stream?.close();
-                      if (poll) {
-                        clearInterval(poll);
-                        poll = undefined;
-                      }
-                      setConnection("Session expired");
-                    }
-                  }
-                });
-            }, 2000);
-          }
-        };
-      })
-      .catch((e) => {
+    const BACKOFF_MS = [0, 1500, 3000, 5000, 8000];
+
+    const startStream = (initial: CockpitState) => {
+      commit(initial);
+      stream = new EventSource("/api/stream");
+      stream.onopen = () => {
+        if (!closed) setConnection("Connected");
+        if (poll) {
+          clearInterval(poll);
+          poll = undefined;
+        }
+      };
+      stream.addEventListener("state", (event: MessageEvent) => {
         if (!closed) {
-          setError(e.message);
-          setConnection("Unavailable");
+          commit(JSON.parse(event.data));
+          setConnection("Connected");
         }
       });
+      stream.onerror = () => {
+        if (!closed) setConnection("Reconnecting");
+        if (!poll) {
+          poll = setInterval(() => {
+            api<CockpitState>("state")
+              .then((next) => {
+                if (!closed) {
+                  commit(next);
+                  setConnection("Polling");
+                }
+              })
+              .catch((e) => {
+                if (!closed) {
+                  setError(e.message);
+                  if (e.status === 401) {
+                    stream?.close();
+                    if (poll) {
+                      clearInterval(poll);
+                      poll = undefined;
+                    }
+                    setConnection("Session expired");
+                  }
+                }
+              });
+          }, 2000);
+        }
+      };
+    };
+
+    const attempt = async (tryIndex: number) => {
+      if (closed) return;
+      setBootRetrying(tryIndex > 0);
+      setConnection(tryIndex > 0 ? "Waiting for a slot" : "Connecting");
+      try {
+        const initial = await api<CockpitState>("sessions", {});
+        if (closed) return;
+        setBootRetrying(false);
+        setBootFailed(false);
+        startStream(initial);
+      } catch (e) {
+        if (closed) return;
+        const status = (e as { status?: number }).status;
+        const nextTry = tryIndex + 1;
+        if (status === 401 || nextTry >= BACKOFF_MS.length) {
+          setBootRetrying(false);
+          setBootFailed(true);
+          setConnection("Unavailable");
+          setError((e as Error).message);
+          return;
+        }
+        setError("");
+        retryTimer = setTimeout(() => void attempt(nextTry), BACKOFF_MS[nextTry]);
+      }
+    };
+
+    void attempt(0);
 
     return () => {
       closed = true;
+      if (retryTimer) clearTimeout(retryTimer);
       stream?.close();
       if (poll) clearInterval(poll);
     };
-  }, [commit]);
+  }, [commit, bootAttempt]);
 
   // API Actions
+  const retryBoot = () => {
+    setError("");
+    setBootFailed(false);
+    setBootAttempt((n) => n + 1);
+  };
+
   const control = async (body: object) => {
     setError("");
     setBusy(true);
@@ -795,15 +833,34 @@ export default function MatchLensCockpit() {
               gap: 16,
             }}
           >
-            <div className="loader-ring" />
+            {!bootFailed && <div className="loader-ring" />}
             <h2 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)" }}>
-              {locale === "zh" ? "正在初始化 MatchLens AI 黑曜石战术工作台..." : "Initializing MatchLens AI Obsidian Cockpit..."}
+              {bootFailed
+                ? locale === "zh"
+                  ? "暂时无法建立会话"
+                  : "Could not start a session yet"
+                : locale === "zh"
+                  ? "正在初始化 MatchLens AI 黑曜石战术工作台..."
+                  : "Initializing MatchLens AI Obsidian Cockpit..."}
             </h2>
-            <p style={{ fontSize: 14, color: "var(--text-secondary)", maxWidth: 500, lineHeight: 1.5 }}>
-              {locale === "zh"
-                ? "连接确定性实时赛事流，载入 S2 控球推进序列，并载入双智能体审议与发布门禁核验引擎..."
-                : "Connecting to real-time deterministic match stream, loading S2 possession sequences, and priming dual-agent deliberation runtime..."}
+            <p style={{ fontSize: 14, color: "var(--text-secondary)", maxWidth: 520, lineHeight: 1.5 }}>
+              {bootFailed
+                ? locale === "zh"
+                  ? "服务器会话名额已满或暂时不可用。稍候片刻后重试即可；不需要刷新页面之外的操作。"
+                  : "The server's session slots are full or it is briefly unavailable. Wait a moment and try again — no other action is needed."
+                : bootRetrying
+                  ? locale === "zh"
+                    ? "服务器会话名额暂时已满，正在自动重试…"
+                    : "Session slots are briefly full; retrying automatically…"
+                  : locale === "zh"
+                    ? "连接确定性实时赛事流，载入 S2 控球推进序列，并载入双智能体审议与发布门禁核验引擎..."
+                    : "Connecting to real-time deterministic match stream, loading S2 possession sequences, and priming dual-agent deliberation runtime..."}
             </p>
+            {bootFailed && (
+              <button type="button" className="r6-primary-action" onClick={retryBoot}>
+                {locale === "zh" ? "重试连接" : "Retry connection"}
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -837,6 +894,22 @@ export default function MatchLensCockpit() {
                 onSelectMatch={(matchId) => void selectMatch(matchId)}
                 onInvestigateShot={investigateShot}
                 onInvestigateCrossMatch={investigateCrossMatch}
+                onInvestigateMoment={(input) =>
+                  void openInvestigation({
+                    requestId: `featured-${input.at}-${Date.now()}`,
+                    matchId: input.matchId,
+                    team: input.team,
+                    at: input.at,
+                    // A "moment" focus with no id: the replay clock is aligned
+                    // to the featured change point first, so the deterministic
+                    // planner resolves the OAAI change nearest that moment
+                    // itself. (A full-curve CP id would not match the id set
+                    // the planner recomputes at the snapshot.)
+                    focusType: "moment",
+                    focusId: null,
+                    question: input.question,
+                  })
+                }
               />
             )}
 

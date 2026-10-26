@@ -107,6 +107,17 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
   const home = state.teams?.H || "Home";
   const away = state.teams?.N || "Away";
   const connected = connection === "Connected" || connection === "Polling";
+  // A recorded match replayed along its own clock is not a live feed. The
+  // label says which kind of stream this is, from the match's declared source.
+  const replayLabel = connected
+    ? state.match_id?.startsWith("syn_") || state.match_context?.provenance_kind === "synthetic"
+      ? isZh
+        ? "模拟回放"
+        : "Simulated replay"
+      : isZh
+        ? "历史回放"
+        : "Historical replay"
+    : connection;
 
   return (
     <header className="r6-topbar" role="banner">
@@ -161,7 +172,7 @@ export const TacticalHeader: React.FC<TacticalHeaderProps> = ({
           </span>
           <span className="r6-current-status">
             <i className={connected ? "ok" : "warn"} aria-hidden="true" />
-            {connected ? (isZh ? "实时回放" : "Live replay") : connection}
+            {replayLabel}
           </span>
         </button>
 

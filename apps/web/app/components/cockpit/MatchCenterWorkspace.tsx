@@ -109,9 +109,7 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
   const matchGoalsN = readReceipt(state.receipts, "N.goals.match");
   const windowShotsH = readReceipt(state.receipts, "H.shots.current");
   const windowShotsN = readReceipt(state.receipts, "N.shots.current");
-  const posValue = windowPossession.value;
-  const matchPossessionText = percentText(matchPossession, isZh ? "未观测" : "Unknown");
-  const activeMoment = state.active_moment;
+  const matchPossessionText = percentText(matchPossession, isZh ? "未观测" : "Unknown");  const activeMoment = state.active_moment;
   const selectedEvent =
     state.events?.find((e) => e.id === selectedEventId) || null;
   const selectedSeq =
@@ -213,7 +211,7 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
           ended={state.ended}
           focus={state.focus}
           activeMomentBadge={activeMoment?.badge}
-          possessionH={posValue}
+          replayKind={state.match_id?.startsWith("syn_") || state.match_context?.provenance_kind === "synthetic" ? "simulated" : "historical"}
           officialScore={state.official_score}
           teams={state.teams}
           coverage={state.coverage}

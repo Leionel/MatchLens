@@ -17,10 +17,8 @@ type ScoreboardProps = {
   ended: boolean;
   focus: string | null;
   activeMomentBadge?: string | null;
-  possessionH?: number | null;
-  /** What the possession number is measured over. Never left implicit. */
-  possessionScope?: "window" | "match" | null;
-  possessionWindowSeconds?: number | null;
+  /** The match's stream kind. A recorded match replayed along its own clock is not live. */
+  replayKind?: "historical" | "simulated" | "live";
   locale?: Locale;
 };
 
@@ -38,27 +36,35 @@ export function Scoreboard({
   competition,
   season,
   clock,
-  seconds,
   speed,
   paused,
   ended,
   focus,
   activeMomentBadge,
-  possessionH,
-  possessionScope = "window",
-  possessionWindowSeconds = 180,
+  replayKind = "historical",
   locale = "zh",
 }: ScoreboardProps) {
   const t = getTranslation(locale);
   const isZh = locale === "zh";
   const homeTeam = teams?.H || "Harbor FC";
   const awayTeam = teams?.N || "Northbridge United";
-  const hasPossession = typeof possessionH === "number" && Number.isFinite(possessionH) && seconds > 0;
   const officialVisible =
     officialScore &&
     officialScore.H !== null &&
     officialScore.N !== null &&
     (officialScore.H !== score.H || officialScore.N !== score.N);
+
+  const replayNoun = isZh
+    ? replayKind === "simulated"
+      ? "模拟推演"
+      : replayKind === "live"
+        ? "实况"
+        : "历史回放"
+    : replayKind === "simulated"
+      ? "Simulated replay"
+      : replayKind === "live"
+        ? "Live feed"
+        : "Historical replay";
 
   const statusLabel = focus
     ? focus.length === 1 ? (isZh ? `关键波次 ${focus}` : `FOCUS MOMENT ${focus}`) : (isZh ? "聚焦波次" : "FOCUSED MOMENT")
@@ -68,7 +74,7 @@ export function Scoreboard({
         ? activeMomentBadge
         : paused
           ? t.statusPaused
-          : `${t.statusLiveReplay} ${speed}×`;
+          : `${replayNoun} ${speed}×`;
 
   return (
     <section className="broadcast-scoreboard" aria-label={`${homeTeam} vs ${awayTeam} scoreboard`}>
@@ -128,43 +134,6 @@ export function Scoreboard({
             <span>{initials(awayTeam)}</span>
           </div>
         </div>
-      </div>
-
-      <div
-        className="possession-gauge-wrap"
-        data-testid="scoreboard-possession"
-        data-scope={possessionScope || "window"}
-        title={
-          possessionScope === "match"
-            ? isZh
-              ? "全场已观测控球率（死球时间不计入）；未观测不等于 0"
-              : "Observed controlled possession over the match (dead-ball time excluded); unobserved is not zero"
-            : isZh
-              ? `当前 ${possessionWindowSeconds ?? 180} 秒窗口已观测控球率；未观测不等于 0`
-              : `Observed controlled possession in the current ${possessionWindowSeconds ?? 180}s window; unobserved is not zero`
-        }
-      >
-        <span className="possession-gauge-scope">
-          {possessionScope === "match"
-            ? isZh
-              ? "全场控球"
-              : "Match possession"
-            : isZh
-              ? `近 ${Math.round((possessionWindowSeconds ?? 180) / 60)} 分钟控球`
-              : `Last ${Math.round((possessionWindowSeconds ?? 180) / 60)} min`}
-        </span>
-        <div className="gauge-label-left">{initials(homeTeam)} {hasPossession ? `${possessionH!.toFixed(0)}%` : "—"}</div>
-        <div className="gauge-track" aria-hidden="true">
-          {hasPossession ? (
-            <>
-              <div className="gauge-fill-h" style={{ width: `${possessionH}%` }} />
-              <div className="gauge-fill-n" style={{ width: `${100 - possessionH!}%` }} />
-            </>
-          ) : (
-            <div className="gauge-unobserved" />
-          )}
-        </div>
-        <div className="gauge-label-right">{hasPossession ? `${(100 - possessionH!).toFixed(0)}%` : "—"} {initials(awayTeam)}</div>
       </div>
     </section>
   );

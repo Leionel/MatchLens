@@ -206,6 +206,7 @@ export type PlayerSpotlight = {
   recoveries: number;
   shots: number;
   goals: number;
+  touches?: number;
   sequences_involved: number;
   touch_points?: [number, number][];
   progressive_pass_ids?: string[];
