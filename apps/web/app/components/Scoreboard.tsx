@@ -18,6 +18,9 @@ type ScoreboardProps = {
   focus: string | null;
   activeMomentBadge?: string | null;
   possessionH?: number | null;
+  /** What the possession number is measured over. Never left implicit. */
+  possessionScope?: "window" | "match" | null;
+  possessionWindowSeconds?: number | null;
   locale?: Locale;
 };
 
@@ -42,6 +45,8 @@ export function Scoreboard({
   focus,
   activeMomentBadge,
   possessionH,
+  possessionScope = "window",
+  possessionWindowSeconds = 180,
   locale = "zh",
 }: ScoreboardProps) {
   const t = getTranslation(locale);
@@ -127,8 +132,27 @@ export function Scoreboard({
 
       <div
         className="possession-gauge-wrap"
-        title={isZh ? "当前窗口已观测控球率；未观测不等于 0" : "Observed controlled possession in the current window; unobserved is not zero"}
+        data-testid="scoreboard-possession"
+        data-scope={possessionScope || "window"}
+        title={
+          possessionScope === "match"
+            ? isZh
+              ? "全场已观测控球率（死球时间不计入）；未观测不等于 0"
+              : "Observed controlled possession over the match (dead-ball time excluded); unobserved is not zero"
+            : isZh
+              ? `当前 ${possessionWindowSeconds ?? 180} 秒窗口已观测控球率；未观测不等于 0`
+              : `Observed controlled possession in the current ${possessionWindowSeconds ?? 180}s window; unobserved is not zero`
+        }
       >
+        <span className="possession-gauge-scope">
+          {possessionScope === "match"
+            ? isZh
+              ? "全场控球"
+              : "Match possession"
+            : isZh
+              ? `近 ${Math.round((possessionWindowSeconds ?? 180) / 60)} 分钟控球`
+              : `Last ${Math.round((possessionWindowSeconds ?? 180) / 60)} min`}
+        </span>
         <div className="gauge-label-left">{initials(homeTeam)} {hasPossession ? `${possessionH!.toFixed(0)}%` : "—"}</div>
         <div className="gauge-track" aria-hidden="true">
           {hasPossession ? (

@@ -10,6 +10,7 @@ import { MetricComparison } from "../MetricComparison";
 import { ReplayDock } from "./ReplayDock";
 import { EvidenceRail } from "./EvidenceRail";
 import { MobileTabs } from "./MobileTabs";
+import { drawableEvents } from "../../lib/eventValidity";
 
 export interface TacticalLabWorkspaceProps {
   state: CockpitState;
@@ -310,7 +311,7 @@ export const TacticalLabWorkspace: React.FC<TacticalLabWorkspaceProps> = ({
             </div>
 
             <MatchStage
-              events={state.events.filter((e) => e.start && e.end) as any}
+              events={drawableEvents(state.events) as any}
               selectedEvent={selectedEvent as any}
               selectedSequence={selectedSeq}
               ball={state.ball}
