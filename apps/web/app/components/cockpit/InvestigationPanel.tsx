@@ -11,6 +11,8 @@ interface InvestigationPanelProps {
   onSelectEvent?: (eventId: string) => void;
   onSelectSequence?: (sequenceId: string) => void;
   onClaimPromoted?: (claim: any) => void;
+  /** Return to the match at the moment this investigation is about. */
+  onReturnToMatch?: (at: number) => void;
 }
 
 type Plan = {
@@ -138,6 +140,29 @@ const AGENT_STATUS_LABELS: Record<string, { zh: string; en: string }> = {
 
 type CancelState = "idle" | "requesting" | "requested" | "confirmed" | "unavailable" | "too_late";
 
+/**
+ * A conclusion is only a conclusion when the gate let it through. The label
+ * says which of those two situations the reader is looking at.
+ */
+const verdictLabel = (status: string, lang: "zh" | "en" = "zh"): string => {
+  const zh: Record<string, string> = {
+    approved: "已通过门禁",
+    qualified: "有条件通过",
+    disputed: "存在争议",
+    rejected: "未通过门禁",
+    withheld: "已扣留",
+  };
+  const en: Record<string, string> = {
+    approved: "gate approved",
+    qualified: "qualified",
+    disputed: "disputed",
+    rejected: "gate rejected",
+    withheld: "withheld",
+  };
+  const table = lang === "zh" ? zh : en;
+  return table[status] ?? status;
+};
+
 const newRequestKey = () => {
   try {
     if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -161,6 +186,7 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
   onSelectEvent,
   onSelectSequence,
   onClaimPromoted,
+  onReturnToMatch,
 }) => {
   const isZh = locale === "zh";
   const [question, setQuestion] = useState("");
@@ -184,6 +210,16 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
   const abortRef = useRef<AbortController | null>(null);
   const busyRef = useRef(false);
   const runToken = useRef(0);
+  /**
+   * The live match id, read at response time. Comparing the response against
+   * the match id captured when the request was sent proves nothing: that pair
+   * is equal by construction. It has to be compared with what the cockpit is
+   * showing *now*.
+   */
+  const liveMatchRef = useRef<string | undefined>(state.match_id);
+  liveMatchRef.current = state.match_id;
+  /** The snapshot this panel's result belongs to, for staleness labelling. */
+  const [resultScope, setResultScope] = useState<{ matchId: string; asOf: number } | null>(null);
 
   const updateCancelState = useCallback((next: CancelState, message: string) => {
     cancelStateRef.current = next;
@@ -194,6 +230,82 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
   useEffect(() => {
     busyRef.current = busy;
   }, [busy]);
+
+  /**
+   * Switching match invalidates every number on this panel. The in-flight
+   * request is aborted, a server cancellation is requested through the same
+   * endpoint the Cancel button uses, and the previous result is dropped rather
+   * than left on screen under a different fixture.
+   */
+  const matchId = state.match_id;
+  const resetForMatch = useCallback(() => {
+    const key = requestKeyRef.current;
+    if (busyRef.current && key) void requestServerCancel(key).catch(() => {});
+    runToken.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    requestKeyRef.current = null;
+    busyRef.current = false;
+    setBusy(false);
+    setPlan(null);
+    setPromoted(null);
+    setError("");
+    setResultScope(null);
+    updateCancelState("idle", "");
+  }, [updateCancelState]);
+
+  const lastMatchRef = useRef<string | undefined>(matchId);
+  useEffect(() => {
+    if (lastMatchRef.current === matchId) return;
+    lastMatchRef.current = matchId;
+    resetForMatch();
+    setFocusId("");
+    setQuestion("");
+    setTeam(state.focus_team ?? "H");
+    setFocusType("moment");
+    // A match switch is a hard boundary: nothing from the previous fixture may
+    // survive it. `state.focus_team` is intentionally read at switch time only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchId, resetForMatch]);
+
+  /**
+   * A seek moves the snapshot. What happens to an in-flight request depends on
+   * what it costs: a paid model run is cancelled through the same server path
+   * as the Cancel button, while a free deterministic run is allowed to finish
+   * and is then labelled as belonging to the earlier moment. Killing a
+   * completed calculation to protect against misreading it loses real work;
+   * labelling it does not.
+   */
+  const currentAsOf = Number(state.snapshot_as_of ?? state.at ?? 0);
+  const lastAsOfRef = useRef(currentAsOf);
+  const executionModeRef = useRef(executionMode);
+  executionModeRef.current = executionMode;
+  useEffect(() => {
+    if (lastAsOfRef.current === currentAsOf) return;
+    lastAsOfRef.current = currentAsOf;
+    if (!abortRef.current) return;
+    if (executionModeRef.current !== "maf_agent") return;
+    const key = requestKeyRef.current;
+    if (key) void requestServerCancel(key).catch(() => {});
+    runToken.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    busyRef.current = false;
+    setBusy(false);
+    updateCancelState("idle", "");
+    setError(
+      isZh
+        ? "回放时刻已改变，付费 Agent 运行已取消；请在新的时刻重新提问。"
+        : "The replay moment changed; the paid agent run was cancelled. Ask again at the new moment.",
+    );
+  }, [currentAsOf, isZh, updateCancelState]);
+
+  /**
+   * Staleness is a display fact, not an error. A deliberate seek is a large
+   * jump; a running clock drifts slowly, so only a real move is labelled.
+   */
+  const momentDelta = resultScope ? Math.abs(resultScope.asOf - currentAsOf) : 0;
+  const staleResult = Boolean(resultScope) && (momentDelta > 30 || (state.paused && momentDelta > 1));
 
   const run = useCallback(
     async (override?: Partial<InvestigationSeed>) => {
@@ -250,8 +362,12 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
         if (!res.ok) throw new Error(`Investigation failed (${res.status})`);
         const data: Plan = await res.json();
         if (token !== runToken.current) return;
-        // The plan must belong to the same match and the moment this request
-        // asked for. A switched match or a later seek invalidates it.
+        // A response is only usable while the cockpit still shows the match it
+        // was requested for. Anything else is a late answer to a question the
+        // user is no longer asking.
+        if (data.match_id !== liveMatchRef.current) {
+          return;
+        }
         if (data.match_id !== matchId || Math.abs(Number(data.as_of) - Number(targetAt)) > 1) {
           throw new Error("Stale investigation response");
         }
@@ -263,6 +379,11 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
               : "The investigation had already completed when the cancel arrived; the full result is shown below.",
           );
         }
+        // Only a plan that actually formed a result can be misattributed to a
+        // moment. A failed plan has nothing to be stale about, so claiming
+        // "this belongs to another snapshot" would just be noise.
+        const formed = data.state !== "FAILED" && data.state !== "UNKNOWN";
+        setResultScope(formed ? { matchId: data.match_id, asOf: Number(data.as_of) } : null);
         setPlan(data);
         setTeam(data.team === "N" ? "N" : "H");
         if (useSeed) {
@@ -426,10 +547,13 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
           )}
         </div>
         <div className="r6-question-suggestions" aria-label={isZh ? "推荐问题" : "Suggested questions"}>
+          {/* Every suggestion must be a question the deterministic planner can
+              map to a supported intent. A chip that returns "scope required"
+              teaches the user the product does not work. */}
           {[
-            isZh ? "这次攻势有哪些可观测的关键动作？" : "Which recorded actions shaped this spell?",
-            isZh ? "前后两个阶段的活动如何变化？" : "How did activity change between the two phases?",
-            isZh ? "这些证据足以证明战术因果吗？" : "Does this evidence support a tactical cause?",
+            isZh ? "为什么这一时刻的进攻活动会上升？" : "Why did attacking activity change around this moment?",
+            isZh ? "对比最近两个阶段的活动。" : "Compare the activity of the last two phases.",
+            isZh ? "样本量足以支持战术结论吗？" : "Is the sample enough to support a tactical cause?",
           ].map((text) => (
             <button key={text} type="button" onClick={() => setQuestion(text)}>
               {text}
@@ -507,213 +631,269 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
       )}
 
       {plan && (
-        <div style={{ display: "grid", gap: 12 }} data-testid="investigation-plan">
-          <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
-            {isZh ? "快照" : "Snapshot"} <code>{plan.snapshot_id.slice(0, 18)}</code> / {plan.as_of}s / {plan.tool_receipts.length} {isZh ? "次工具调用" : "tool calls"}
-            {plan.agent_run_id && (
-              <span data-testid="investigation-run-id"> / Run <code>{plan.agent_run_id}</code></span>
-            )}
-          </div>
-          <div className="r6-plan-status" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            <span className="rail-chip neutral">{plan.intent}</span>
-            <span className="rail-chip neutral" style={{ color: statusTone[plan.state] || undefined }}>{plan.state}</span>
-            <span
-              className="rail-chip neutral"
-              data-testid="investigation-execution-mode"
-              data-execution-mode={plan.execution_mode}
-              title={isZh ? "产生该计划的执行引擎" : "Engine that produced this plan"}
-            >
-              {EXECUTION_LABELS[plan.execution_mode]?.[isZh ? "zh" : "en"] ?? plan.execution_mode}
-            </span>
-            <span
-              className="rail-chip neutral"
-              data-testid="investigation-agent-status"
-              data-agent-status={plan.agent_status}
-              title={isZh ? "模型智能体是否真的执行过" : "Whether a model agent actually ran"}
-            >
-              {AGENT_STATUS_LABELS[plan.agent_status]?.[isZh ? "zh" : "en"] ?? plan.agent_status}
-            </span>
-            <span className="rail-chip neutral" title={plan.dataset_revision || undefined}>
-              {plan.completeness?.status || "—"}
-            </span>
-          </div>
+        <article className="r6-result" data-testid="investigation-plan" data-result-as-of={resultScope?.asOf ?? "none"} data-plan-state={plan.state}>
+          {staleResult && (
+            <div className="r6-result-stale" role="status" data-testid="investigation-stale">
+              <b>{isZh ? "这份结果属于另一个快照" : "This result belongs to another snapshot"}</b>
+              <span>
+                {isZh
+                  ? `结果时刻 ${Math.round(resultScope!.asOf)}s，当前回放 ${Math.round(currentAsOf)}s。它不是当前时刻的答案。`
+                  : `Result at ${Math.round(resultScope!.asOf)}s; the replay is at ${Math.round(currentAsOf)}s. It is not an answer about this moment.`}
+              </span>
+              <button type="button" className="r6-text-action" onClick={() => void run()}>
+                {isZh ? "在当前时刻重新调查" : "Investigate the current moment"}
+              </button>
+            </div>
+          )}
+
+          <header className="r6-result-head">
+            <div className="r6-result-kicker">
+              <span>{isZh ? "调查结论" : "Conclusion"}</span>
+              <span className="r6-result-verdict" data-verdict={plan.gate_preview.status}>
+                {verdictLabel(plan.gate_preview.status, isZh ? "zh" : "en")}
+              </span>
+            </div>
+            <h4 data-testid="investigation-conclusion">
+              {plan.gate_preview.statement ||
+                plan.findings[0]?.statement ||
+                (isZh ? "本次调查没有形成可发布的结论。" : "This investigation did not form a publishable conclusion.")}
+            </h4>
+            <div className="r6-result-meta">
+              <span className="rail-chip neutral">{plan.intent}</span>
+              <span className="rail-chip neutral" style={{ color: statusTone[plan.state] || undefined }}>{plan.state}</span>
+              <span className="rail-chip neutral" title={plan.dataset_revision || undefined}>
+                {plan.completeness?.status || "—"}
+              </span>
+              <span className="r6-result-when">
+                {isZh ? "快照" : "Snapshot"} <code>{plan.snapshot_id.slice(0, 18)}</code> · {plan.as_of}s
+                {plan.agent_run_id && (
+                  <span data-testid="investigation-run-id"> · Run <code>{plan.agent_run_id}</code></span>
+                )}
+              </span>
+              {onReturnToMatch && (
+                <button
+                  type="button"
+                  className="r6-text-action"
+                  data-testid="investigation-return"
+                  onClick={() => onReturnToMatch(Number(plan.as_of))}
+                >
+                  {isZh ? "回到比赛中这一刻 →" : "Back to this moment →"}
+                </button>
+              )}
+            </div>
+          </header>
 
           {(plan.required_scope.length > 0 || plan.state === "FAILED" || plan.state === "UNKNOWN") && (
-            <div style={{ padding: 10, borderRadius: 6, border: "0.5px solid var(--red-11)", color: "var(--red-11)", fontSize: 12 }}>
+            <div className="r6-result-blocked" role="alert" data-testid="investigation-blocked">
               {plan.required_scope.length > 0
                 ? `${isZh ? "需要补充范围" : "Scope required"}: ${plan.required_scope.join(", ")}`
-                : isZh ? "问题未被映射到受支持的足球调查意图。" : "The question was not mapped to a supported investigation intent."}
+                : isZh
+                  ? `本次调查在 ${plan.as_of}s 的 ${plan.focus_type} 焦点上未能形成结论（${plan.state}）。可以换一个时间点、换一个焦点，或先让回放到达有记录动作的时刻。`
+                  : `This investigation formed no conclusion for the ${plan.focus_type} focus at ${plan.as_of}s (${plan.state}). Try another moment, another focus, or let the replay reach recorded actions.`}
             </div>
           )}
 
-          {plan.oaai_ledger && plan.oaai_ledger.contributions.length > 0 && (
-            <div style={{ display: "grid", gap: 6 }}>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>
-                {isZh ? "OAAI 贡献账本" : "OAAI contribution ledger"}
-              </div>
-              <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
-                {isZh ? "原始球队贡献" : "Raw team intensity"} {plan.oaai_ledger.raw_team_intensity} / {isZh ? "平滑值" : "smoothed"} {plan.oaai_ledger.smoothed_value_at_nearest_sample ?? "—"}
-              </div>
-              {plan.oaai_ledger.contributions.slice(0, 6).map((row) => (
-                <button
-                  key={row.event_id}
-                  type="button"
-                  onClick={() => onSelectEvent?.(row.event_id)}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr auto",
-                    gap: 8,
-                    textAlign: "left",
-                    padding: "7px 9px",
-                    borderRadius: 6,
-                    border: "0.5px solid var(--glass-border)",
-                    background: "color-mix(in srgb, var(--slate-1) 65%, transparent)",
-                    color: "var(--text-primary)",
-                    cursor: "pointer",
-                  }}
-                >
-                  <span style={{ fontSize: 12 }}>
-                    <b>{row.event_id}</b> {row.actor} <span style={{ color: "var(--text-tertiary)" }}>{row.kind} @ {Math.floor(row.t / 60)}'</span>
-                  </span>
-                  <span style={{ fontSize: 12, fontFamily: "monospace", color: row.team_contribution >= 0 ? "var(--text-emerald)" : "var(--red-11)" }}>
-                    {row.team_contribution >= 0 ? "+" : ""}{row.team_contribution.toFixed(3)} / w {row.weight.toFixed(2)}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          <details open={plan.tool_receipts.length <= 8} style={{ display: "grid", gap: 6 }}>
-            <summary style={{ fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-              {isZh ? "工具回执" : "Tool receipts"} ({plan.tool_receipts.length})
-            </summary>
-            <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
-              {plan.tool_receipts.map((step) => (
-                <div key={step.sequence} style={{ display: "flex", gap: 8, alignItems: "baseline", fontSize: 12, color: "var(--text-secondary)" }}>
-                  <code>{step.sequence.toString().padStart(2, "0")}</code>
-                  {step.role && (
-                    <span
-                      className="rail-chip neutral"
-                      style={{ fontSize: 10, padding: "0 6px" }}
-                      title={isZh ? "选择该工具的智能体角色" : "Agent role that selected this tool"}
-                    >
-                      {step.role}
-                    </span>
-                  )}
-                  <b style={{ color: "var(--text-primary)" }}>{step.tool}</b>
-                  <span style={{ color: statusTone[step.status] || "var(--text-tertiary)" }}>{step.status}</span>
-                  <span style={{ color: "var(--text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{step.summary}</span>
-                </div>
-              ))}
-            </div>
-          </details>
-
-          {plan.agent_run && (
-            <details style={{ display: "grid", gap: 6 }} data-testid="investigation-agent-run">
-              <summary style={{ fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                {isZh ? "Agent 执行轨迹" : "Agent run trajectory"}
-                {plan.agent_run.model ? ` · ${plan.agent_run.model}` : ""}
-                {` · ${plan.agent_run.state}`}
-              </summary>
-              <div style={{ display: "grid", gap: 4, marginTop: 6 }}>
-                <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
-                  {isZh ? "运行 ID" : "Run ID"} <code>{plan.agent_run.run_id}</code>
-                  {typeof plan.agent_run.requests === "number" && (
-                    <> / {isZh ? "模型请求" : "model requests"} {plan.agent_run.requests}</>
-                  )}
-                  {plan.agent_run.prompt_version && (
-                    <> / prompt {plan.agent_run.prompt_version}</>
-                  )}
-                </div>
-                {plan.agent_run.state_history.map((entry, index) => (
-                  <div key={`${entry.state}-${index}`} style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-                    <b style={{ color: statusTone[entry.state] || "var(--text-primary)" }}>{entry.state}</b>
-                    {entry.reason && <span style={{ color: "var(--text-tertiary)" }}> — {entry.reason}</span>}
-                  </div>
+          <section className="r6-result-section" aria-labelledby="r6-result-evidence">
+            <h5 id="r6-result-evidence">{isZh ? "依据：记录到的动作" : "Evidence: recorded actions"}</h5>
+            {plan.findings.length === 0 ? (
+              <p className="r6-result-empty">{isZh ? "没有可引用的记录发现。" : "No recordable findings."}</p>
+            ) : (
+              <ul className="r6-finding-list">
+                {plan.findings.map((finding) => (
+                  <li key={finding.finding_id} data-testid="investigation-finding">
+                    <span className="r6-finding-level">L{finding.level}</span>
+                    <span className="r6-finding-text">{finding.statement}</span>
+                    {finding.event_ids.length > 0 && onSelectEvent && (
+                      <button type="button" className="r6-text-action" onClick={() => onSelectEvent(finding.event_ids[0])}>
+                        {isZh ? `查看事件 ${finding.event_ids[0]}` : `Open ${finding.event_ids[0]}`}
+                      </button>
+                    )}
+                  </li>
                 ))}
-                {plan.agent_run.error && (
-                  <div style={{ fontSize: 12, color: "var(--red-11)" }}>{plan.agent_run.error}</div>
-                )}
-              </div>
-            </details>
-          )}
+              </ul>
+            )}
+          </section>
 
-          {plan.agent_error && (
-            <div
-              data-testid="investigation-agent-error"
-              style={{ padding: 10, borderRadius: 6, border: "0.5px solid var(--text-gold)", color: "var(--text-gold)", fontSize: 12 }}
-            >
-              {isZh ? "Agent 降级原因" : "Agent degradation"}: {plan.agent_error}
-            </div>
-          )}
+          <section className="r6-result-section" aria-labelledby="r6-result-alt">
+            <h5 id="r6-result-alt">{isZh ? "替代解释与可信度" : "Alternative explanations"}</h5>
+            {plan.explanations.length === 0 ? (
+              <p className="r6-result-empty">
+                {isZh ? "本次调查未生成竞争性假说。" : "No competing hypothesis was formed for this question."}
+              </p>
+            ) : (
+              <ul className="r6-explanation-list">
+                {plan.explanations.map((item) => (
+                  <li key={item.explanation_id} data-testid="investigation-explanation">
+                    <div className="r6-explanation-head">
+                      <span>{item.hypothesis}</span>
+                      <span style={{ color: statusTone[item.status] || "var(--text-secondary)" }}>
+                        {item.status} · L{item.claim_level}
+                      </span>
+                    </div>
+                    <p>{item.verification}</p>
+                    {item.supporting_evidence.length > 0 && (
+                      <p className="r6-explanation-pro">+ {item.supporting_evidence.join(", ")}</p>
+                    )}
+                    {item.counterevidence.length > 0 && (
+                      <p className="r6-explanation-con">− {item.counterevidence.join(", ")}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>{isZh ? "已记录发现" : "Findings"}</div>
-            {plan.findings.map((finding) => (
-              <div key={finding.finding_id} style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-                <b style={{ color: "var(--text-primary)" }}>L{finding.level}</b> {finding.statement}
-                {finding.event_ids.length > 0 && onSelectEvent && (
-                  <button
-                    type="button"
-                    onClick={() => onSelectEvent(finding.event_ids[0])}
-                    style={{ marginLeft: 8, minHeight: "auto", padding: "1px 6px", fontSize: 12 }}
-                  >
-                    {isZh ? "查看事件" : "Open event"}
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
+          <section className="r6-result-section" aria-labelledby="r6-result-limits" data-testid="investigation-limits">
+            <h5 id="r6-result-limits">{isZh ? "哪些无法判断" : "What this cannot decide"}</h5>
+            {plan.not_inferable.length === 0 && plan.unresolved.length === 0 ? (
+              <p className="r6-result-empty">
+                {isZh ? "确定性引擎未返回额外限制。" : "The deterministic engine returned no extra limits."}
+              </p>
+            ) : (
+              <ul className="r6-limit-list">
+                {[...plan.not_inferable, ...plan.unresolved].map((text) => (
+                  <li key={text}>{text}</li>
+                ))}
+              </ul>
+            )}
+          </section>
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>{isZh ? "候选解释" : "Candidate explanations"}</div>
-            {plan.explanations.map((item) => (
-              <div key={item.explanation_id} style={{ borderTop: "0.5px solid var(--pitch-border)", paddingTop: 8, display: "grid", gap: 4 }}>
-                <div style={{ display: "flex", gap: 8, justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 12, fontWeight: 700 }}>{item.hypothesis}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: statusTone[item.status] || "var(--text-secondary)" }}>{item.status}</span>
-                </div>
-                <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{item.verification}</div>
-                {item.supporting_evidence.length > 0 && <div style={{ fontSize: 12, color: "var(--text-emerald)" }}>+ {item.supporting_evidence.join(", ")}</div>}
-                {item.counterevidence.length > 0 && <div style={{ fontSize: 12, color: "var(--red-11)" }}>− {item.counterevidence.join(", ")}</div>}
-                <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>L{item.claim_level}</div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>{isZh ? "门禁预览" : "Gate preview"}</div>
-            <div style={{ fontSize: 12, color: statusTone[plan.gate_preview.status] || "var(--text-secondary)" }}>
-              {plan.gate_preview.assertion} / {plan.gate_preview.status} / L{plan.gate_preview.claim_level}
-              {plan.gate_preview.persisted ? (isZh ? " / 已持久化" : " / persisted") : isZh ? " / 未持久化" : " / not persisted"}
-            </div>
-            {plan.gate_preview.violations.length > 0 && <div style={{ fontSize: 12, color: "var(--red-11)" }}>{plan.gate_preview.violations.join(" ")}</div>}
-            {plan.gate_preview.statement && <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{plan.gate_preview.statement}</div>}
-            {plan.gate_preview.status === "approved" && !plan.gate_preview.persisted && (
+          <div className="r6-result-actions">
+            {plan.gate_preview.status === "approved" && !plan.gate_preview.persisted ? (
               <button
                 type="button"
-                className="mz-btn mz-btn-primary"
+                className="r6-primary-action"
                 onClick={promote}
                 disabled={promoting}
                 title={isZh ? "注册后可在制作人工作区加入 Rundown 并导出" : "After registration the claim can join a producer rundown"}
               >
                 {promoting ? (isZh ? "注册中..." : "Registering...") : isZh ? "确认并注册 Claim" : "Confirm and register claim"}
               </button>
+            ) : (
+              <button type="button" className="r6-text-action" onClick={() => void run()}>
+                {isZh ? "换个问法继续调查" : "Ask a different question"}
+              </button>
             )}
             {promoted && (
-              <div style={{ fontSize: 12, color: "var(--text-emerald)" }}>
+              <span className="r6-result-promoted">
                 {isZh ? "已注册" : "Registered"}: {promoted.claim_id} / {promoted.current_revision_id?.slice(0, 12)}
-              </div>
+              </span>
             )}
           </div>
 
-          <div style={{ display: "grid", gap: 4 }}>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>{isZh ? "无法推断" : "Not inferable"}</div>
-            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "var(--text-secondary)" }}>
-              {[...plan.not_inferable, ...plan.unresolved].map((text) => <li key={text}>{text}</li>)}
-            </ul>
-          </div>
-        </div>
+          {/* Technical receipts stay available, but they are not the answer. */}
+          <details className="r6-result-details" data-testid="investigation-technical">
+            <summary>{isZh ? "技术回执 · 门禁校验 · 执行轨迹" : "Tool receipts, gate and execution trace"}</summary>
+
+            <div className="r6-tech-grid">
+              <span
+                className="rail-chip neutral"
+                data-testid="investigation-execution-mode"
+                data-execution-mode={plan.execution_mode}
+                title={isZh ? "产生该计划的执行引擎" : "Engine that produced this plan"}
+              >
+                {EXECUTION_LABELS[plan.execution_mode]?.[isZh ? "zh" : "en"] ?? plan.execution_mode}
+              </span>
+              <span
+                className="rail-chip neutral"
+                data-testid="investigation-agent-status"
+                data-agent-status={plan.agent_status}
+                title={isZh ? "模型智能体是否真的执行过" : "Whether a model agent actually ran"}
+              >
+                {AGENT_STATUS_LABELS[plan.agent_status]?.[isZh ? "zh" : "en"] ?? plan.agent_status}
+              </span>
+            </div>
+
+            <div className="r6-gate-audit" data-testid="investigation-gate">
+              <div className="r6-gate-head">
+                <b>{isZh ? "门禁校验" : "Gate check"}</b>
+                <span style={{ color: statusTone[plan.gate_preview.status] || "var(--text-secondary)" }}>
+                  {plan.gate_preview.assertion || "—"} · {plan.gate_preview.status} · L{plan.gate_preview.claim_level} ·{" "}
+                  {plan.gate_preview.persisted ? (isZh ? "已持久化" : "persisted") : isZh ? "未持久化" : "not persisted"}
+                </span>
+              </div>
+              {plan.gate_preview.violations.length > 0 && (
+                <p className="r6-gate-violation">{plan.gate_preview.violations.join(" ")}</p>
+              )}
+            </div>
+
+            {plan.oaai_ledger && plan.oaai_ledger.contributions.length > 0 && (
+              <div className="r6-ledger">
+                <div className="r6-ledger-head">
+                  <b>{isZh ? "OAAI 贡献账本" : "OAAI contribution ledger"}</b>
+                  <span>
+                    {isZh ? "原始" : "raw"} {plan.oaai_ledger.raw_team_intensity} /{" "}
+                    {isZh ? "平滑" : "smoothed"} {plan.oaai_ledger.smoothed_value_at_nearest_sample ?? "—"}
+                  </span>
+                </div>
+                {plan.oaai_ledger.contributions.slice(0, 6).map((row) => (
+                  <button
+                    key={row.event_id}
+                    type="button"
+                    className="r6-ledger-row"
+                    onClick={() => onSelectEvent?.(row.event_id)}
+                  >
+                    <span>
+                      <b>{row.event_id}</b> {row.actor}{" "}
+                      <em>{row.kind} @ {Math.floor(row.t / 60)}'</em>
+                    </span>
+                    <span style={{ color: row.team_contribution >= 0 ? "var(--text-emerald)" : "var(--red-11)" }}>
+                      {row.team_contribution >= 0 ? "+" : ""}
+                      {row.team_contribution.toFixed(3)} / w {row.weight.toFixed(2)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <details className="r6-tool-receipts" open={plan.tool_receipts.length <= 8}>
+              <summary>{isZh ? "工具回执" : "Tool receipts"} ({plan.tool_receipts.length})</summary>
+              <ol>
+                {plan.tool_receipts.map((step) => (
+                  <li key={step.sequence} data-testid="investigation-tool-receipt">
+                    <code>{step.sequence.toString().padStart(2, "0")}</code>
+                    {step.role && <span className="r6-role-chip">{step.role}</span>}
+                    <b>{step.tool}</b>
+                    <span style={{ color: statusTone[step.status] || "var(--text-tertiary)" }}>{step.status}</span>
+                    <em>{step.summary}</em>
+                  </li>
+                ))}
+              </ol>
+            </details>
+
+            {plan.agent_run && (
+              <details data-testid="investigation-agent-run">
+                <summary>
+                  {isZh ? "Agent 执行轨迹" : "Agent run trajectory"}
+                  {plan.agent_run.model ? ` · ${plan.agent_run.model}` : ""}
+                  {` · ${plan.agent_run.state}`}
+                </summary>
+                <div className="r6-agent-trace">
+                  <div>
+                    {isZh ? "运行 ID" : "Run ID"} <code>{plan.agent_run.run_id}</code>
+                    {typeof plan.agent_run.requests === "number" && (
+                      <> / {isZh ? "模型请求" : "model requests"} {plan.agent_run.requests}</>
+                    )}
+                    {plan.agent_run.prompt_version && <> / prompt {plan.agent_run.prompt_version}</>}
+                  </div>
+                  {plan.agent_run.state_history.map((entry, index) => (
+                    <div key={`${entry.state}-${index}`}>
+                      <b style={{ color: statusTone[entry.state] || "var(--text-primary)" }}>{entry.state}</b>
+                      {entry.reason && <span> — {entry.reason}</span>}
+                    </div>
+                  ))}
+                  {plan.agent_run.error && <div className="r6-agent-error">{plan.agent_run.error}</div>}
+                </div>
+              </details>
+            )}
+
+            {plan.agent_error && (
+              <div data-testid="investigation-agent-error" className="r6-agent-degraded">
+                {isZh ? "Agent 降级原因" : "Agent degradation"}: {plan.agent_error}
+              </div>
+            )}
+          </details>
+        </article>
       )}
     </div>
   );

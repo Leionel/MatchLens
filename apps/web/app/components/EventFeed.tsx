@@ -297,6 +297,8 @@ export const EventFeed: React.FC<EventFeedProps> = ({
             return (
               <div
                 key={e.id}
+                data-testid="event-feed-row"
+                data-event-kind={e.kind}
                 onClick={() => onSelectEvent(e.id)}
                 style={{
                   display: "flex",

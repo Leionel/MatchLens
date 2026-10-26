@@ -19,6 +19,7 @@ interface StoryAgentWorkbenchProps {
   onCommitState?: (nextState: any) => void;
   investigationSeed?: InvestigationSeed | null;
   onClaimPromoted?: (claim: any) => void;
+  onReturnToMatch?: (at: number) => void;
 }
 
 const clock = (s: number) =>
@@ -41,6 +42,7 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
   onCommitState,
   investigationSeed = null,
   onClaimPromoted,
+  onReturnToMatch,
 }) => {
   const t = getTranslation(locale);
   const isZh = locale === "zh";
@@ -1129,6 +1131,7 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
           locale={locale}
           seed={investigationSeed}
           onSelectEvent={onSelectEvent}
+          onReturnToMatch={onReturnToMatch}
           onClaimPromoted={(claim) => {
             setStoryRefresh((n) => n + 1);
             onClaimPromoted?.(claim);

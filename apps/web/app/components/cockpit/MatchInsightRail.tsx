@@ -219,6 +219,13 @@ export const MatchInsightRail: React.FC<MatchInsightRailProps> = ({
               <b>{contributor.actor || "Unknown"}</b> · {contributor.kind} · {clock(contributor.t)}
             </p>
           )}
+          {/* The reader is entitled to know what this card cannot decide before
+              they act on it, not after they open a disclosure. */}
+          <p className="r6-insight-limit" data-testid="match-insight-limit">
+            {isZh
+              ? "无法判断：无球阵型与压迫意图未观测；这是指标分解，不是战术因果。"
+              : "Cannot decide: off-ball shape and pressing intent are not observed. This is metric attribution, not tactical causation."}
+          </p>
           <div className="r6-insight-actions">
             {primaryDirection?.team ? (
               <button
