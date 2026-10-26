@@ -120,7 +120,15 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
     () =>
       visible
         .filter((match) => match.analysis_ready !== false)
-        .sort((a, b) => (b.events_count ?? 0) - (a.events_count ?? 0))
+        // A real provider payload is a stronger demo than a synthetic fixture,
+        // whatever their relative event counts. Synthetic matches stay
+        // available, but they never outrank a real one that is ready to open.
+        .sort((a, b) => {
+          const realA = (a.provenance_kind ?? "synthetic") === "provider_payload" ? 1 : 0;
+          const realB = (b.provenance_kind ?? "synthetic") === "provider_payload" ? 1 : 0;
+          if (realA !== realB) return realB - realA;
+          return (b.events_count ?? 0) - (a.events_count ?? 0);
+        })
         .slice(0, 4),
     [visible],
   );
@@ -312,8 +320,14 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
               <div className="r6-recommended-grid">
                 {recommended.map((match) => {
                   const isCurrent = match.match_id === currentMatchId;
+                  const isDemo = (match.provenance_kind ?? "synthetic") !== "provider_payload";
                   return (
-                    <article key={match.match_id} className={`r6-recommended-card ${isCurrent ? "current" : ""}`} data-testid="match-recommended">
+                    <article
+                      key={match.match_id}
+                      className={`r6-recommended-card ${isCurrent ? "current" : ""}`}
+                      data-testid="match-recommended"
+                      data-provenance={match.provenance_kind ?? "synthetic"}
+                    >
                       <span className="r6-rec-comp">
                         {competitionLabel(match.competition, isZh)} · {match.season} · {match.stage ? stageLabel(match.stage, isZh) : "—"}
                         {isCurrent ? ` · ${isZh ? "当前" : "current"}` : ""}
@@ -322,7 +336,9 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
                         {match.home_team} <strong>{match.home_score ?? "-"} : {match.away_score ?? "-"}</strong> {match.away_team}
                       </h3>
                       <div className="r6-rec-meta">
-                        <span className="r6-rec-badge">{isZh ? "可分析" : "Ready"}</span>
+                        <span className={`r6-rec-badge ${isDemo ? "demo" : ""}`}>
+                          {isDemo ? (isZh ? "Demo · 合成" : "Demo · synthetic") : isZh ? "真实数据" : "Real data"}
+                        </span>
                         <span>{match.events_count ?? 0} {isZh ? "事件" : "events"}</span>
                         <span>{match.match_date || "—"}</span>
                       </div>

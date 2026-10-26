@@ -613,3 +613,354 @@ body .inspector-drawer.open { display: flex; transform: none; }
   .qr-spatial-grid { grid-template-columns: 1fr !important; }
   .qr-spatial-grid > * { min-width: 0; }
 }
+
+/* ── Match totals vs. live window ───────────────────────────────────────────
+   A match total and a three-minute window are different measurements that
+   used to share one row. They are now two rows with two explicitly labelled
+   scopes, so a quiet window can never be read as the match's shot count. */
+.match-quickstats.r6-match-totals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 22px;
+  padding: 10px 14px;
+  border: 0.5px solid var(--glass-border);
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--slate-1) 60%, transparent);
+}
+.r6-match-totals .r6-totals-scope {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  padding-right: 10px;
+  border-right: 0.5px solid var(--glass-border);
+}
+.r6-match-totals > span { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+.r6-match-totals b {
+  margin-left: 5px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.r6-window-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 16px;
+  padding: 7px 14px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  border-left: 2px solid color-mix(in srgb, var(--cyan-9) 45%, transparent);
+  background: color-mix(in srgb, var(--cyan-1) 30%, transparent);
+  border-radius: 0 6px 6px 0;
+}
+.r6-window-strip-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  font-weight: 750;
+  color: var(--tech-cyan);
+}
+.r6-window-strip-label em {
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.r6-window-strip b {
+  margin-left: 4px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The "no coords" tag is an honesty marker, not an error: the event is real
+   and counted, the pitch simply cannot place it. */
+.r6-noloc-tag {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  border: 0.5px dashed var(--glass-border-bright);
+}
+
+@media (max-width: 560px) {
+  .match-quickstats.r6-match-totals {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 12px;
+    padding: 10px 12px;
+  }
+  .r6-match-totals .r6-totals-scope { grid-column: 1 / -1; border-right: 0; padding-right: 0; }
+  .r6-match-totals > span { white-space: normal; }
+  .r6-window-strip { gap: 4px 12px; padding: 7px 10px; }
+}
+
+/* The live-window strip belongs to the overview section on phones. */
+@media (max-width: 900px) {
+  .r6-detail-page[data-mobile-section="overview"] [data-mobile-panel="overview"].r6-window-strip { display: flex !important; }
+}
+
+/* ── Possession scope caption ───────────────────────────────────────────────
+   The scoreboard gauge is a live window reading. Naming the scope on the
+   surface is what stops it from being compared to the whole-match figure in
+   the totals row as if they were the same measurement. */
+.possession-gauge-wrap { flex-wrap: wrap; row-gap: 6px; }
+.possession-gauge-scope {
+  flex: 0 0 100%;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* ── Investigation result: conclusion before machinery ──────────────────────
+   The reader asked a football question. The answer is the statement, the
+   evidence and what remains undecidable; receipts, gate checks and the agent
+   trace are proof, and proof lives behind a disclosure. */
+.r6-result { display: grid; gap: 16px; padding: 16px 18px; border-radius: var(--radius-panel); border: 0.5px solid var(--glass-border); background: color-mix(in srgb, var(--slate-1) 70%, transparent); }
+.r6-result-stale {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 0.5px solid color-mix(in srgb, var(--amber-9) 55%, transparent);
+  background: color-mix(in srgb, var(--amber-2) 55%, transparent);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.r6-result-stale b { color: var(--amber-gold); }
+.r6-result-stale .r6-text-action { justify-self: start; margin-top: 2px; }
+
+.r6-result-head { display: grid; gap: 8px; }
+.r6-result-kicker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.r6-result-verdict {
+  padding: 1px 7px;
+  border-radius: 3px;
+  letter-spacing: .04em;
+  border: 0.5px solid currentColor;
+  color: var(--text-tertiary);
+}
+.r6-result-verdict[data-verdict="approved"] { color: var(--text-emerald); }
+.r6-result-verdict[data-verdict="qualified"],
+.r6-result-verdict[data-verdict="disputed"],
+.r6-result-verdict[data-verdict="withheld"] { color: var(--amber-gold); }
+.r6-result-verdict[data-verdict="rejected"] { color: var(--red-11); }
+.r6-result-head h4 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.45;
+  font-weight: 650;
+  letter-spacing: -.01em;
+  color: var(--text-primary);
+  text-wrap: pretty;
+}
+.r6-result-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.r6-result-when { font-size: 11px; color: var(--text-tertiary); }
+.r6-result-when code { font-family: var(--font-mono); }
+
+.r6-result-blocked {
+  padding: 9px 11px;
+  border-radius: 6px;
+  font-size: 12px;
+  border: 0.5px solid color-mix(in srgb, var(--red-9) 55%, transparent);
+  color: var(--red-11);
+}
+
+.r6-result-section { display: grid; gap: 7px; }
+.r6-result-section h5 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  color: var(--text-secondary);
+}
+.r6-result-empty { margin: 0; font-size: 12px; color: var(--text-tertiary); }
+.r6-finding-list,
+.r6-explanation-list,
+.r6-limit-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.r6-finding-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+.r6-finding-level {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--tech-cyan);
+  border: 0.5px solid color-mix(in srgb, var(--cyan-9) 45%, transparent);
+}
+.r6-finding-text { flex: 1 1 240px; min-width: 0; color: var(--text-primary); }
+
+.r6-explanation-list li { padding: 9px 11px; border-radius: 6px; border-left: 2px solid var(--glass-border-bright); background: color-mix(in srgb, var(--slate-1) 55%, transparent); }
+.r6-explanation-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 650; color: var(--text-primary); }
+.r6-explanation-head > span:last-child { font-family: var(--font-mono); font-size: 11px; font-weight: 700; }
+.r6-explanation-list p { margin: 4px 0 0; font-size: 12px; color: var(--text-secondary); }
+.r6-explanation-pro { color: var(--text-emerald) !important; }
+.r6-explanation-con { color: var(--red-11) !important; }
+
+.r6-limit-list li { position: relative; padding-left: 16px; font-size: 12px; color: var(--text-secondary); }
+.r6-limit-list li::before { content: "—"; position: absolute; left: 0; color: var(--text-tertiary); }
+
+.r6-result-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.r6-result-promoted { font-size: 12px; color: var(--text-emerald); }
+
+.r6-result-details { display: grid; gap: 10px; padding-top: 10px; border-top: 0.5px solid var(--glass-border); }
+.r6-result-details > summary { cursor: pointer; font-size: 12px; font-weight: 750; color: var(--text-secondary); }
+.r6-tech-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.r6-gate-audit { display: grid; gap: 4px; font-size: 12px; color: var(--text-secondary); }
+.r6-gate-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.r6-gate-head b { color: var(--text-primary); }
+.r6-gate-violation { margin: 0; color: var(--red-11); }
+.r6-ledger { display: grid; gap: 5px; }
+.r6-ledger-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-tertiary); }
+.r6-ledger-head b { color: var(--text-primary); }
+.r6-ledger-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  text-align: left;
+  padding: 6px 9px;
+  border-radius: 6px;
+  border: 0.5px solid var(--glass-border);
+  background: color-mix(in srgb, var(--slate-1) 65%, transparent);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+.r6-ledger-row em { font-style: normal; color: var(--text-tertiary); }
+.r6-ledger-row span:last-child { font-family: var(--font-mono); }
+.r6-tool-receipts > summary { cursor: pointer; font-size: 12px; font-weight: 750; color: var(--text-secondary); }
+.r6-tool-receipts ol { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 5px; }
+.r6-tool-receipts li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+.r6-tool-receipts li code { font-family: var(--font-mono); color: var(--text-tertiary); }
+.r6-tool-receipts li b { color: var(--text-primary); }
+.r6-tool-receipts li em { font-style: normal; color: var(--text-tertiary); min-width: 0; overflow-wrap: anywhere; }
+.r6-role-chip { font-size: 10px; font-weight: 700; padding: 0 5px; border-radius: 3px; border: 0.5px solid var(--glass-border-bright); color: var(--text-tertiary); }
+.r6-agent-trace { display: grid; gap: 4px; margin-top: 8px; font-size: 12px; color: var(--text-secondary); }
+.r6-agent-trace code { font-family: var(--font-mono); }
+.r6-agent-error { color: var(--red-11); }
+.r6-agent-degraded {
+  padding: 9px 11px;
+  border-radius: 6px;
+  font-size: 12px;
+  border: 0.5px solid color-mix(in srgb, var(--amber-9) 50%, transparent);
+  color: var(--amber-gold);
+}
+
+@media (max-width: 560px) {
+  .r6-result { padding: 13px 13px; gap: 13px; }
+  .r6-result-head h4 { font-size: 15px; }
+  .r6-finding-text { flex-basis: 100%; }
+  .r6-ledger-row { grid-template-columns: 1fr; }
+}
+
+/* A synthetic fixture is a demo and must say so on the card itself. */
+.r6-rec-badge.demo {
+  border-color: color-mix(in srgb, var(--amber-9) 50%, transparent);
+  color: var(--amber-gold);
+}
+
+/* ── Key players in Match Detail ────────────────────────────────────────────
+   Reuses the player spotlight the backend already computes. Deliberately a
+   small row, not a second analytics surface. */
+.r6-player-focus { display: grid; gap: 10px; padding: 14px; border: 0.5px solid var(--glass-border); border-radius: var(--radius-panel); background: color-mix(in srgb, var(--slate-1) 55%, transparent); }
+.r6-player-focus-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.r6-player-focus-head h3 { margin: 0; font-size: 13px; font-weight: 800; letter-spacing: .02em; color: var(--text-primary); }
+.r6-player-focus-head p { margin: 0; font-size: 11px; color: var(--text-tertiary); }
+.r6-player-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.r6-player-card {
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+  border-radius: 8px;
+  border: 0.5px solid var(--glass-border);
+  background: color-mix(in srgb, var(--slate-2) 70%, transparent);
+}
+.r6-player-card.selected { border-color: color-mix(in srgb, var(--green-9) 55%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--green-9) 30%, transparent); }
+.r6-player-card header { display: grid; gap: 3px; min-width: 0; }
+.r6-player-team { font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r6-player-team[data-team="H"] { color: var(--text-emerald); }
+.r6-player-team[data-team="N"] { color: var(--tech-cyan); }
+.r6-player-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.r6-player-name:hover { color: var(--text-emerald); }
+.r6-player-card dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0; }
+.r6-player-card dt { font-size: 10px; color: var(--text-tertiary); }
+.r6-player-card dd { margin: 0; font-family: var(--font-mono); font-size: 15px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.r6-player-card .r6-text-action { justify-self: start; font-size: 11px; }
+
+@media (max-width: 1100px) {
+  .r6-player-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .r6-player-focus { padding: 12px; }
+  .r6-player-grid { grid-template-columns: 1fr; gap: 8px; }
+  .r6-player-card dl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.r6-insight-limit {
+  margin: 0;
+  padding: 6px 9px;
+  border-radius: 5px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+  border-left: 2px solid var(--glass-border-bright);
+  background: color-mix(in srgb, var(--slate-1) 50%, transparent);
+}
+
+/* ── Selected event context ────────────────────────────────────────────────
+   Turns a selected event into a doorway: locate it, or investigate it. */
+.r6-event-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  border-radius: var(--radius-panel);
+  border: 0.5px solid color-mix(in srgb, var(--green-9) 35%, transparent);
+  background: color-mix(in srgb, var(--green-2) 45%, transparent);
+}
+.r6-event-context-time {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-emerald);
+  font-variant-numeric: tabular-nums;
+}
+.r6-event-context-kind { font-size: 12px; color: var(--text-secondary); }
+.r6-event-context b { font-size: 13px; color: var(--text-primary); }
+.r6-event-context-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.r6-event-context-actions .r6-primary-action { min-height: 32px; padding: 4px 11px; font-size: 12px; }
+
+@media (max-width: 560px) {
+  .r6-event-context { gap: 6px; padding: 9px 11px; }
+  .r6-event-context-actions { margin-left: 0; width: 100%; justify-content: space-between; }
+}
