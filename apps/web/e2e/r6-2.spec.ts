@@ -91,8 +91,8 @@ test.describe("R6.2 measurement windows", () => {
     // Possession: the match share is a different number under a different scope.
     const possession = page.getByTestId("match-stat-possession");
     await expect(possession).toContainText(`${Math.round(receipts["H.possession.match"].value)}%`);
-    await expect(page.getByTestId("scoreboard-possession")).toHaveAttribute("data-scope", "window");
-    await expect(page.getByTestId("scoreboard-possession")).toContainText("Last 3 min");
+    // The scoreboard no longer repeats the window reading at all: the labelled
+    // three-minute strip above is the only place a window scope appears.
     expect(home.length).toBeGreaterThan(0);
   });
 

@@ -1,6 +1,6 @@
-# MatchLens AI — Demo and Submission Plan (R6.2)
+# MatchLens AI — Demo and Submission Plan (R6.4)
 
-Baseline: 2026-10-26, commit `fa42ee8` + this round's changes. Target **112–115 s**, hard limit **< 120 s** (official rule). English interface, English narration, burned-in English captions.
+Baseline: 2026-10-26, branch `r6.4/ui-competition-polish`. Target **112–115 s**, hard limit **< 120 s** (official rule). English interface, English narration, burned-in English captions.
 
 > **The one rule for this video:** every frame is the running product. Nothing is re-typed, re-timed or narrated over a still that the app did not produce. If the two-agent run cannot be recorded live, the fallback in §3 is used and the on-screen label says so.
 
@@ -20,18 +20,28 @@ Do **not** tour the feature set. Four surfaces, one story.
 
 | # | Time | On screen (real UI) | Narration | Must be true in the frame |
 | --- | --- | --- | --- | --- |
-| 1 | 0–10 s | Match Detail, paused at 07:00. Insight card reading *"Harbor FC activity peaked in this spell"* with the **Cannot decide** line under it. | "Possession is up. The crowd is up. Does that mean the team is in control?" | Synthetic match; the `SYNTHETIC` provenance is visible somewhere in frame. |
-| 2 | 10–20 s | Scroll the totals row and the live-window strip: `WHOLE MATCH` 8/5 shots, `Last 3 min window` 0/0. | "This is where most tools stop: a number without a scope. The last three minutes had no shots. The match had thirteen." | The strip must show its own bounds (`4020s–4200s`). |
+| 1 | 0–10 s | Match Detail, **real match `sb_18235` (Champions League 2009/2010 Final, Bayern Munich 0-2 Inter Milan)**, paused at 67:00 (`at=4020`). Header shows `Historical replay`. Insight card reading *"Bayern Munich activity peaked in this spell"* with the **Cannot decide** line under it. | "Possession is up. The crowd is up. Does that mean the team is in control?" | Real match; the `Historical replay` status (not Live) is visible in the header, and the scoreboard shows replay score 0–1 plus `OFFICIAL FT 0–2` as two different facts. |
+| 2 | 10–20 s | Scroll the totals row and the live-window strip: `WHOLE MATCH` shots 18 / 11, goals 0 / 1, possession 68% / 32%; `Last 3 min` shots 1 / 1 with its own window bounds shown. | "This is where most tools stop: a number without a scope. The last three minutes produced one shot each way; the match so far has twenty-nine." | Every number is a real receipt of this match at 67:00; the strip shows its own bounds (`4020s` window) and is visually separate from `WHOLE MATCH`. |
 | 3 | 20–30 s | Press **Investigate this change**. Studio opens on that exact moment; question pre-filled. | "So we ask the match — at this second, not about the whole game." | Clock in the panel reads the same second as the chart. |
 | 4 | 30–55 s | **Agent collaboration panel.** Analyst row (tools it called, claim id), Verifier row (its own tools, verdict + reason), Gate row. | "The Analyst picks its own tools and proposes one claim. The Verifier gets its own tool budget, checks counterevidence, and decides whether that claim survives. This is the part a single model cannot do for itself." | See §3 — this is the only segment that depends on a model key. |
 | 5 | 55–70 s | Open **Evidence**: findings with event ids; click one → the pitch jumps to that event. Then **What this cannot decide**. | "Every sentence points back to recorded events — and the claim is narrow on purpose: no off-ball shape, no tactical cause." | The event id in the finding equals the one selected on the pitch. |
 | 6 | 70–82 s | Switch perspective **Fan → Coach → Media**. Same time, same claim: consequence → shot comparison → lower-third line. | "Same fact. A fan gets the consequence, an analyst gets the window comparison, a producer gets a line that can go on air." | The match time and claim id do **not** change between the three. |
-| 7 | 82–93 s | **Broadcast preview** card under the result: provenance strip, score bug, headline, evidence refs. | "Approved claims become a lower-third with the match time and its evidence attached." | Provenance strip must read `SYNTHETIC SIMULATED REPLAY` for the synthetic match. |
-| 8 | 93–104 s | Cut to Match Hub → open a `Real data` match → Match Detail → the same totals row and insight. | "The same pipeline runs on eighty real matches — provider event data, same receipts, same gate." | Hub card shows `Real data`, not `Demo`. |
-| 9 | 104–112 s | Closing card: title, one-line claim, repo URL, "run locally in three minutes". | "MatchLens. Football intelligence you can challenge." | No invented URL, no "live at". |
+| 7 | 82–93 s | **Broadcast preview** card under the result: provenance strip, score bug, headline, evidence refs. | "Approved claims become a lower-third with the match time and its evidence attached." | Provenance strip must read `HISTORICAL PROVIDER DATA` for this real match. If the preview is instead recorded on the synthetic scenario, it must read `SYNTHETIC SIMULATED REPLAY` — never mix the two in one segment. |
+| 8 | 93–104 s | Cut to Match Hub → the Featured Investigation card and `Real data` badges → open another real match → Match Detail. | "The same pipeline runs on eighty real matches — provider event data, same receipts, same gate. The featured moment on the hub is picked by the deterministic engine, not by a model." | Hub cards show `Real data`, not `Demo`; the featured card's source line is visible. |
+| 9 | 104–112 s | Closing card: title, one-line claim, live demo URL + repo URL, "run locally in three minutes". | "MatchLens. Football intelligence you can challenge." | Both URLs resolve; the live demo is the same build as the recording. |
 
 ### Optional 3 s if under time
 60–63 s: open one **alternative explanation** row and show its `insufficient_evidence` status. This is the cheapest way to prove the system is willing to say "we cannot test this".
+
+### One match per segment (data hygiene)
+
+Segments 1–7 all use `sb_18235` at one frozen clock (`at=4020`): one match, one
+moment, one claim, one evidence set. A synthetic match may only appear as its
+own clearly labelled segment (shot 8's featured-card b-roll, or the §3 Variant
+B fallback), with its `SYNTHETIC`/`Simulated replay` provenance visible. Never
+cut from one match's clock into another match's numbers inside a segment: a
+4020–4200s window belongs to a 90+ minute real fixture and cannot be narrated
+over a 12-minute synthetic kickoff.
 
 ---
 
@@ -114,7 +124,9 @@ If used, it must carry the UI's **Historical real analysis** label and the narra
 
 **Built with:** Microsoft Agent Framework, FastAPI, Next.js, DeepSeek (optional live agent mode).
 
-**What is intentionally not claimed:** no calibrated xG, no off-ball tracking, no measured multi-agent uplift, no public deployment at submission time.
+**What is intentionally not claimed:** no calibrated xG, no off-ball tracking, no measured multi-agent uplift. The public demo runs the deterministic journey only (no model key is configured there, and the UI states it); live two-agent runs are demonstrated locally with the key.
+
+**Live demo:** [p01--matchlens--zfs7xk57gw42.code.run](https://p01--matchlens--zfs7xk57gw42.code.run) (deterministic journey, anonymous).
 
 ---
 
@@ -123,8 +135,9 @@ If used, it must carry the UI's **Historical real analysis** label and the narra
 | Task | Owner | Blocking? |
 | --- | --- | --- |
 | Record and upload the < 120 s video | user | **yes** — submission requires a URL |
-| Decide on public hosting (funded key + rate limits) | user | no — local path is documented and honest |
-| Replace the `Live demo` line in README with the real URL if hosting happens | user | no |
+| Confirm the Northflank public instance is up and freshly rebooted before recording | user | **yes** — the live URL is now in the closing card |
+| Optionally upgrade the Northflank instance to 512 MB+ before judging day | user | no — deterministic mode fits 256 MB, but headroom prevents OOM restarts |
 | Final read of submission text against the recorded footage | user | **yes** |
 
-Nothing in this plan requires new product code. If hosting is approved, the only change is the README line and the closing card.
+The README Live demo line and this plan now point at the running deployment;
+if the hosting URL changes, only those two lines need updating.

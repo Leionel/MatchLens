@@ -22,6 +22,57 @@ interface MatchLibraryWorkspaceProps {
   onSelectMatch: (matchId: string) => void;
   onInvestigateShot?: (input: { matchId: string; eventId: string; team: "H" | "N"; at: number }) => void;
   onInvestigateCrossMatch?: (input: { matchId: string; otherMatchId: string }) => void;
+  onInvestigateMoment?: (input: {
+    matchId: string;
+    focusId: string;
+    at: number;
+    team: "H" | "N";
+    question: string;
+  }) => void;
+}
+
+interface FeaturedPayload {
+  featured: {
+    match_id: string;
+    label: string;
+    competition: string;
+    season: string;
+    stage?: string | null;
+    match_date?: string | null;
+    home_team: string;
+    away_team: string;
+    home_score?: number | null;
+    away_score?: number | null;
+    provenance_kind: string;
+    data_provider: string;
+    attribution_text?: string | null;
+    moment: {
+      change_point_id: string;
+      at: number;
+      minute: number;
+      leading_team: "H" | "N";
+      team_name: string;
+      oaai_amplitude: number;
+      claim_level?: number;
+      disclaimer?: string;
+    };
+    what_changed: string;
+    why_investigate: string;
+    question: string;
+    supporting_events: {
+      event_id: string;
+      minute: number;
+      team: string;
+      actor?: string;
+      kind: string;
+      outcome?: string;
+      explanation?: string;
+    }[];
+    source: string;
+  } | null;
+  fallback: boolean;
+  fallback_reason?: string | null;
+  algorithm: string;
 }
 
 export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
@@ -32,11 +83,13 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
   onSelectMatch,
   onInvestigateShot,
   onInvestigateCrossMatch,
+  onInvestigateMoment,
 }) => {
   const isZh = locale === "zh";
   const [matches, setMatches] = useState<LibraryMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [featured, setFeatured] = useState<FeaturedPayload | null>(null);
   const [query, setQuery] = useState("");
   const [competition, setCompetition] = useState("");
   const [season, setSeason] = useState("");
@@ -65,6 +118,16 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
       })
       .finally(() => {
         if (active) setLoading(false);
+      });
+    // The featured moment is independent of the catalog list: a slow or failed
+    // recommendation must never block the catalog behind it.
+    fetch("/api/featured")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active && data) setFeatured(data);
+      })
+      .catch(() => {
+        if (active) setFeatured(null);
       });
     return () => {
       active = false;
@@ -153,22 +216,34 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
     <div className="workspace-pane-fade ml-shell">
       <header className="r6-page-head r6-hub-head">
         <div>
-          <span className="r6-kicker">{isZh ? "比赛库" : "Match Hub"}</span>
-          <h1>{isZh ? "从一场真实比赛开始" : "Start with a real match"}</h1>
-          <p>
+          <span className="r6-kicker">{isZh ? "MatchLens" : "MatchLens"}</span>
+          <h1 className="r6-hub-value">
+            {isZh ? (
+              <>
+                可以被质疑的足球智能。
+              </>
+            ) : (
+              <>Football intelligence you can challenge.</>
+            )}
+          </h1>
+          <p className="r6-hub-value-sub">
             {isZh
-              ? "先看比分、事件与活动趋势，再按需进入战术探索和带证据的 AI 调查。"
-              : "Read the score, events and activity trend first; then open tactical exploration or an evidence-led investigation."}
+              ? "看清比赛时刻 · 检视每一条证据 · 质疑每一个结论。"
+              : "Understand the moment. Inspect the evidence. Challenge the conclusion."}
           </p>
         </div>
         <div className="r6-hub-facts">
-          <span>
-            <b>{loading ? "—" : matches.filter((match) => match.analysis_ready !== false).length}</b>
-            <small>{isZh ? "可分析" : "analysis ready"}</small>
+          <span data-testid="hub-count-real">
+            <b>{loading ? "—" : matches.filter((m) => m.analysis_ready !== false && (m.provenance_kind ?? "synthetic") === "provider_payload").length}</b>
+            <small>{isZh ? "真实比赛 · 可分析" : "Real matches ready"}</small>
           </span>
-          <span>
+          <span data-testid="hub-count-synthetic">
+            <b>{loading ? "—" : matches.filter((m) => m.analysis_ready !== false && (m.provenance_kind ?? "synthetic") === "synthetic").length}</b>
+            <small>{isZh ? "合成情景" : "Simulated scenarios"}</small>
+          </span>
+          <span data-testid="hub-count-catalogued">
             <b>{loading ? "—" : matches.length}</b>
-            <small>{isZh ? "已登记" : "catalogued"}</small>
+            <small>{isZh ? "已登记" : "Catalogued"}</small>
           </span>
           {currentMatchId && (
             <button type="button" className="r6-text-action" onClick={() => onSelectMatch(currentMatchId)}>
@@ -177,6 +252,22 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
           )}
         </div>
       </header>
+
+      <FeaturedInvestigation
+        featured={featured}
+        currentMatchId={currentMatchId}
+        locale={locale}
+        onExplore={(input) =>
+          onInvestigateMoment?.({
+            matchId: input.matchId,
+            focusId: input.focusId,
+            at: input.at,
+            team: input.team,
+            question: input.question,
+          })
+        }
+        onOpenMatch={onSelectMatch}
+      />
 
       <section className="r6-hub-tools" aria-label={isZh ? "搜索与筛选" : "Search and filters"}>
         <div className="r6-hub-tool-line">
@@ -425,5 +516,140 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
         </>
       )}
     </div>
+  );
+};
+
+interface FeaturedInvestigationProps {
+  featured: FeaturedPayload | null;
+  currentMatchId?: string;
+  locale?: Locale;
+  onExplore: (input: { matchId: string; focusId: string; at: number; team: "H" | "N"; question: string }) => void;
+  onOpenMatch: (matchId: string) => void;
+}
+
+/**
+ * The first screen's one true entry point. The moment comes from
+ * `/api/featured` — a deterministic pick over installed matches, not a
+ * hardcoded highlight and not a model output — so the CTA always lands on a
+ * real, in-clock, investigable moment.
+ */
+const FeaturedInvestigation: React.FC<FeaturedInvestigationProps> = ({
+  featured,
+  currentMatchId,
+  locale = "zh",
+  onExplore,
+  onOpenMatch,
+}) => {
+  const isZh = locale === "zh";
+  const moment = featured?.featured?.moment;
+  const match = featured?.featured;
+  const isDemo = Boolean(match && (match.provenance_kind || "synthetic") !== "provider_payload");
+  const isCurrent = Boolean(match && match.match_id === currentMatchId);
+
+  if (!featured) {
+    return (
+      <div className="r6-featured r6-featured-loading" aria-hidden="true">
+        <span className="r6-kicker">{isZh ? "精选时刻" : "Featured investigation"}</span>
+        <p>{isZh ? "正在从已安装比赛中挑选一个值得调查的时刻…" : "Selecting an investigable moment from the installed matches…"}</p>
+      </div>
+    );
+  }
+
+  if (!match || !moment) {
+    return (
+      <div className="r6-featured r6-featured-empty">
+        <span className="r6-kicker">{isZh ? "精选时刻" : "Featured investigation"}</span>
+        <p>
+          {isZh
+            ? "暂时没有可推荐的已安装时刻；请直接在下方目录中选择一场比赛。"
+            : "No installed moment to recommend right now; pick a match from the catalog below."}
+          {featured.fallback_reason && featured.fallback
+            ? isZh
+              ? `（原因：${featured.fallback_reason}）`
+              : ` (Reason: ${featured.fallback_reason})`
+            : ""}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <section
+      className="r6-featured"
+      data-testid="featured-investigation"
+      data-provenance={match.provenance_kind}
+      aria-label={isZh ? "精选调查时刻" : "Featured investigation"}
+    >
+      <div className="r6-featured-head">
+        <span className="r6-kicker">{isZh ? "精选时刻 · 一次有证据的调查" : "Featured investigation"}</span>
+        <span
+          className={`r6-rec-badge ${isDemo ? "demo" : ""}`}
+          title={match.attribution_text || undefined}
+        >
+          {isDemo
+            ? isZh
+              ? "合成演示"
+              : "Synthetic demo"
+            : isZh
+              ? "真实数据"
+              : "Real data"}
+        </span>
+      </div>
+      <div className="r6-featured-grid">
+        <div className="r6-featured-match">
+          <span className="r6-featured-comp">
+            {match.competition}
+            {match.stage ? ` · ${match.stage.replace(/_/g, " ")}` : ""}
+            {match.match_date ? ` · ${match.match_date}` : ""}
+          </span>
+          <h2>
+            {match.home_team} <strong>{match.home_score ?? "-"} : {match.away_score ?? "-"}</strong> {match.away_team}
+          </h2>
+          <p className="r6-featured-when">
+            {isZh ? "时刻" : "Moment"} {moment.minute}′ · OAAI {moment.oaai_amplitude > 0 ? "+" : ""}
+            {moment.oaai_amplitude.toFixed(2)} · {moment.team_name}
+          </p>
+        </div>
+        <div className="r6-featured-story">
+          <p className="r6-featured-what" data-testid="featured-what-changed">{match.what_changed}</p>
+          <p className="r6-featured-why">{match.why_investigate}</p>
+          {match.supporting_events.length > 0 && (
+            <ul className="r6-featured-events" aria-label={isZh ? "支持事件" : "Supporting events"}>
+              {match.supporting_events.map((event) => (
+                <li key={event.event_id}>
+                  <span className="r6-featured-event-minute">{event.minute}′</span>
+                  <b>{event.actor || (isZh ? "未知球员" : "Unattributed")}</b>
+                  <span>{event.kind}{event.outcome ? ` · ${event.outcome}` : ""}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="r6-featured-actions">
+            <button
+              type="button"
+              className="r6-primary-action r6-featured-cta"
+              data-testid="featured-explore"
+              onClick={() =>
+                onExplore({
+                  matchId: match.match_id,
+                  focusId: "",
+                  at: Math.round(moment.at),
+                  team: moment.leading_team === "N" ? "N" : "H",
+                  question: match.question,
+                })
+              }
+            >
+              {isZh ? `调查这个时刻 →` : "Explore this moment →"}
+            </button>
+            {!isCurrent && (
+              <button type="button" className="r6-text-action" onClick={() => onOpenMatch(match.match_id)}>
+                {isZh ? "打开比赛" : "Open match"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+      <p className="r6-featured-note">{match.source}</p>
+    </section>
   );
 };

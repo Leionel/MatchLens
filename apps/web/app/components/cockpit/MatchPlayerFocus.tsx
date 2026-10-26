@@ -32,6 +32,15 @@ export const MatchPlayerFocus: React.FC<MatchPlayerFocusProps> = ({
   const top = useMemo(() => {
     const players = state.player_spotlight || [];
     return [...players]
+      // An unattributed bucket ("Unknown") with zero recorded actions carries
+      // no information; showing it reads as a broken card. Named players with
+      // recorded actions always win the slots.
+      .filter(
+        (p) =>
+          p.name &&
+          p.name !== "Unknown" &&
+          p.progressive_passes + p.shots + p.recoveries + (p.touches || 0) > 0,
+      )
       .sort(
         (a, b) =>
           b.progressive_passes + b.shots * 3 + b.recoveries - (a.progressive_passes + a.shots * 3 + a.recoveries),

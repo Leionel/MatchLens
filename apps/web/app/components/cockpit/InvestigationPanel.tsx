@@ -148,21 +148,23 @@ type CancelState = "idle" | "requesting" | "requested" | "confirmed" | "unavaila
  * says which of those two situations the reader is looking at.
  */
 const verdictLabel = (status: string, lang: "zh" | "en" = "zh"): string => {
-  const zh: Record<string, string> = {
-    approved: "已通过门禁",
-    qualified: "有条件通过",
-    disputed: "存在争议",
-    rejected: "未通过门禁",
-    withheld: "已扣留",
-  };
   const en: Record<string, string> = {
     approved: "gate approved",
     qualified: "qualified",
     disputed: "disputed",
     rejected: "gate rejected",
     withheld: "withheld",
+    not_formed: "no publishable claim",
   };
-  const table = lang === "zh" ? zh : en;
+  const zhTable: Record<string, string> = {
+    approved: "已通过门禁",
+    qualified: "有条件通过",
+    disputed: "存在争议",
+    rejected: "未通过门禁",
+    withheld: "已扣留",
+    not_formed: "未形成可发布主张",
+  };
+  const table = lang === "zh" ? zhTable : en;
   return table[status] ?? status;
 };
 
@@ -569,7 +571,29 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
             </button>
           ))}
         </div>
+        <p
+          className="r6-execution-mode-line"
+          data-testid="investigation-mode-line"
+          data-mode={executionMode}
+          data-model-configured={state.model_configured ? "true" : "false"}
+        >
+          {executionMode === "deterministic_planner"
+            ? isZh
+              ? "当前模式：确定性引擎 · 不调用模型，结果来自 recorded events 与确定性工具。"
+              : "Mode: Deterministic · No model called. Results come from recorded events and deterministic tools."
+            : state.model_configured
+              ? isZh
+                ? "当前模式：真实多智能体 · 需要消耗模型预算；失败时自动回退确定性引擎。"
+                : "Mode: Real multi-agent · Model required. Falls back to the deterministic engine on failure."
+              : isZh
+                ? "当前模式：真实多智能体 · 未配置模型，主分析仍将使用确定性引擎。"
+                : "Mode: Real multi-agent · No model configured, the deterministic engine will answer."}
+        </p>
       </div>
+
+      {!plan && !busy && (
+        <RecentInvestigations matchId={matchId || ""} locale={locale} />
+      )}
 
       <details className="r6-investigation-advanced" data-testid="investigation-advanced">
         <summary>{isZh ? "高级设置 · 焦点 / 模型执行 / 工具记录" : "Advanced · focus, execution and tool records"}</summary>
@@ -611,7 +635,15 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
               data-testid="investigation-engine-select"
             >
               <option value="deterministic_planner">{isZh ? "确定性引擎（免费）" : "Deterministic (free)"}</option>
-              <option value="maf_agent">{isZh ? "真实 Agent（消耗模型预算）" : "Real Agent (uses model budget)"}</option>
+              <option value="maf_agent" disabled={!state.model_configured}>
+                {isZh
+                  ? state.model_configured
+                    ? "真实 Agent（消耗模型预算）"
+                    : "真实 Agent（未配置模型）"
+                  : state.model_configured
+                    ? "Real Agent (uses model budget)"
+                    : "Real Agent (no model configured)"}
+              </option>
             </select>
           </label>
         </div>
@@ -938,5 +970,79 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
         </article>
       )}
     </div>
+  );
+};
+
+type InvestigationSummary = {
+  investigation_id: string;
+  state: string;
+  focus_type: string;
+  team: "H" | "N";
+  as_of: number;
+  question: string;
+  intent: string;
+  gate_status: string;
+  finding_count: number;
+};
+
+/**
+ * Before the first result of a session exists, this is what the panel shows
+ * instead of empty space: the session's own saved investigations. They are
+ * real records from `/api/investigations`, scoped to this browser session —
+ * never a demo transcript.
+ */
+const RecentInvestigations: React.FC<{ matchId: string; locale: Locale }> = ({ matchId, locale }) => {
+  const isZh = locale === "zh";
+  const [items, setItems] = useState<InvestigationSummary[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setItems(null);
+    setFailed(false);
+    if (!matchId) return () => {};
+    fetch(`/api/investigations?match_id=${encodeURIComponent(matchId)}&limit=5`)
+      .then((res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        return res.json();
+      })
+      .then((data) => {
+        if (active) setItems(Array.isArray(data?.investigations) ? data.investigations : []);
+      })
+      .catch(() => {
+        if (active) setFailed(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [matchId]);
+
+  return (
+    <section className="r6-recent-investigations" data-testid="recent-investigations" aria-label={isZh ? "本次会话的调查记录" : "This session's investigations"}>
+      <h5>{isZh ? "本次会话已保存的调查" : "Saved investigations in this session"}</h5>
+      {failed ? (
+        <p className="r6-recent-empty">{isZh ? "调查记录暂不可用；这不影响发起新的调查。" : "Investigation records are unavailable; new investigations are unaffected."}</p>
+      ) : items === null ? (
+        <p className="r6-recent-empty" role="status">{isZh ? "正在读取…" : "Loading…"}</p>
+      ) : items.length === 0 ? (
+        <p className="r6-recent-empty">
+          {isZh
+            ? "还没有记录。提出一个问题，MatchLens 会用确定性工具与真实回执回答，结论必须通过门禁才会展示为可信。"
+            : "Nothing yet. Ask a question — MatchLens answers with deterministic tools and real receipts, and a conclusion only counts once the gate approves it."}
+        </p>
+      ) : (
+        <ul>
+          {items.map((item) => (
+            <li key={item.investigation_id} data-testid="recent-investigation">
+              <span className="r6-recent-when">{Math.floor(item.as_of / 60)}′</span>
+              <b>{item.question || item.intent}</b>
+              <span className="r6-recent-status" data-gate={item.gate_status}>
+                {item.state} · {verdictLabel(item.gate_status, isZh ? "zh" : "en")}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 };
