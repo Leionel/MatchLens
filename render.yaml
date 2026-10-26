@@ -1,0 +1,40 @@
+# MatchLens AI — Render Blueprint (production/judging)
+# One Docker web service with a persistent disk.
+# A free Render instance cannot attach a disk; use the manual free-demo
+# instructions in docs/RENDER_DEPLOY.md if you do not want a paid service.
+services:
+  - type: web
+    name: matchlens
+    runtime: docker
+    region: oregon
+    plan: 0.5c-512mb
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    numInstances: 1
+    autoDeployTrigger: checksPass
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: MATCHLENS_RUNTIME_DIR
+        value: /data/matchlens
+      - key: MATCHLENS_DATA_DIR
+        value: /data/matchlens/data
+      - key: MATCHLENS_BOOTSTRAP
+        value: "1"
+      - key: MATCHLENS_BOOTSTRAP_MATCH
+        value: sb_3795221
+      - key: MATCHLENS_BOOTSTRAP_TIMEOUT
+        value: "90"
+      - key: MATCHLENS_AUTO_ANALYSE
+        value: "0"
+      - key: MATCHLENS_MAX_REQUESTS
+        value: "32"
+      - key: MATCHLENS_MAX_RESERVED_USD
+        value: "1"
+      - key: MATCHLENS_ALLOW_LOCAL_PRODUCER
+        value: "0"
+    disk:
+      name: matchlens-runtime
+      mountPath: /data/matchlens
+      sizeGB: 1
