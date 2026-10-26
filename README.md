@@ -6,7 +6,7 @@ A football explanation is only worth airing if someone can check it. MatchLens t
 
 ![Match Detail: score, whole-match totals, a separately labelled live window, and an insight that states what it cannot decide](evidence/r6.2/browser-detail-1440.png)
 
-**Live demo:** no public URL yet — the Railway deployment path is ready and documented in [RAILWAY_DEPLOY](docs/RAILWAY_DEPLOY.md). Run it locally in about three minutes (below); no key, account or payment is needed for the full deterministic journey.
+**Live demo:** public URL pending — deploy the tested single-container image using [Render Blueprint](docs/RENDER_DEPLOY.md) (`render.yaml`). Run it locally in about three minutes (below); no key, account or payment is needed for the full deterministic journey.
 
 ---
 
@@ -125,10 +125,7 @@ docker run --rm -p 8000:8000 -v matchlens-data:/data/matchlens matchlens
 open http://127.0.0.1:8000
 ```
 
-Railway is the supported target: `railway.toml` pins the Dockerfile, the
-`/api/health` probe, the restart policy, and a single replica. **Click-by-click
-console steps, variables, the volume mount and troubleshooting are in
-[RAILWAY_DEPLOY](docs/RAILWAY_DEPLOY.md).**
+**Render is the current hosting target.** Import this GitHub repository as a Render Blueprint (`render.yaml`): one paid Docker Web Service, a 1 GB disk mounted at `/data/matchlens`, and HTTPS `onrender.com` address. See [RENDER_DEPLOY](docs/RENDER_DEPLOY.md) for the click-by-click steps and the free-preview limitations. The prior [Railway setup](docs/RAILWAY_DEPLOY.md) remains available as a fallback.
 
 Provider payloads are licensed and are **not** in the image. On first boot the
 container fetches one complete real match from the provider's public repository,
@@ -136,11 +133,7 @@ verifies it, and imports it onto the volume; until that finishes the synthetic
 library is fully usable. The fetch is idempotent, bounded, and cannot fail the
 boot.
 
-**Status at submission:** the deployment path is implemented and verified
-locally (container contract checked by `scripts/verify_deployment.py`, HTTP
-surface exercised against a volume-backed dataset). **No public URL exists yet** —
-it is created in the Railway console, and the demo video is recorded by the
-entrant. Neither is claimed to exist here.
+**Deployment verification:** Docker CI builds and runs the actual image, tests the HTTP/API paths, imports a real match on a volume, and checks it survives a container restart. **Render itself has not yet been deployed or publicly tested.** A real public URL must be generated in Render and validated by the entrant; the demo video still needs to be recorded and published.
 
 ---
 
