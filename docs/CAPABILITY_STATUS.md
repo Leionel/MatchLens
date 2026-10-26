@@ -1,7 +1,8 @@
 # MatchLens Capability Status (single current matrix)
 
-**Updated**: 2026-10-25 (Prompt 2.1 remediation)
-**Code baseline**: `1af5fc6` + Prompt 2.1 remediation
+**Updated**: 2026-10-26 (R6.2 final competition sprint)
+**Code baseline**: `057f062` (tag `v6.1-competition-baseline`) + R6.2
+**Round record**: `R6_2_RESULTS.md`
 **Planning authority**: `PRODUCT_UPGRADE_ROADMAP.md` (work items `A-01`…`F-08`)
 **Architecture contract**: `NEXT_GENERATION_ARCHITECTURE.md`
 **Rule**: code + an executed test/receipt is the status source. A checked box in a
@@ -52,7 +53,7 @@ roadmap; it is not a phase claim.
 | CAP-05 | Content-addressed DatasetRevision | A | Implemented & Verified | `catalog.content_revision_from_events` | rail version | revision tests | migrate pre-revision runs |
 | CAP-06 | Licensed StatsBomb import | B | Implemented & Verified | `ingest.py` + completeness verifier + receipt + manifest merge | hub label | `test_data_contract.py`, `test_statsbomb_corpus.py` | payloads stay git-ignored; partial import preserves the catalog; paths are POSIX and hashes verified |
 | CAP-07 | Real 2022 final full analysis | B | Implemented & Verified | `sb_3869685` in the ingested corpus | hub + match centre | `test_imported_match_reproduces_the_declared_score` | metrics are heuristic (CAP-09/CAP-10 still open) |
-| CAP-08 | Metrics Registry | A | Implemented & Verified | `metrics.py` team×window receipts | charts, Ask, Investigation, Story | fifth-pass metric tests | story phase chapters still count events directly (`B-04`) |
+| CAP-08 | Metrics Registry | A | Implemented & Verified (R6.2) | `metrics.py` team×window receipts; Match Detail reads `.match` and shows the live window separately | totals row, window strip, charts, Ask, Investigation, Story | fifth-pass metric tests + `test_r6_2_boundaries.py` window counterexamples | narrative counts still come from `PHASE_METRIC_IDS`, not a per-chapter receipt set (`B-04` partly open) |
 | CAP-09 | Calibrated xG model | B | Research Required | `models/xg.py` heuristic | reports `not_calibrated` | metric tests | calibration remains outstanding |
 | CAP-10 | xT grid/fitting | B | Implemented but Partial | `models/xt.py` | Validation Lab | existing tests | static grid; not fitted on complete data |
 | CAP-11 | OAAI | B | Implemented & Verified | `oaai.py` + `compute_oaai_contribution_ledger` | OAAI timeline/investigation | ledger recompute tests | heuristic activity index, not momentum or causality |
@@ -99,6 +100,10 @@ roadmap; it is not a phase claim.
 | CAP-50 | R6 product information architecture | D | Implemented & Verified | static export + existing APIs | Match Hub, Match Detail, Tactical Explorer, Intelligence Studio; Professional tools menu; contextual replay/evidence | `r6.spec.ts`, responsive/a11y, screenshots | producer/research remain token-based tools |
 | CAP-51 | Interaction correctness (Space/history/seek/clock) | D | Implemented & Verified | page state layer | replay draft-on-release, one-seek guard, popstate without push, zero-clock guard, match-scoped async results | R6 Playwright interaction suite | no distributed session store |
 | CAP-52 | R6.1 semantic and cancellation correctness | D | Implemented & Verified | owner-scoped live-cancel endpoint + cooperative MAF cancellation + agent-run reads | signed OAAI wording with neutral team choice; model availability/current source/latest run split; cross-match clock verify-or-block; server-confirmed cancel; phone tools and section tabs | 3 new backend tests, 7 new R6 browser tests, axe/overflow suite | deterministic cancellation is exercised without a paid model request |
+| CAP-53 | Measurement scope honesty (R6.2) | B/D | Implemented & Verified | `readReceipt`/`matchWindowLabel` + `.match` vs `.current` | Match Detail totals row, live-window strip, scoreboard possession scope | `test_r6_2_boundaries.py` (window counterexample on `sb_3869685`), R6.2 browser "match totals" | `.previous` window still unlabelled where used |
+| CAP-54 | Event display vs event drawing (R6.2) | D | Implemented & Verified | — | `lib/eventValidity.ts`; feed lists all readable events, pitch draws located segments only | R6.2 browser "feed completeness" and "key event" | provider payloads that omit endpoints stay undrawable by design |
+| CAP-55 | Investigation context isolation (R6.2) | C/D | Implemented & Verified | live match-id guard + existing server cancel endpoint | stale-result banner, match-switch reset, paid-run cancellation | R6.2 browser "match switch" and "stale label" | deterministic runs are kept and labelled rather than cancelled |
+| CAP-56 | Story/evidence interval convention (R6.2) | A | Implemented & Verified | `stories._in_phase` half-open, `_tiles` invariant | chapters, metric refs, claim refs | `test_r6_2_boundaries.py` boundary and no-future tests | narrative counts still assembled per phase (B-04) |
 
 ---
 
