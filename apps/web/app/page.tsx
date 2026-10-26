@@ -761,6 +761,23 @@ export default function MatchLensCockpit() {
     setIsDrawerOpen(true);
   };
 
+  /**
+   * Clicking an event id inside the evidence drawer must not just update an
+   * invisible selection: the reader asked to see that event. Jump to the match
+   * view, align the replay clock to the event's own second, and let the pitch
+   * and event feed show the selection.
+   */
+  const selectEventFromEvidence = async (eventId: string) => {
+    setSelectedEventId(eventId);
+    const t = evidence?.events?.find((event) => event.id === eventId)?.t;
+    const onMatchView = activeWorkspace === "match_center" || activeWorkspace === "tactical_lab";
+    if (typeof t === "number" && Number.isFinite(t) && !onMatchView) {
+      const aligned = await seekTo(Math.round(t));
+      if (!aligned) return;
+    }
+    if (!onMatchView) selectWorkspace("match_center");
+  };
+
   return (
     <main className="matchlens-app-root" style={{ background: "var(--pitch-bg)", minHeight: "100vh" }}>
       {/* 1. Tactical Header (Top Control Center) */}
@@ -1031,7 +1048,7 @@ export default function MatchLensCockpit() {
           evidence={evidence}
           players={state?.players}
           locale={locale}
-          onSelectEvent={(id) => setSelectedEventId(id)}
+          onSelectEvent={(id) => void selectEventFromEvidence(id)}
           onSelectSequence={(seqId) => setSelectedSeqId(seqId)}
           onInspectReceipt={(id) => inspect(id)}
         />

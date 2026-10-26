@@ -1980,7 +1980,23 @@ async def featured_investigation(request: Request):
             if not points:
                 fallback_reason = f"{mid}: no OAAI change point inside the replayable clock"
                 continue
-            strongest = max(points, key=lambda cp: abs(float(cp.get("oaai_amplitude") or 0)))
+            ranked_points = sorted(
+                points,
+                key=lambda cp: abs(float(cp.get("oaai_amplitude") or 0)),
+                reverse=True,
+            )
+            # Moments with a recorded shot among their contributors are the
+            # ones a deterministic investigation can usually support with a
+            # window comparison; prefer them, but never invent one.
+            strongest = next(
+                (
+                    cp
+                    for cp in ranked_points
+                    if any(c.get("kind") == "shot" for c in (cp.get("top_contributors") or []))
+                ),
+                ranked_points[0],
+            )
+            shot_backed = any(c.get("kind") == "shot" for c in (strongest.get("top_contributors") or []))
             contributors = [
                 c
                 for c in (strongest.get("top_contributors") or [])
@@ -2022,6 +2038,7 @@ async def featured_investigation(request: Request):
                     "oaai_amplitude": amplitude,
                     "change_type": strongest.get("change_type"),
                     "claim_level": strongest.get("claim_level", 2),
+                    "shot_backed": shot_backed,
                     "disclaimer": strongest.get("disclaimer"),
                 },
                 "what_changed": (
@@ -2035,7 +2052,9 @@ async def featured_investigation(request: Request):
                 ),
                 "why_investigate": (
                     f"Strongest recorded swing on this match's activity curve inside the replayable clock, "
-                    f"backed by {len(contributors)} supporting recorded event(s)."
+                    f"backed by {len(contributors)} supporting recorded event(s)"
+                    + (f" including a recorded {next(c['kind'] for c in contributors if c.get('kind') == 'shot')}" if shot_backed else "")
+                    + "."
                 ),
                 "question": (
                     f"What produced {lead_name}'s attacking activity change around {minute}'?"
@@ -2076,7 +2095,8 @@ async def featured_investigation(request: Request):
         "algorithm": (
             "strongest |OAAI amplitude| change point within the replayable clock on the "
             "analysis-ready match ranked by provider provenance then recorded event count; "
-            "deterministic, no model called"
+            "shot-backed change points are preferred because a window comparison can "
+            "support them; deterministic, no model called"
         ),
     }
     eng.featured_cache[signature] = response
