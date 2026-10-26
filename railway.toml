@@ -1,0 +1,29 @@
+# Railway service configuration.
+#
+# One container, one replica, one volume. The image runs FastAPI with the static
+# Next.js export mounted at "/", so there is no second service and no database.
+#
+# Anything not expressed here (volume mount, variables, replica count) is a
+# dashboard step; see docs/RAILWAY_DEPLOY.md.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+# Keep the build context small: licensed payloads are excluded in .dockerignore
+# and are fetched at runtime instead.
+watchPatterns = [
+  "apps/web/**",
+  "services/api/**",
+  "scripts/**",
+  "data/source_manifest.json",
+  "data/corpus_statsbomb.json",
+  "Dockerfile",
+  "docker-entrypoint.sh",
+]
+
+[deploy]
+# Railway's edge probes this path; it answers without a model key.
+healthcheckPath = "/api/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

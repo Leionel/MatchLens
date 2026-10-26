@@ -10,3 +10,8 @@
 **/.pytest_cache
 spikes
 evidence
+# Licensed provider payloads never enter a build context or an image.
+data/datasets
+data/raw
+data/**/*.json.tmp
+.pytest-tmp

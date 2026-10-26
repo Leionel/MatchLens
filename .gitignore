@@ -28,3 +28,9 @@ apps/web/e2e/.artifacts/
 apps/web/e2e/.playwright-report/
 apps/web/e2e/.auth.json
 
+# Local verification scratch (pytest basetemp, simulated deployment volume)
+.pytest-tmp/
+.vol-test/
+
+# Local agent workspace notes
+.workbuddy/
