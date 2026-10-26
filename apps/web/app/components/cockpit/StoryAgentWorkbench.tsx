@@ -679,7 +679,7 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
             <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 12, lineHeight: 1.5 }}>
               {isZh
                 ? `客观量化计算当前 OAAI 攻防动量潮汐窗口 (${clock(state.at - 120)}–${clock(state.at)}) 内各触球动作的正向贡献权重。`
-                : `Calculates objective contribution weights for actions occurring within the active OAAI momentum wave window (${clock(state.at - 120)}–${clock(state.at)}).`}
+                : `Calculates objective contribution weights for actions occurring within the active OAAI activity window (${clock(state.at - 120)}–${clock(state.at)}).`}
             </p>
 
             {/* Top Contributing Actions */}

@@ -3,6 +3,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { CockpitState, InvestigationSeed } from "./types";
 import { Locale } from "../../lib/i18n";
+import { AgentCollaboration, CollaborationSummary } from "./AgentCollaboration";
+import { BroadcastOverlay, OverlayProvenance } from "../BroadcastOverlay";
 
 interface InvestigationPanelProps {
   state: CockpitState;
@@ -105,6 +107,7 @@ type Plan = {
   not_inferable: string[];
   unresolved: string[];
   required_scope: string[];
+  collaboration?: CollaborationSummary | null;
 };
 
 const statusTone: Record<string, string> = {
@@ -305,6 +308,12 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
    * jump; a running clock drifts slowly, so only a real move is labelled.
    */
   const momentDelta = resultScope ? Math.abs(resultScope.asOf - currentAsOf) : 0;
+  const contextProvenance = state.match_context?.provenance_kind;
+  const overlayProvenance: OverlayProvenance =
+    contextProvenance === "provider_payload" || contextProvenance === "provider_schema_excerpt"
+      ? contextProvenance
+      : "synthetic";
+
   const staleResult = Boolean(resultScope) && (momentDelta > 30 || (state.paused && momentDelta > 1));
 
   const run = useCallback(
@@ -649,7 +658,7 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
           <header className="r6-result-head">
             <div className="r6-result-kicker">
               <span>{isZh ? "调查结论" : "Conclusion"}</span>
-              <span className="r6-result-verdict" data-verdict={plan.gate_preview.status}>
+              <span className="r6-result-verdict" data-testid="investigation-verdict" data-verdict={plan.gate_preview.status}>
                 {verdictLabel(plan.gate_preview.status, isZh ? "zh" : "en")}
               </span>
             </div>
@@ -692,6 +701,15 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
                   : `This investigation formed no conclusion for the ${plan.focus_type} focus at ${plan.as_of}s (${plan.state}). Try another moment, another focus, or let the replay reach recorded actions.`}
             </div>
           )}
+
+          <AgentCollaboration
+            collaboration={plan.collaboration}
+            stateHistory={plan.state_history}
+            toolReceiptCount={plan.tool_receipts.length}
+            agentStatus={plan.agent_status}
+            agentError={plan.agent_error}
+            locale={locale}
+          />
 
           <section className="r6-result-section" aria-labelledby="r6-result-evidence">
             <h5 id="r6-result-evidence">{isZh ? "依据：记录到的动作" : "Evidence: recorded actions"}</h5>
@@ -780,6 +798,30 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
               </span>
             )}
           </div>
+
+          {plan.gate_preview.status === "approved" && (
+            <section className="r6-result-section" aria-labelledby="r6-result-overlay">
+              <h5 id="r6-result-overlay">{isZh ? "转播预览" : "Broadcast preview"}</h5>
+              <BroadcastOverlay
+                homeTeam={state.match_context?.home_team_name || state.teams?.H || "Home"}
+                awayTeam={state.match_context?.away_team_name || state.teams?.N || "Away"}
+                score={state.score}
+                asOf={Number(plan.as_of)}
+                headline={plan.gate_preview.statement || plan.findings[0]?.statement || plan.gate_preview.assertion}
+                verdict={plan.gate_preview.status}
+                refs={plan.gate_preview.refs}
+                claimLevel={plan.gate_preview.claim_level}
+                provenance={overlayProvenance}
+                registered={plan.gate_preview.persisted}
+                locale={locale}
+              />
+              <p className="r6-overlay-note">
+                {isZh
+                  ? "预览使用同一条已通过门禁的主张、同一比赛时间与同一组证据引用；正式导出到 Rundown 仍需制作人权限。"
+                  : "The preview uses the same gate-approved claim, match time and evidence refs; exporting to a rundown still requires producer scope."}
+              </p>
+            </section>
+          )}
 
           {/* Technical receipts stay available, but they are not the answer. */}
           <details className="r6-result-details" data-testid="investigation-technical">

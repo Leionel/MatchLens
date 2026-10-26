@@ -1,13 +1,16 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { CockpitState, InspectorPayload } from "./types";
+import { CockpitState, InspectorPayload, PerspectiveId } from "./types";
 import { EvidenceRail } from "./EvidenceRail";
 import { Locale } from "../../lib/i18n";
+import { countText, readReceipt } from "../../lib/receipts";
 
 interface MatchInsightRailProps {
   state: CockpitState;
   locale?: Locale;
+  /** Fan, coach and media read the same fact with different emphasis. */
+  perspective?: PerspectiveId;
   onInvestigateChangePoint: (payload: {
     focus_type: "oaai_point";
     focus_id: string;
@@ -53,6 +56,7 @@ const pointDirection = (point: any): { team: "H" | "N" | null; turn: boolean } =
 export const MatchInsightRail: React.FC<MatchInsightRailProps> = ({
   state,
   locale = "zh",
+  perspective = "coach",
   onInvestigateChangePoint,
   onAsk,
   onSelectEvent,
@@ -190,6 +194,10 @@ export const MatchInsightRail: React.FC<MatchInsightRailProps> = ({
     ? (state.sequences || []).find((sequence) => sequence.event_ids.includes(contributor.event_id))
     : null;
   const primaryDirection = top ? pointDirection(top) : null;
+  const leadTeam: "H" | "N" = primaryDirection?.team === "N" ? "N" : "H";
+  const leadName = leadTeam === "N" ? awayName : homeName;
+  const shotsCur = readReceipt(state.receipts, `${leadTeam}.shots.current`);
+  const shotsPrev = readReceipt(state.receipts, `${leadTeam}.shots.previous`);
 
   return (
     <aside className="r6-insight-rail" aria-label={isZh ? "AI 洞察与证据" : "AI insights and evidence"}>
@@ -202,30 +210,77 @@ export const MatchInsightRail: React.FC<MatchInsightRailProps> = ({
       </header>
 
       {top ? (
-        <article className="r6-insight-card" data-testid="match-insight-primary" data-direction={primaryDirection?.team || "neutral"}>
+        <article
+          className="r6-insight-card"
+          data-testid="match-insight-primary"
+          data-direction={primaryDirection?.team || "neutral"}
+          data-perspective={perspective}
+        >
           <div className="r6-insight-meta">
             <span className="r6-time">{clock(top.at)}</span>
             <span className="r6-level">{isZh ? "Level 2 · 指标归因" : "Level 2 · metric attribution"}</span>
           </div>
           <h3 data-testid="match-insight-title">{describePoint(top)}</h3>
-          <p>
-            {isZh
-              ? `OAAI 平滑值 ${signed(Number(top.oaai_amplitude || 0))}（正值 = 主队活动占优，负值 = 客队活动占优）。这是公式分解，不是战术因果。`
-              : `Smoothed OAAI ${signed(Number(top.oaai_amplitude || 0))} (positive = home activity lead, negative = away). Formula attribution, not tactical causation.`}
-          </p>
-          {contributor && (
+
+          {/* Why it matters. Same fact, different emphasis — never a different
+              number. A fan gets the consequence, a coach the comparison, a
+              producer the line that could go on air. */}
+          {perspective === "fan" && (
+            <p data-testid="match-insight-why">
+              {isZh
+                ? `${leadName} 在这段时间的记录活动最强，比赛的重心刚向他们倾斜。`
+                : `${leadName} produced the strongest recorded activity in this spell; the match tilted their way.`}
+            </p>
+          )}
+
+          {perspective === "coach" && (
+            <div className="r6-insight-compare" data-testid="match-insight-why">
+              <div>
+                <span>{isZh ? "上一窗口射门" : "Shots, previous"}</span>
+                <b>{countText(shotsPrev)}</b>
+              </div>
+              <span className="r6-compare-arrow" aria-hidden="true">→</span>
+              <div>
+                <span>{isZh ? "当前窗口射门" : "Shots, current"}</span>
+                <b>{countText(shotsCur)}</b>
+              </div>
+              <p>
+                {isZh
+                  ? `OAAI 平滑值 ${signed(Number(top.oaai_amplitude || 0))}（正值 = 主队占优）。这是公式分解，不是战术因果。`
+                  : `Smoothed OAAI ${signed(Number(top.oaai_amplitude || 0))} (positive = home leads). Formula attribution, not tactical causation.`}
+              </p>
+            </div>
+          )}
+
+          {perspective === "media" && (
+            <div className="r6-insight-lower-third" data-testid="match-insight-why">
+              <span className="r6-lower-third-tag">{isZh ? "可上屏字幕" : "Lower-third ready"}</span>
+              <p>
+                {clock(top.at)} · {describePoint(top)} ·{" "}
+                {contributor ? `${contributor.actor || "—"} ${contributor.kind}` : signed(Number(top.oaai_amplitude || 0))}
+              </p>
+            </div>
+          )}
+
+          {contributor && perspective !== "media" && (
             <p className="r6-insight-evidence">
               {isZh ? "最强记录动作" : "Top recorded action"}:{" "}
               <b>{contributor.actor || "Unknown"}</b> · {contributor.kind} · {clock(contributor.t)}
             </p>
           )}
+
           {/* The reader is entitled to know what this card cannot decide before
               they act on it, not after they open a disclosure. */}
           <p className="r6-insight-limit" data-testid="match-insight-limit">
-            {isZh
-              ? "无法判断：无球阵型与压迫意图未观测；这是指标分解，不是战术因果。"
-              : "Cannot decide: off-ball shape and pressing intent are not observed. This is metric attribution, not tactical causation."}
+            {perspective === "fan"
+              ? isZh
+                ? "无法判断：无球跑动未观测，镜头之外的阵型不在数据里。"
+                : "Cannot decide: off-ball movement is not observed; shape off camera is not in the data."
+              : isZh
+                ? "无法判断：无球阵型与压迫意图未观测；这是指标分解，不是战术因果。"
+                : "Cannot decide: off-ball shape and pressing intent are not observed. This is metric attribution, not tactical causation."}
           </p>
+
           <div className="r6-insight-actions">
             {primaryDirection?.team ? (
               <button

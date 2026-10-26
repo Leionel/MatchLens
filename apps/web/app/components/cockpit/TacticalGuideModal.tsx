@@ -102,7 +102,7 @@ export const TacticalGuideModal: React.FC<TacticalGuideModalProps> = ({
           }}
         >
           {[
-            { id: "oaai", labelZh: "1. OAAI 攻防动量", labelEn: "1. OAAI Momentum" },
+            { id: "oaai", labelZh: "1. OAAI 活动指数", labelEn: "1. OAAI activity index" },
             { id: "s2_s3", labelZh: "2. S2 序列与九宫格", labelEn: "2. S2 & S3 Zones" },
             { id: "corridors", labelZh: "3. 进攻三走廊", labelEn: "3. Attacking Corridors" },
             { id: "recovery", labelZh: "4. 6s 反抢恢复", labelEn: "4. 6s Recovery" },
@@ -157,33 +157,33 @@ export const TacticalGuideModal: React.FC<TacticalGuideModalProps> = ({
               >
                 {isZh
                   ? "💡 核心公式：OAAI = λ xT_gain + μ final_third_entries + ν box_actions。度量已记录客观事件聚合的攻防活动强度。"
-                  : "💡 Core formula: OAAI aggregates spatial xT gain, final third entries, and box events into objective attack intensity."}
+                  : "💡 Core formula: OAAI aggregates spatial xT gain, final-third entries and box events into one activity weight. It is not momentum and not a measure of control."}
               </div>
 
               <h4 style={{ color: "var(--text-primary)", fontWeight: 700, fontSize: 18 }}>
-                {isZh ? "如何阅读 OAAI 攻防动量波浪图？" : "How to Read the OAAI Momentum Wave?"}
+                {isZh ? "如何阅读 OAAI 活动指数曲线？" : "How to Read the OAAI Activity Curve?"}
               </h4>
               <ul style={{ paddingLeft: 20, margin: 0, display: "flex", flexDirection: "column", gap: 10 }}>
                 <li>
                   <strong style={{ color: "var(--text-emerald)" }}>{isZh ? "零轴上方 (+)" : "Above Zero Line (+)"}: </strong>
                   {isZh
-                    ? "主队（Harbor FC）处于进攻推进强势期，连续产生高价值向前传球、前场逼抢或射门。"
-                    : "Home team (Harbor FC) dominates attacking progression and forward territorial pressure."}
+                    ? "主队（Harbor FC）在这段时间的记录活动更强：更多向前推进、进入前场与射门被计入公式。"
+                    : "The home side recorded more attacking activity in this spell: more progression, final-third entries and shots entered the formula."}
                 </li>
                 <li>
                   <strong style={{ color: "var(--text-cyan)" }}>{isZh ? "零轴下方 (-)" : "Below Zero Line (-)"}: </strong>
                   {isZh
-                    ? "客队（Northbridge United）压制或打出快速防守反击，主导进攻活动。"
-                    : "Away side (Northbridge United) is applying counter-pressure or dominating attacking sequences."}
+                    ? "客队（Northbridge United）在这段时间的记录活动更强。"
+                    : "The away side recorded more attacking activity in this spell."}
                 </li>
                 <li>
                   <strong style={{ color: "var(--text-gold)" }}>{isZh ? "CP 变化点 (Change-Points)" : "Change-Points (CP Icons)"}: </strong>
                   {isZh
-                    ? "图上的圆圈（CP-01, CP-02...）表示攻防动量发生突变的关键节点。点击圆圈可直接查看驱动该突变的 Top 支撑动作与归因分解。"
-                    : "Circles represent statistical momentum inflection points. Click any CP to see causal event attribution."}
+                    ? "图上的圆圈（CP-01, CP-02...）表示活动指数变化最明显的时间点。点击圆圈可查看驱动该变化的记录动作与指标归因分解。"
+                    : "Circles mark the moments where the activity index changed most. Click a CP to see the recorded actions and metric attribution behind it."}
                 </li>
                 <li>
-                  <strong style={{ color: "var(--text-primary)" }}>{isZh ? "因果滤波 vs 赛后双边平滑" : "Causal vs. Bilateral Smoothing"}: </strong>
+                  <strong style={{ color: "var(--text-primary)" }}>{isZh ? "实时滤波 vs 赛后双边平滑" : "Causal vs. Bilateral Smoothing"}: </strong>
                   {isZh
                     ? "实时因果滤波（Causal）仅计算当前时钟以前的事件，符合直播实况推演；赛后双边平滑（Bilateral）使用前后对称卷积核，波形更加优雅平滑，适合赛后全场复盘。"
                     : "Causal mode only uses historical data (<= t) for live streaming; Bilateral mode uses forward-backward smoothing for post-match analysis."}

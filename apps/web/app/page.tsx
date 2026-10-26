@@ -98,7 +98,10 @@ export default function MatchLensCockpit() {
   const inspectionRequest = useRef(0);
 
   // Theme & Language Initialization & Sync
-  const [locale, setLocale] = useState<Locale>("zh");
+  // Submission materials and the demo are English, so the product opens in
+  // English. A Chinese-language browser keeps its own default on first visit;
+  // an explicit choice from the switcher always wins.
+  const [locale, setLocale] = useState<Locale>("en");
   const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   useEffect(() => {
@@ -116,6 +119,8 @@ export default function MatchLensCockpit() {
       const savedLocale = localStorage.getItem("matchlens-locale");
       if (savedLocale === "zh" || savedLocale === "en") {
         setLocale(savedLocale);
+      } else if (typeof navigator !== "undefined" && /^zh\b/i.test(navigator.language || "")) {
+        setLocale("zh");
       }
     } catch {}
   }, []);

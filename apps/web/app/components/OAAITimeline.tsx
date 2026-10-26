@@ -619,7 +619,7 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
           aria-label={
             isZh
               ? `进攻活动指数动量曲线，已观测 ${formatClock(observedEnd)}，${changePoints.length} 处指标拐点`
-              : `Attacking activity momentum curve, ${formatClock(observedEnd)} observed, ${changePoints.length} metric change points`
+              : `Attacking activity curve, ${formatClock(observedEnd)} observed, ${changePoints.length} metric change points`
           }
           style={{ width: "100%", height: "auto", cursor: "crosshair", userSelect: "none" }}
           onClick={(e) => {

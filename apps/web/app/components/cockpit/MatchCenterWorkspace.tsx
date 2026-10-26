@@ -525,6 +525,7 @@ export const MatchCenterWorkspace: React.FC<MatchCenterWorkspaceProps> = ({
         <MatchInsightRail
           state={state}
           locale={locale}
+          perspective={perspective}
           onInvestigateChangePoint={onInvestigateMoment}
           onAsk={onOpenIntelligence}
           onSelectEvent={onSelectEvent}

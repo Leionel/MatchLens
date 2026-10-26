@@ -964,3 +964,237 @@ body .inspector-drawer.open { display: flex; transform: none; }
   .r6-event-context { gap: 6px; padding: 9px 11px; }
   .r6-event-context-actions { margin-left: 0; width: 100%; justify-content: space-between; }
 }
+
+/* ── Agent collaboration ───────────────────────────────────────────────────
+   Shows the division of labour between the two stages without asking the
+   reader to open a raw trace, and refuses to stage a conversation when only
+   the deterministic planner ran. */
+.r6-collab {
+  display: grid;
+  gap: 12px;
+  padding: 14px 15px;
+  border-radius: var(--radius-panel);
+  border: 0.5px solid var(--glass-border);
+  background: color-mix(in srgb, var(--slate-1) 62%, transparent);
+}
+.r6-collab-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.r6-collab-head h5 { margin: 0; font-size: 12px; font-weight: 800; letter-spacing: .05em; color: var(--text-secondary); }
+.r6-collab-mode {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 0.5px solid var(--glass-border-bright);
+  color: var(--text-tertiary);
+}
+.r6-collab-mode[data-live="true"] {
+  border-color: color-mix(in srgb, var(--green-9) 55%, transparent);
+  color: var(--text-emerald);
+}
+.r6-collab-flow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.r6-collab-flow > li {
+  display: grid;
+  gap: 5px;
+  align-content: start;
+  padding: 10px 11px;
+  border-radius: 8px;
+  border: 0.5px solid var(--glass-border);
+  background: color-mix(in srgb, var(--slate-2) 60%, transparent);
+}
+.r6-collab-role {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--tech-cyan);
+}
+.r6-collab-flow > li > b { font-size: 13px; color: var(--text-primary); overflow-wrap: anywhere; }
+.r6-collab-flow p { margin: 0; font-size: 12px; line-height: 1.45; color: var(--text-secondary); }
+.r6-collab-flow code { font-family: var(--font-mono); font-size: 11px; color: var(--text-primary); }
+.r6-collab-flow small { font-size: 11px; color: var(--text-tertiary); overflow-wrap: anywhere; }
+.r6-collab-decision { display: grid; gap: 2px; padding-top: 5px; border-top: 0.5px solid var(--glass-border); }
+.r6-collab-decision span { font-family: var(--font-mono); font-size: 11px; font-weight: 700; }
+.r6-collab-decision em { font-style: normal; font-size: 11px; line-height: 1.45; color: var(--text-tertiary); }
+.r6-collab-one { display: grid; gap: 6px; }
+.r6-collab-one p { margin: 0; font-size: 12px; line-height: 1.55; color: var(--text-secondary); }
+.r6-collab-one small { font-size: 11px; color: var(--text-tertiary); overflow-wrap: anywhere; }
+.r6-collab-degraded {
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  border: 0.5px solid color-mix(in srgb, var(--amber-9) 50%, transparent);
+  color: var(--amber-gold);
+}
+.r6-collab-stages > summary { cursor: pointer; font-size: 11px; font-weight: 750; color: var(--text-tertiary); }
+.r6-collab-stages ol { margin: 8px 0 0; padding-left: 18px; font-size: 11px; color: var(--text-tertiary); }
+.r6-collab-stages b { color: var(--text-secondary); }
+
+@media (max-width: 900px) {
+  .r6-collab-flow { grid-template-columns: 1fr; }
+}
+
+/* ── Perspective emphasis ──────────────────────────────────────────────────
+   The selector used to change nothing. It now changes what the insight leads
+   with, while the underlying fact, team and time stay identical. */
+.r6-insight-compare {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 9px 11px;
+  border-radius: 6px;
+  border: 0.5px solid var(--glass-border);
+  background: color-mix(in srgb, var(--slate-1) 55%, transparent);
+}
+.r6-insight-compare > div { display: grid; gap: 1px; }
+.r6-insight-compare span { font-size: 10px; color: var(--text-tertiary); }
+.r6-insight-compare b { font-family: var(--font-mono); font-size: 17px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.r6-compare-arrow { font-size: 14px; color: var(--text-tertiary); }
+.r6-insight-compare p { grid-column: 1 / -1; margin: 2px 0 0; font-size: 11px; line-height: 1.45; color: var(--text-tertiary); }
+
+.r6-insight-lower-third {
+  display: grid;
+  gap: 4px;
+  padding: 9px 11px;
+  border-left: 2px solid var(--amber-gold);
+  background: color-mix(in srgb, var(--amber-2) 40%, transparent);
+  border-radius: 0 6px 6px 0;
+}
+.r6-lower-third-tag {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--amber-gold);
+}
+.r6-insight-lower-third p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-primary); }
+
+/* ── Broadcast lower-third preview ─────────────────────────────────────────
+   One approved claim, its real match time, its real evidence refs, and a
+   provenance strip that never lets a simulated replay look like a live feed. */
+.r6-overlay {
+  display: grid;
+  gap: 0;
+  border-radius: var(--radius-panel);
+  overflow: hidden;
+  border: 0.5px solid var(--glass-border-bright);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--slate-1) 92%, black) 0%, color-mix(in srgb, var(--slate-2) 92%, black) 100%);
+}
+.r6-overlay-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  background: color-mix(in srgb, var(--slate-4) 85%, black);
+  border-bottom: 0.5px solid var(--glass-border);
+}
+.r6-overlay-badge {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  color: var(--amber-gold);
+}
+.r6-overlay[data-provenance="provider_payload"] .r6-overlay-badge { color: var(--text-emerald); }
+.r6-overlay-asof {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: .05em;
+}
+.r6-overlay-preview-tag {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--text-tertiary);
+}
+.r6-overlay-strap {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: stretch;
+  gap: 0;
+}
+.r6-overlay-scorebug {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--green-9) 18%, black);
+  border-right: 0.5px solid var(--glass-border);
+}
+.r6-overlay-scorebug span {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  color: var(--text-secondary);
+}
+.r6-overlay-scorebug b {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.r6-overlay-copy { display: grid; gap: 5px; padding: 12px 14px; }
+.r6-overlay-headline {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  font-weight: 650;
+  color: #fff;
+  text-wrap: pretty;
+  /* A lower-third is read in about three seconds, so it is clamped like one.
+     The full statement stays in the conclusion above. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.r6-overlay-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.r6-overlay-verdict {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--text-emerald);
+}
+.r6-overlay-verdict.rejected,
+.r6-overlay-verdict.withheld { color: var(--red-11); }
+.r6-overlay-verdict.qualified,
+.r6-overlay-verdict.disputed { color: var(--amber-gold); }
+.r6-overlay-refs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 14px 11px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  border-top: 0.5px solid var(--glass-border);
+}
+.r6-overlay-refs span { font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.r6-overlay-refs code {
+  font-family: var(--font-mono);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 0.5px solid var(--glass-border-bright);
+  color: var(--text-secondary);
+}
+.r6-overlay-note { margin: 0; font-size: 11px; line-height: 1.5; color: var(--text-tertiary); }
+
+@media (max-width: 560px) {
+  .r6-overlay-strap { grid-template-columns: 1fr; }
+  .r6-overlay-scorebug { border-right: 0; border-bottom: 0.5px solid var(--glass-border); justify-content: center; }
+  .r6-overlay-headline { font-size: 14px; }
+}
