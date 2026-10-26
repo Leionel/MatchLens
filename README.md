@@ -6,7 +6,7 @@ A football explanation is only worth airing if someone can check it. MatchLens t
 
 ![Match Detail: score, whole-match totals, a separately labelled live window, and an insight that states what it cannot decide](evidence/r6.2/browser-detail-1440.png)
 
-**Live demo:** public URL pending — deploy the tested single-container image using [Render Blueprint](docs/RENDER_DEPLOY.md) (`render.yaml`). Run it locally in about three minutes (below); no key, account or payment is needed for the full deterministic journey.
+**Live demo:** [p01--matchlens--zfs7xk57gw42.code.run](https://p01--matchlens--zfs7xk57gw42.code.run) — the public single-container deployment (Northflank). It runs the full deterministic journey anonymously: one real match (UEFA Euro 2020, England 2–1 Denmark) plus the synthetic scenarios are installed; model-agent mode is off there, and the UI says so. Run it locally in about three minutes (below) for the complete 80-match corpus; no key, account or payment is needed.
 
 ---
 
@@ -125,7 +125,7 @@ docker run --rm -p 8000:8000 -v matchlens-data:/data/matchlens matchlens
 open http://127.0.0.1:8000
 ```
 
-**Render is the current hosting target.** Import this GitHub repository as a Render Blueprint (`render.yaml`): one paid Docker Web Service, a 1 GB disk mounted at `/data/matchlens`, and HTTPS `onrender.com` address. See [RENDER_DEPLOY](docs/RENDER_DEPLOY.md) for the click-by-click steps and the free-preview limitations. The prior [Railway setup](docs/RAILWAY_DEPLOY.md) remains available as a fallback.
+**Current production:** the Northflank single container at the Live demo URL above (judge traffic: 0.1 vCPU / 256 MB observed — a 512 MB+ upgrade is recommended before heavy judging). **Render is the documented, tested hosting target** for a fresh paid deployment: import this GitHub repository as a Render Blueprint (`render.yaml`): one paid Docker Web Service, a 1 GB disk mounted at `/data/matchlens`, and HTTPS `onrender.com` address. See [RENDER_DEPLOY](docs/RENDER_DEPLOY.md) for the click-by-click steps and the free-preview limitations. The prior [Railway setup](docs/RAILWAY_DEPLOY.md) remains available as a fallback.
 
 Provider payloads are licensed and are **not** in the image. On first boot the
 container fetches one complete real match from the provider's public repository,
