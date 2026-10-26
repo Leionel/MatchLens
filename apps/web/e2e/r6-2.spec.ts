@@ -82,6 +82,11 @@ test.describe("R6.2 measurement windows", () => {
     await expect(windowStrip).toBeVisible();
     await expect(windowStrip).toContainText("Last 3 min");
     await expect(page.getByTestId("match-window-shots")).toContainText("0 / 0");
+    // The strip publishes the exact bounds it was measured over, so the reader
+    // can tell a quiet three minutes from a quiet match.
+    await expect(windowStrip).toContainText(
+      `${Math.round(receipts["H.shots.current"].start)}s–${Math.round(receipts["H.shots.current"].end)}s`,
+    );
 
     // Possession: the match share is a different number under a different scope.
     const possession = page.getByTestId("match-stat-possession");
