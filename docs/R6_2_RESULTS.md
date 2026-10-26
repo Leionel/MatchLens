@@ -157,8 +157,10 @@ suggestion-to-intent mapping in both languages. The file runs in the
 `real-match` CI job, which installs `sb_3795221`, so it is executed rather than
 skipped.
 
-Browser: `npx playwright test` → **47 passed, 1 skipped** (37 + 1 at baseline).
-Typecheck and production build: 0 errors.
+Browser: `npx playwright test` → **47 passed, 1 skipped locally** and
+**48 passed in CI** (`40323109566`); the local skip is the
+catalogued-but-not-installed case, which only exists in CI. Baseline was 37 + 1
+locally and 38/38 in CI. Typecheck and production build: 0 errors.
 
 The demo path is itself a test (`apps/web/e2e/demo-path.spec.ts`): hub →
 real match → labelled totals → insight limit → investigation → conclusion and
