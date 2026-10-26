@@ -45,6 +45,41 @@ happened. Set `MATCHLENS_BOOTSTRAP=0` to skip it entirely.
 
 ---
 
+## Verified in CI, not assumed
+
+`Container Build & Smoke (Docker)` builds this exact image on every push and
+runs it with a volume. The run at `40335144434`:
+
+```
+healthy after 4s
+matches listed: 87
+real match ready after 1s
+[bootstrap] seeded source_manifest.json (metadata only, no payloads)
+[bootstrap] downloaded events_3795221.json (3853 KiB)
+[bootstrap] downloaded lineups_3795221.json (26 KiB)
+[bootstrap] importing sb_3795221
+[bootstrap]   manifest: /data/matchlens/data/source_manifest.json (80 matches)
+[bootstrap]   sb_3795221  COMPLETE_VERIFIED  events=4691 end=7871.8s index=2-1 recorded=2-1 ok
+[bootstrap] sb_3795221 ready in 1.4s at /data/matchlens/data/datasets/sb_3795221.json
+```
+
+Then the container is restarted, and on the next boot:
+
+```
+analysis-ready provider matches after restart: 1
+[bootstrap] sb_3795221 already imported and verified; nothing to do
+```
+
+That is the important pair: the payload arrives from the provider at runtime
+(nothing is shipped), and the volume keeps it across restarts (nothing is
+re-downloaded).
+
+`scripts/verify_deployment.py` additionally checks the contract that Docker
+cannot see: every `COPY` source exists in the build context, the payload
+directories are excluded, the entrypoint has LF endings, `railway.toml` points
+at a route the app really serves, and a truncated dataset is repaired on the
+next boot.
+
 ## 1. Create the service
 
 Railway → **New Project** → **Deploy from GitHub repo** → `Leionel/MatchLens`.

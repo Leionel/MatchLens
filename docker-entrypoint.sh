@@ -45,7 +45,7 @@ if [ "${MATCHLENS_BOOTSTRAP:-1}" != "0" ]; then
   (
     MATCHLENS_DATA_DIR="$DATA_DIR" MATCHLENS_RUNTIME_DIR="$RUNTIME_DIR" \
       "/app/services/api/.venv/bin/python" /app/scripts/bootstrap_real_match.py 2>&1 \
-      | sed -u 's/^/[bootstrap] /'
+      | sed -u 's/^/  /'
   ) &
 else
   log "real-match bootstrap disabled (MATCHLENS_BOOTSTRAP=0)"
