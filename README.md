@@ -1,113 +1,171 @@
 # MatchLens AI
 
-**Football intelligence you can challenge.** Replay a continuous synthetic match, discover what changed, and inspect the events behind a real Analyst/Verifier explanation.
+### Football intelligence you can challenge.
 
-Repository: [Leionel/MatchLens](https://github.com/Leionel/MatchLens).
+A football explanation is only worth airing if someone can check it. MatchLens turns recorded match events into a claim, has a second agent try to break that claim, sends it through a publication gate, and lets you walk back to the exact events behind it — or challenge it.
 
-R0.2 uses Microsoft Agent Framework, DeepSeek Flash, FastAPI and Next.js. The match, statistics and publication predicates are deterministic; both agents use the actual model API. Public hosting and the final competition video are not yet available. See [current execution results](docs/R0.2_RESULTS.md) and [historical R0.1 results](docs/R0.1_RESULTS.md).
+![Match Detail: score, whole-match totals, a separately labelled live window, and an insight that states what it cannot decide](evidence/r6.2/browser-detail-1440.png)
 
-![Actual browser: real goal analysis, original as-of time and inspectable scoring event](evidence/r0.2/c-fan-1920.png)
+**Live demo:** no public URL yet — the Railway deployment path is ready and documented in [RAILWAY_DEPLOY](docs/RAILWAY_DEPLOY.md). Run it locally in about three minutes (below); no key, account or payment is needed for the full deterministic journey.
 
-## Run locally
+---
 
-Tested on Windows with PowerShell, Python3.13.9, `uv`0.6.6, Node24.16.0 and npm. Use Node22+ / Python3.13. Dependencies are locked in `services/api/uv.lock` and `apps/web/package-lock.json`.
+## The 30-second version
 
-```powershell
-Copy-Item .env.example .env
-# Set DEEPSEEK_API_KEY in .env using your editor. Never put it in client config.
-powershell -ExecutionPolicy Bypass -File scripts/run.ps1
+Most football tools give you numbers. Most LLM wrappers give you confident prose. MatchLens is built around the gap between them:
+
+| What usually happens | What MatchLens does instead |
+| --- | --- |
+| A model explains a moment. You either believe it or you do not. | A **Verifier** independently re-reads the same evidence, checks counterevidence, and can publish, narrow or withhold the claim. |
+| Numbers appear without a scope. | Every number carries the window it was measured over. A three-minute reading is never shown as a match total. |
+| "Possession is up" becomes "they are in control". | The claim is bounded to recorded events; off-ball shape and tactical cause are listed as *not inferable*. |
+| An explanation cannot be argued with. | You can challenge a registered claim and read the resulting revision. |
+
+That loop — **claim → verify → gate → evidence → challenge** — is the product. Everything else (match hub, tactical map, broadcast rundown) exists to give it somewhere real to land.
+
+---
+
+## What actually runs
+
+Three different things are easy to confuse, so the product labels them everywhere:
+
+| Layer | Status | How to see it |
+| --- | --- | --- |
+| **Deterministic engine** | Always on, free, no model call | The default investigation. Same input, same numbers, same conclusion. Every metric receipt is recomputed from the event log. |
+| **Real MAF two-agent run** | Requires `DEEPSEEK_API_KEY` and budget runway | Choose *Real Agent (uses model budget)* under **Advanced** in Intelligence Studio. Analyst and Verifier are two `Executor`s in one Microsoft Agent Framework `WorkflowBuilder`, each with its own tool registry. |
+| **Historical recorded model output** | Shipped as evidence, not re-run | `evidence/r0.2/runs/*.json`. Labelled as historical in the UI; never presented as a live run. |
+
+The investigation panel says which of these produced the plan you are reading, and the agent panel shows **which tools each stage actually called** — or says plainly that no model was called. A failed agent run degrades to the deterministic plan and says so; it never fabricates agent output.
+
+### Microsoft Agent Framework
+
+`services/api/matchlens/agents.py` builds a real `Agent(client=OpenAIChatCompletionClient(...), tools=[...])` per stage and a `WorkflowBuilder(start_executor=analyst).add_edge(analyst, verifier)` for the classic analyse path. The investigation path (`services/api/matchlens/investigation.py`) runs the same two roles with the same binding rules:
+
+```
+Analyst  → tools it chose itself (max 12) → typed claim draft → SHA-256 handoff
+Verifier → its own tools (max 6), including find_counterevidence → per-claim verdict
+Gate     → refs, scope, slots, numeric binding, unsupported-language rules
 ```
 
-Open **http://127.0.0.1:8000**. Subsequent starts can use `scripts/run.ps1 -SkipBuild`. Keep exactly one Uvicorn worker/replica. Without a key, the replay, statistics, source events and explicitly labeled fallback work; no model answer is simulated.
+The model can select tools; it cannot bypass the allow-list, per-tool budgets, receipt hashing, or the gate. One bounded format correction is allowed per stage, and it may not change the claim id, assertion or scope.
 
+---
 
-Optional, to enable bounded paid automatic analysis, set `MATCHLENS_AUTO_ANALYSE=1` in server `.env` before startup. Default is free detection only. Never raise/reset a ledger limit implicitly. The local development ledger currently has insufficient six-request runway; fresh inference requires a separately configured allowance.
+## Judge path (no key, no account)
 
-To inspect historical **real** A/C analyses without another paid request, copy only the selected run receipts into `.runtime/runs` before starting:
-
-```powershell
-New-Item -ItemType Directory -Force .runtime/runs | Out-Null
-Copy-Item evidence/r0.2/runs/run-14e303594906f796.json .runtime/runs/
-Copy-Item evidence/r0.2/runs/run-c-verify-a359468b.json .runtime/runs/
-```
-
-The loader checks the exact canonical snapshot and current publication gates; incompatible records are excluded. Imported cards say **Historical real analysis**. Original receipts stay unchanged; their factual presentation is rendered under the current bound-facts contract.
-
-Other platforms:
-
-```sh
+```bash
+git clone https://github.com/Leionel/MatchLens && cd MatchLens
 uv sync --project services/api --frozen
-npm --prefix apps/web ci
-npm --prefix apps/web run build
-cd services/api
-uv run uvicorn matchlens.main:app --host 127.0.0.1 --port 8000 --workers 1
+npm --prefix apps/web ci && NODE_OPTIONS= npm --prefix apps/web run build
+cd services/api && uv run uvicorn matchlens.main:app --host 127.0.0.1 --port 8000 --workers 1
 ```
 
-Development: start FastAPI as above and `npm --prefix apps/web run dev` in another terminal. Next's dev server proxies `/api`; the built application needs only Python at runtime.
+Open **http://127.0.0.1:8000**. Then, in order:
 
-## Try the football story
+1. **Match Hub** — real provider matches are listed first, each marked `Real data`; synthetic fixtures say `Demo`.
+2. **Open a match** (1 click) — you land on Match Detail with the score, whole-match totals, a *separately labelled* live window, and the strongest recorded activity change.
+3. **Investigate this change** (1 click) — the investigation runs at that exact moment and returns a conclusion, its evidence, alternative explanations, and what cannot be decided.
+4. **Read the agent panel** — it tells you whether a model ran, which tools each stage called, and what the gate decided.
+5. **Trace event** / **Back to this moment** — the result is bound to real events and to its own match time.
+6. Optional: register the claim, then **challenge** it and read the revision.
 
-1. Press **Play Replay**. Default30x plays the 12-minute synthetic match in24 seconds. Event-boundary checks surface possession divergence, recovery-to-shot chains and goals without requiring chapter selection.
-2. With `MATCHLENS_AUTO_ANALYSE=1`, a configured server key and six-request runway, a detected moment can launch a real Analyst/Verifier workflow while playback continues. At most two auto runs/session, no repeated automatic charge for a candidate. With auto off or insufficient allowance, detection and source facts still work.
-3. Read the card's **as-of** time. **Fan View** leads with a concise finding; **Analyst View** adds frozen-window comparisons and limits. Both use the same accepted claim and refs; switching is free.
-4. **Challenge with Evidence** opens a keyboard-accessible drawer. Select a receipt, an event ID or a scoring/recovery chain; inspect exact coordinates and original JSON. **Inspect Agent Trace** reveals actual tools and handoff. Overlay preview reuses the approved summary and its original score/time.
-5. Investigate an automatically detected moment at its actual timestamp, or use A/B/C chapter shortcuts. Focus pauses; Exit Focus resumes. The final recap links approved findings at their original times.
+Two clicks from the front page to a formed, gated conclusion. No producer token is needed for any of it; the broadcast preview is generated from the approved claim inside the studio.
 
-The replay is a **12-minute demonstration match**, not regulation football or live Premier League data. Harbor FC, Northbridge United and all players are fictional. Original SVG event map; no match footage or off-ball player tracking.
+To see the synthetic replay the brief asks for, open a `Demo · Synthetic` match from the hub and press play — a continuous 12-minute match, about 24 seconds at 30×.
 
-## How it works
+---
 
-```mermaid
-flowchart LR
-    E[Validated synthetic events] --> R[Reducer / intervals]
-    R --> M[Window metrics / candidate]
-    M --> S[Immutable evidence]
-    S --> A[MAF Analyst and tools]
-    A --> V[MAF Verifier and fresh evidence]
-    V --> G[Schema / reference / publication gates]
-    G --> F[FastAPI / SSE]
-    F --> U[Next.js / inspectable card]
+## Data
+
+| Source | What it is | How it gets here |
+| --- | --- | --- |
+| **Synthetic match engine** | 12-minute simulated fixtures with a continuous event stream, 7 scenarios | Generated deterministically in-process (`football.generate_match`), fictional teams and players. |
+| **StatsBomb open data** | 80-match corpus across 15 competition-seasons (2010–2024), 302,638 events, all `COMPLETE_VERIFIED` | Licensed payloads are **not** committed. Fetch and import with `scripts/fetch_statsbomb_open_data.py` + `scripts/ingest_statsbomb_corpus.py`. |
+
+The catalog distinguishes `CATALOGUED` (metadata only), `MATERIALIZED` (payload present, unverified) and `ANALYSIS_READY`. A match without a payload can never silently fall back to synthetic data.
+
+---
+
+## What this cannot do
+
+Stated here because the product states it too, on screen, next to the claim:
+
+- **No off-ball tracking.** Formation, pressing height, compactness and marking are not observed. The product refuses to draw 22-player defensive shapes.
+- **No calibrated xG.** Chance quality is not modelled; no xG number is published as calibrated.
+- **xT is a static grid**, not fitted on a complete corpus.
+- **OAAI is a defined activity index**, not momentum and not causal. It is not a reverse-engineered copy of any commercial metric.
+- **No causal claims.** Every registered claim is Level 1 (observed) or Level 2 (metric attribution). Level 3/4 require designs this data cannot support.
+- **No multi-agent quality study has been run.** We do not claim a measured uplift over a single agent; the claim is architectural and inspectable.
+
+---
+
+## Verification
+
+| Gate | Command | Result |
+| --- | --- | --- |
+| Backend | `services/api/.venv/Scripts/python.exe -m pytest services/api/tests/ -q` | see [R6_2_RESULTS](docs/R6_2_RESULTS.md) |
+| Types | `npm --prefix apps/web run typecheck` | 0 errors |
+| Build | `NODE_OPTIONS= npm --prefix apps/web run build` | 0 errors |
+| Browser | `npx playwright test` (in `apps/web`) | 47 passed / 1 skipped locally, 48 passed in CI |
+| CI | GitHub Actions | [workflow](.github/workflows/ci.yml), latest run green |
+
+The browser suite includes a **demo-path spec** that walks the journey above and writes the screenshots in `evidence/r6.2/`. The images in this README are produced by that test, not staged separately.
+
+---
+
+## Deployment (single container)
+
+The app is packaged as **one container**: FastAPI serves the API and the static
+Next.js export on one port, with one uvicorn worker and one volume. There is no
+second service and no database.
+
+```bash
+docker build -t matchlens .
+docker run --rm -p 8000:8000 -v matchlens-data:/data/matchlens matchlens
+open http://127.0.0.1:8000
 ```
 
-The Analyst selects a useful interpretation; a fresh Verifier checks its precise prose against original evidence and opposing metrics. `qualify` can select a narrower supplied variant of the **same true core**. It cannot rescue a false core with a disclaimer. Independent program checks enforce the bounded assertion, snapshot, refs, scope, tool roundtrips, handoff and numeric slots. Public Fan/Analyst facts use the finite `bound-facts-v1` renderer: metric labels, values and periods come together from the approved assertion and frozen receipts. Original model prose and Verifier rationale remain in the operator receipt; public summaries are not verbatim model quotations. A false core is still withheld. No third agent, RAG, cloud agent service or arithmetic delegated to an LLM.
+Railway is the supported target: `railway.toml` pins the Dockerfile, the
+`/api/health` probe, the restart policy, and a single replica. **Click-by-click
+console steps, variables, the volume mount and troubleshooting are in
+[RAILWAY_DEPLOY](docs/RAILWAY_DEPLOY.md).**
 
-JSON Object output is locally validated. At most one format correction per role, using the same role/session/evidence; no factual code repair or unbounded debate. Invalid/unfinished review yields statistics only. Detailed [contracts](docs/SPEC.md), [architecture](docs/ARCHITECTURE.md), [review](docs/R0.1_REVIEW.md) and historical [provider Spike](docs/TECH_SPIKE.md) are included.
+Provider payloads are licensed and are **not** in the image. On first boot the
+container fetches one complete real match from the provider's public repository,
+verifies it, and imports it onto the volume; until that finishes the synthetic
+library is fully usable. The fetch is idempotent, bounded, and cannot fail the
+boot.
 
-## Tests and actual model runs
+**Status at submission:** the deployment path is implemented and verified
+locally (container contract checked by `scripts/verify_deployment.py`, HTTP
+surface exercised against a volume-backed dataset). **No public URL exists yet** —
+it is created in the Railway console, and the demo video is recorded by the
+entrant. Neither is claimed to exist here.
 
-```powershell
-Push-Location services/api
-uv run pytest -q
-Pop-Location
-npm --prefix apps/web run typecheck
-npm --prefix apps/web run build
-# With the local server running and a funded key; incurs real inference:
-services/api/.venv/Scripts/python.exe scripts/live_validation.py --out evidence/r0.1/my-run.json
+---
+
+## Repository map
+
+```
+services/api/matchlens/
+  football.py        reducer, windows, receipts (one formula per metric)
+  metrics.py         metric registry, range queries, provenance
+  oaai.py            activity index + contribution ledger
+  investigation.py   deterministic planner, MAF two-agent run, plan assembly
+  agents.py          Microsoft Agent Framework agents, tool binding, budgeting
+  contracts.py       claim/review schema, publication gate, slot binding
+  gate.py            deterministic rules the gate enforces
+  registry.py        claim registry, revisions, lifecycle
+  stories.py         evidence-bound match narrative
+  main.py            FastAPI surface, SSE, static export mount
+apps/web/app/
+  components/cockpit/  Match Hub, Match Detail, Tactical Explorer, Intelligence Studio, Producer
+  lib/receipts.ts      receipt reading with explicit windows
+  lib/eventValidity.ts display validity vs. draw validity
 ```
 
-Offline regressions prove event arithmetic, source boundaries, publication rules, persistent reservations and cancellation isolation. They do not prove football-language quality. Real HTTP reports and independent human review status are separate in [R0.2_RESULTS](docs/R0.2_RESULTS.md). S0/S1/M comparative study and external audience tests remain **NOT RUN**; no multi-agent quality uplift is claimed.
+---
 
-## Reliability, privacy and cost
+## Licence and provenance
 
-Key is server-only in environment/root `.env` (ignored), never `NEXT_PUBLIC_*`. No public prompt/upload interface. Anonymous HttpOnly session, same-origin writes, fixed fixture/model/endpoint, finite session/IP/global rates, two workflow slots and one workflow/session. Analysis has a 25s model deadline plus up to 5s queue wait. A manual retry stays within budgets; no SDK auto-retries.
-
-`.runtime/budget.sqlite3` reserves $0.02 before **every** dispatch, including tool continuations and format correction; failures/cancellation do not refund it. Default **32 requests / $1 total reservation ceiling**, whichever binds first. The peak-price byte/output bound is conservative; actual usage estimates are not invoices. Before starting a workflow, admission checks capacity for all six possible dispatches and existing in-flight allowances. Restart preserves the ledger and loses sessions. Do not delete/reset the ledger to bypass a budget. Configure an explicit additional allowance when needed.
-
-Sanitized operator records in `.runtime/runs` contain raw/validated outputs and frozen evidence, never credentials or headers. Browser only sees accepted cards and sanitized trace summaries. Export relevant evidence before replacing a host/release. No calibrated xG, formations, pressing diagnosis, coaching intent or causal-effect estimates are supported.
-
-## Deployment preparation
-
-`Dockerfile` builds the static UI and runs one Python process. Container build/deployment are separate from the tested local static export; see results for actual status.
-
-```sh
-docker build -t matchlens:r01 .
-docker run --rm -p 8000:8000 --env-file .env -v matchlens-data:/data/matchlens matchlens:r01
-```
-
-Choose an authorized funded host, preserve `/data/matchlens`, set one worker/replica and host rate protection. Verify actual DeepSeek egress and ten-minute public transport behavior there. Production budget/free judge access through Nov 10, a final release and <120s video remain release tasks in [ROADMAP](docs/ROADMAP.md) and [DEMO_PLAN](docs/DEMO_PLAN.md).
-
-Code assistance: OpenAI Codex. Runtime orchestration: Microsoft Agent Framework. DeepSeek is the model provider. Foundry and GitHub Copilot SDK are not runtime dependencies. This project was developed for the 2026 Inside the Game Hackathon; retain truthful Git/release history and original run evidence.
-
-## License
-
-MIT. Synthetic events, fictional identities and interface assets are created within this project. Dependencies retain their own licenses. Official competition rules and Microsoft/Premier League names belong to their respective owners.
+MIT. Synthetic events, fictional identities and all interface assets are created within this project. StatsBomb open data is used under its own licence and is not redistributed here. Microsoft, Premier League and hackathon names belong to their respective owners. Built for the Microsoft × Premier League *Inside the Game* hackathon; runtime orchestration uses Microsoft Agent Framework with DeepSeek as the model provider.

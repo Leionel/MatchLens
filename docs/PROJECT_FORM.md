@@ -1,6 +1,6 @@
-# Project form draft
+# Project form — paste-ready fields (R6.2)
 
-Draft for the fields shown in the user's screenshots. This file has not been entered or submitted in the portal. Product status: R0.1 local vertical slice runs with real agents/evidence; public deployment and full release acceptance remain pending.
+Status: filled in against commit `fa42ee8` + the R6.2 red-team round. This file is a draft for the portal; nothing here is submitted automatically. Every sentence describes behaviour that runs today. Items that are **not** done are listed at the bottom instead of being written as done.
 
 **Title** (limit 140):
 
@@ -11,29 +11,45 @@ MatchLens AI — Football Intelligence You Can Challenge
 **Tagline** (limit 300):
 
 ```text
-What changed? Why does it matter? MatchLens turns synthetic football events into personalized explanations backed by traceable evidence.
+A second agent tries to break every football claim before it reaches you. Every number carries the window it was measured over, off-ball guesswork is refused, and you can challenge the conclusion.
 ```
 
-**Keywords:** Football; Explainable AI; Multi-Agent Systems; Synthetic Data; Real-Time Analytics.
+**Keywords:** Football; Explainable AI; Multi-Agent Systems; Synthetic Data; Sports Analytics; Broadcast.
 
-**Open for others to join:** No, following the current solo-development plan. Leave Skills Needed empty and Advanced off.
+**Open for others to join:** No (solo). Leave Skills Needed empty and Advanced off.
 
 **Challenge:** The Synthetic Match Insights Engine for Premier League Studio.
 
-**Writing Code:** Yes. Repository supplied by entrant: https://github.com/Leionel/MatchLens. Add it to the portal after saving; this document does not submit the form.
+**Writing Code:** Yes. Repository supplied by entrant: https://github.com/Leionel/MatchLens
 
 **Description:**
 
 ```text
-Does more possession really mean more danger?
+Does more possession really mean more danger? Usually the answer arrives as a confident sentence. MatchLens turns that sentence into something you can check.
 
-MatchLens AI is being built to turn synthetic football events into explanations that fans and analysts can inspect and challenge.
+The pipeline starts from recorded football events and computes every metric deterministically — the same events always produce the same numbers. Each number carries the window it was measured over, so a three-minute reading is never displayed as a match total.
 
-The system will replay a coherent, reproducible synthetic match and calculate statistics from the event stream. An Analyst agent will investigate meaningful changes, while a separate Verifier will check the evidence, consider opposing signals, and decide whether an explanation should be published, qualified, or withheld.
+An investigation works on one frozen moment. In the free deterministic mode, a typed tool registry produces the claim, its evidence and its counterevidence. With a model key configured, a Microsoft Agent Framework Analyst selects its own tools and proposes one claim, then hands it to a separate Verifier with its own tool budget, which re-reads the evidence, queries counterevidence, and returns a per-claim decision. A deterministic publication gate then checks refs, scope, numeric binding and unsupported language before anything is shown as approved.
 
-Each insight will link to its supporting events, metrics, and time window. Fan Mode will offer a concise explanation of why the moment matters; Analyst Mode will expose the comparisons and limitations behind the same claims. An automatic recap will collect the match's supported moments.
+The interface keeps the two honest: the agent panel shows which tools each stage actually called, or states plainly that no model was called. Approved claims can be challenged and read back as revisions, and they can be turned into a broadcast lower-third with their match time and evidence references attached.
 
-The implementation uses Microsoft Agent Framework with DeepSeek Flash. The local R0.1 vertical slice now runs a continuous 12-minute synthetic match through deterministic metrics, an immutable evidence snapshot, real Analyst and Verifier calls, publication gates, and an interactive browser evidence card. Public deployment and broader evaluation are in progress.
+Coverage: a continuous 12-minute synthetic match for the reproducible demo, and an 80-match StatsBomb open-data corpus (2010–2024, 302,638 events) for real-data generalisation.
 
-The goal is a working, evidence-driven football experience with transparent failure handling and a measurable comparison between single-agent and multi-agent analysis. The project uses synthetic data and original visualizations.
+What MatchLens refuses to do is part of the product: no off-ball shape, no pressing diagnosis, no calibrated xG, no causal claims. Those appear on screen as explicit limits next to the claim rather than as silence.
 ```
+
+**What is not claimed (keep out of the portal copy):**
+
+- No public hosted URL at submission time; the app runs locally with no key.
+- No calibrated xG or fitted xT model.
+- No measured single-agent vs. multi-agent quality comparison has been run.
+- No off-ball / tracking data of any kind.
+- The demo video is recorded and uploaded by the entrant; until that exists there is no video URL.
+
+**Repository entry checklist:**
+
+- [ ] Repository is public and the README renders the `evidence/r6.2/` screenshots
+- [ ] `License: MIT` present (it is)
+- [ ] No licensed StatsBomb payloads committed (they are git-ignored)
+- [ ] No `.env`, key or token in history
+- [ ] The three "what actually runs" rows in the README match what the recording shows

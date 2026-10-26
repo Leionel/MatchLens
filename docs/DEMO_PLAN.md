@@ -1,104 +1,130 @@
-# MatchLens AI: Demo and Submission
+# MatchLens AI — Demo and Submission Plan (R6.2)
 
-Baseline: 2026-10-19. Target **115 seconds**, with a strict final file duration below 120 seconds. English interface, narration, captions, description and testing instructions. Final materials describe implemented behavior only; remove any planned feature that did not pass its gate.
+Baseline: 2026-10-26, commit `fa42ee8` + this round's changes. Target **112–115 s**, hard limit **< 120 s** (official rule). English interface, English narration, burned-in English captions.
 
-## Story the judge should remember
+> **The one rule for this video:** every frame is the running product. Nothing is re-typed, re-timed or narrated over a still that the app did not produce. If the two-agent run cannot be recorded live, the fallback in §3 is used and the on-screen label says so.
 
-**MatchLens shows when a football explanation deserves to be believed — and when the evidence says to narrow it.**
+---
 
-One story carries the demonstration: possession rises, but attacking threat may not. Show the difference between an appealing conclusion and what the event evidence actually supports. The agent trace substantiates that story; it is not the opening product screen.
+## 1. The single claim the video must land
 
-Proposed English pitch, to finalize against the release:
+> **A football explanation is only worth airing if someone can check it — and can argue with it.**
 
-> MatchLens turns a reproducible synthetic football match into explanations you can inspect. An Analyst investigates what changed; a separate Verifier checks the evidence and challenges overstatement. Fans get a clear consequence, analysts get the comparison and event trail, and both see the same approved facts. Built with Microsoft Agent Framework and DeepSeek, MatchLens keeps the match useful even when AI is unavailable.
+Everything else in the edit serves that sentence: one moment, one claim, one independent check, one gate decision, one piece of evidence you can open, one way to disagree.
 
-The actual R0.1 local product path is recorded in R0.1_RESULTS; public access, final video and the comparative study remain release work. Do not claim Foundry, guaranteed truth or single-agent improvement. Use the final released stack in submission copy; see [TECH_SPIKE](TECH_SPIKE.md) and [PROJECT_FORM](PROJECT_FORM.md).
+Do **not** tour the feature set. Four surfaces, one story.
 
-## Storyboard: 1 minute 55 seconds
+---
 
-| Time | On-screen action | Suggested English narration | Required real evidence |
-| --- | --- | --- | --- |
-| 0–9 s | MatchLens scoreboard and pitch; synthetic label visible; open possession chapter | “More possession sounds like more control. But is this team actually more dangerous?” | Real app, fictional teams and current scenario |
-| 9–24 s | Start replay or seek to chapter cutoff; event feed and window bars change; request analysis | “This is a seeded synthetic match, with consistent possession, passes, recoveries and shots.” | Prefix reducer and real live request; visible pending status |
-| 24–43 s | Keep Focus frozen at its as-of time while agents finish; show the actual decision | “The Analyst proposes an explanation. The Verifier checks opposing evidence before it reaches the screen.” | Both actual agent stages and tool calls; no inserted answer text |
-| 43–64 s | Open evidence panel; compare possession with shots/pass entries; click a source event on pitch | “Here is the comparison behind the claim — the time window, the counts and the exact events. More possession alone is not enough.” | Cited receipts and source IDs from this run. Adapt narration to the actual verdict |
-| 64–79 s | Switch Fan → Analyst → Fan | “One checked fact set, two useful views: a short consequence for fans, and the detail an analyst needs.” | Same claim IDs; different information density; no extra provider call |
-| 79–94 s | Focus recovery chapter; show the actual recovery-to-shot discovery and linked IDs | “Here the system finds recoveries followed quickly by shots. Inspect the exact chains without claiming tactical causation.” | Actual framework stages, DeepSeek request/usage metadata and tool receipts; injected failure must be labeled |
-| 94–107 s | Jump to final cutoff and display automatic match recap | “At full time, accepted moments become a linked recap. Every explanation stays attached to its evidence.” | Reconstruct full prefix; recap uses existing approved claims and score |
-| 107–115 s | Repository/test URL closing card | “MatchLens: football intelligence you can challenge. Try the replay and inspect the evidence.” | Actual public URLs and released app |
+## 2. Shot list (112–115 s)
 
-Chapter seek is a deterministic replay shortcut. State clearly that match time is accelerated or skipped; label this continuous 12-minute demonstration match; do not imply a 90-minute match occurred. At full-time seek, only already generated/reviewed claims enter recap; any new pending analysis remains pending. An unfinished segment must say “segment recap.”
+| # | Time | On screen (real UI) | Narration | Must be true in the frame |
+| --- | --- | --- | --- | --- |
+| 1 | 0–10 s | Match Detail, paused at 07:00. Insight card reading *"Harbor FC activity peaked in this spell"* with the **Cannot decide** line under it. | "Possession is up. The crowd is up. Does that mean the team is in control?" | Synthetic match; the `SYNTHETIC` provenance is visible somewhere in frame. |
+| 2 | 10–20 s | Scroll the totals row and the live-window strip: `WHOLE MATCH` 8/5 shots, `Last 3 min window` 0/0. | "This is where most tools stop: a number without a scope. The last three minutes had no shots. The match had thirteen." | The strip must show its own bounds (`4020s–4200s`). |
+| 3 | 20–30 s | Press **Investigate this change**. Studio opens on that exact moment; question pre-filled. | "So we ask the match — at this second, not about the whole game." | Clock in the panel reads the same second as the chart. |
+| 4 | 30–55 s | **Agent collaboration panel.** Analyst row (tools it called, claim id), Verifier row (its own tools, verdict + reason), Gate row. | "The Analyst picks its own tools and proposes one claim. The Verifier gets its own tool budget, checks counterevidence, and decides whether that claim survives. This is the part a single model cannot do for itself." | See §3 — this is the only segment that depends on a model key. |
+| 5 | 55–70 s | Open **Evidence**: findings with event ids; click one → the pitch jumps to that event. Then **What this cannot decide**. | "Every sentence points back to recorded events — and the claim is narrow on purpose: no off-ball shape, no tactical cause." | The event id in the finding equals the one selected on the pitch. |
+| 6 | 70–82 s | Switch perspective **Fan → Coach → Media**. Same time, same claim: consequence → shot comparison → lower-third line. | "Same fact. A fan gets the consequence, an analyst gets the window comparison, a producer gets a line that can go on air." | The match time and claim id do **not** change between the three. |
+| 7 | 82–93 s | **Broadcast preview** card under the result: provenance strip, score bug, headline, evidence refs. | "Approved claims become a lower-third with the match time and its evidence attached." | Provenance strip must read `SYNTHETIC SIMULATED REPLAY` for the synthetic match. |
+| 8 | 93–104 s | Cut to Match Hub → open a `Real data` match → Match Detail → the same totals row and insight. | "The same pipeline runs on eighty real matches — provider event data, same receipts, same gate." | Hub card shows `Real data`, not `Demo`. |
+| 9 | 104–112 s | Closing card: title, one-line claim, repo URL, "run locally in three minutes". | "MatchLens. Football intelligence you can challenge." | No invented URL, no "live at". |
 
-Record the central request→decision→evidence segment as an actual functioning screen capture. The agents may correctly agree or abstain; choose the relevant explanation from the real result. Do not force a disagreement, hardcode a rejection or substitute an anticipated script for a model response. The exact example sentence is illustrative until observed; avoid putting invented numbers in narration.
+### Optional 3 s if under time
+60–63 s: open one **alternative explanation** row and show its `insufficient_evidence` status. This is the cheapest way to prove the system is willing to say "we cannot test this".
 
-Prioritize the positive B-chapter discovery at79–94s. If the actual model takes longer, start that request earlier or disclose an edit/time skip; retain the raw capture/run receipt. Keep failure injection and longer traces in README unless they fit without losing the football story. The Spike's tiny samples are not a quality study or product p95 chart.
+---
 
-## Recording protocol
+## 3. Segment 4 (30–55 s): the honesty fork
 
-1. Freeze release commit, fixture, prompts, model configuration and deployment. Recheck that the endpoint is funded through Nov 10.
-2. Open a fresh browser session; verify health without paid inference, then run the documented live smoke. Retain its run/trace IDs separately from the recording.
-3. Record a fresh analysis in the product. Keep a raw capture and the run receipt. Captions may clarify window changes or shorten transitions, not manufacture behavior.
-4. If the provider is down, a saved genuine run may be shown only with an explicit recorded-run label, timestamp and provenance. It is not a fresh run or evidence of current cloud availability. Resolve the live release gate before claiming live capability.
-5. Use original SVG pitch, owned text and your own voice or properly licensed audio. No match footage, club crests, copyrighted music or borrowed broadcast graphics. Read the actual permission terms before adding any sponsor/league logo.
-6. Capture at 1080p when practical; verify the score, evidence and uncertainty text at ordinary video viewing size. Keep cursor movement purposeful. English captions and narration agree with the visible result.
-7. Inspect the exported video from start to end. Check actual duration via media metadata, audio intelligibility and UI readability; target 115 s to retain margin. Upload to a platform allowed by the official rules and test the public URL without login.
+This is the segment that decides whether the submission is credible. Pick **one** of the following and never blend them.
 
-## Judge reproduction path
+### Variant A — live two-agent run (preferred, needs a key)
 
-Target instructions to place in the English README after implementation:
+Requirements before recording:
 
-1. Open the public test URL in a normal desktop browser. No account or payment required.
-2. Select **Possession without penetration** to Focus at 06:00, then **Analyse this moment**. The UI identifies synthetic data and replay speed.
-3. Wait for the analysis state to finish, or select the chapter's analysis control. A reused result says “saved model analysis”; its original run remains inspectable. The documented live route must also work without a judge buying API credits.
-4. Open **Evidence**, compare the two windows and select an event to highlight it on the pitch.
-5. Switch **Fan / Analyst** and verify that the claim/evidence IDs are unchanged.
-6. Select the recovery chapter, then the final cutoff; read the scope-labeled recap and source links.
-7. Inspect **View run trace** for provider/model, time, agent decisions and token/latency information. Test failure/recovery through the documented safe reproduction procedure if desired.
+- `DEEPSEEK_API_KEY` set server-side, ledger runway ≥ 6 requests (`$1.00` default ceiling).
+- In Studio **Advanced → Engine** choose **Real Agent (uses model budget)**.
+- Record the run id from the panel; keep the run receipt afterwards.
 
-Provide local reproduction for environments where the public endpoint is inaccessible: pinned prerequisites, `.env.example`, fixture generation/validation, offline start, real-model start and expected visible states. No key may be shipped in a test build. A paid user-supplied key is not the only free judging path; maintain the funded hosted route or an equivalent authorized test service. State CPU/platform requirements and known restrictions honestly.
+On screen the collaboration panel must show:
 
-## English README structure
+- mode chip = **Live model · deepseek-flash · N requests**
+- Analyst row with `claim_id` and the tools it called
+- Verifier row with its own tool list and a decision (`publish` / `qualify` / `withhold`)
+- Gate row with the verdict
 
-| Section | Required contents |
-| --- | --- |
-| Opening | One-sentence problem/outcome, actual screenshot, test URL and <2 min video URL |
-| Quick judge path | The concrete sequence above, including fresh/cached/fallback labels and expected timings |
-| Run locally | Tested OS/prerequisites, package locks, exact commands, ports and safe example config |
-| Why two agents | Distinct objectives, immutable handoff, counterevidence, failure behavior; link architecture |
-| Microsoft technology | Actual Agent Framework graph/tools and handoff; exact DeepSeek model/options; real run receipts and chosen hosting service. No Foundry dependency or Copilot runtime claim |
-| Synthetic football data | Seed/version/hash, state invariants, coordinate/time model, supported metrics and limitations |
-| Evaluation | Protocol, actual report/denominators, single-rater or missing-study limits; separate deterministic and live gates |
-| Architecture | Mermaid diagram from ARCHITECTURE and an explanation of the request/evidence path |
-| Reliability and cost | Deadlines, fallback, saved-run provenance, API budget assumptions and judging availability |
-| Reproduce / contribute | Validation commands, clear module boundaries, license, third-party notices and evidence artifacts |
-| Hackathon provenance | Development dates, release commit, original work and truthful tool-use disclosure |
+Narration must not invent a disagreement. If the Verifier publishes, say so: *"here it agreed — and you can see exactly what it checked before agreeing."*
 
-Do not claim GitHub Copilot was used if coding was done with Codex. Category rules mention several supported orchestration approaches; actual runtime Agent Framework collaboration is the relevant evidence here. Do not list services merely because they appear in an architecture wish list.
+### Variant B — no key: deterministic run, labelled on camera
 
-## Final submission checklist
+- Leave **Engine** on **Deterministic (free)**.
+- The collaboration panel will render: *"No model called · deterministic tools"* and *"no Analyst/Verifier exchange exists"*.
+- Narration: *"This run is deterministic — no model was called, so there is no agent debate to show. What you can still check is the gate, the evidence and the counterevidence."*
+- Then spend the saved time on segment 5 (evidence + limits), which is the part that survives without a key.
 
-Rules source: [OFFICIAL RULES.md](https://github.com/microsoft/insidethegamehackathon/blob/main/OFFICIAL%20RULES.md). User screenshots establish the displayed challenge and basic fields. The agent has not operated/saved/submitted the form; remaining portal requirements still need checking. Copyable draft text is in [PROJECT_FORM](PROJECT_FORM.md).
+**Never** show Variant B while narrating a two-agent discussion. That is the one thing that would make the whole submission untrustworthy.
 
-- [ ] Registration receipt retained; entrant checks age/residence/conflicts and any applicable preferential-support restriction.
-- [ ] Project creation history is after Sep 29, 2026, 09:00 PT; repository history and dependencies reflect the actual work.
-- [ ] Actual submission form inspected: deadline/timezone, category options, required fields, URLs and any additional technical conditions.
-- [ ] Category label uses the real form wording; understand only one category prize can be won.
-- [ ] Public GitHub repository URL works signed out; English README, setup, license and third-party notices complete.
-- [ ] Architecture diagram matches the release. Planned/unused services are removed from pitch and README.
-- [ ] Real test URL/build works freely for judges, with any required test login supplied; funded access retained through **Nov 10, 2026, 23:59 PT**.
-- [ ] G0–G5 evidence recorded; actual provider calls, both roles, tool use, references, failure handling and browser journey distinguishable from offline tests.
-- [ ] No secret in current files, client bundle, released artifacts or Git history; synthetic identities and assets have clear provenance.
-- [ ] Metrics and uncertainty match available event data. No xG, speed, formations or causal claims without new validated inputs.
-- [ ] Evaluation report contains measured values or explicit NOT RUN; no invented uplift, latency, user study or availability claim.
-- [ ] Video duration **<120 seconds**; target 115. English audio/captions, real operation and public allowed-platform URL verified.
-- [ ] Every visible sample is labeled fresh, saved or deterministic as appropriate; injected failure is disclosed if shown.
-- [ ] Pitch states problem, outcome and technologies actually used; no SDK/service laundry list.
-- [ ] Final rules rechecked for changes; any material ambiguity sent to organizer by entrant as required, without guessed eligibility promises.
-- [ ] Submit by internal target **Oct 27, 18:00 PT**; retain received confirmation, submission URLs and released commit SHA.
-- [ ] Keep the submitted revision stable after the deadline; restrict changes to what the rules/organizer permit. Preserve the working deployment and logs through judging.
+### Variant C — historical recorded run (only if A and B both fail)
 
-## Completion evidence to retain
+`evidence/r0.2/runs/` contains genuine recorded model runs, including a **rejection**:
 
-`release commit + image/revision identifier + fixture hash + package locks + prompt versions + live run receipts + actual evaluation report + public test/video/repository URLs + raw recording + final media duration + submission receipt`.
+| Run | Verdict | Why it is useful on camera |
+| --- | --- | --- |
+| `run-14e303594906f796` | published `possession_without_penetration` | a supported claim |
+| `run-c-verify-a359468b` | published `goal_sequence` | a supported claim after correction |
+| `run-c-verify-29254a79` | **rejected** — `unbound_spelled_number` | the gate refusing a claim the verifier thought was in-bounds |
 
-Missing entries are outstanding work. A storyboard, passing unit suite or saved screenshot alone does not complete delivery.
+If used, it must carry the UI's **Historical real analysis** label and the narration must say "recorded earlier", with the run id visible. This is evidence, not a live demo.
+
+---
+
+## 4. Recording protocol
+
+1. Freeze the commit. `git tag demo-<date>`; do not edit during recording.
+2. `NODE_OPTIONS= npm --prefix apps/web run build`, start one Uvicorn worker, open a fresh browser at 1920×1080, zoom 100%.
+3. Set locale **English**, theme **dark** (dim room) or **light** (bright room) — pick one and keep it.
+4. Record at 1080p60 if available; 1080p30 is fine. Cursor: hide when idle, no shaking.
+5. One continuous take per segment; cut only on segment boundaries to keep the clock honest.
+6. Burn in captions that match narration exactly. No caption may assert something not visible.
+7. Export, then **check duration with media metadata** (`ffprobe`). If ≥ 120 s, cut segment 2 or 8, not the honesty lines.
+8. Watch the export at 50% size: the score, the window bounds and the *Cannot decide* line must still be legible.
+
+### Pre-flight checklist
+
+- [ ] Hub shows `Real data` badges and `Demo · Synthetic` on synthetic cards
+- [ ] Match Detail totals read `WHOLE MATCH`; the live strip shows its own seconds
+- [ ] Investigating lands on the same second as the chart
+- [ ] Collaboration panel matches the engine actually selected
+- [ ] Evidence click moves the pitch/time to that event
+- [ ] Fan/Coach/Media keep the same clock and claim id
+- [ ] Broadcast preview shows the correct provenance strip
+- [ ] No visible console error, no `localhost` banner, no dev overlay
+- [ ] Repo URL in the closing card resolves
+
+---
+
+## 5. Submission copy (paste-ready)
+
+**Title:** MatchLens — Football Intelligence You Can Challenge
+
+**One line:** MatchLens turns recorded football events into claims a second agent can verify, a gate can withhold, and you can challenge — with every number tied to the window it was measured over.
+
+**Description:** MatchLens runs a full claim lifecycle on real football event data. A deterministic engine computes every metric from the event log; optionally, a Microsoft Agent Framework Analyst proposes a claim with tools it selects itself, and a separate Verifier re-checks it with its own tool budget and counterevidence query before a publication gate decides. Off-ball shape and tactical cause are explicitly out of scope, and the UI says so next to the claim. Works on a continuous synthetic match and on an 80-match StatsBomb open-data corpus. Runs locally with no key and no account.
+
+**Built with:** Microsoft Agent Framework, FastAPI, Next.js, DeepSeek (optional live agent mode).
+
+**What is intentionally not claimed:** no calibrated xG, no off-ball tracking, no measured multi-agent uplift, no public deployment at submission time.
+
+---
+
+## 6. Release tasks that need a human
+
+| Task | Owner | Blocking? |
+| --- | --- | --- |
+| Record and upload the < 120 s video | user | **yes** — submission requires a URL |
+| Decide on public hosting (funded key + rate limits) | user | no — local path is documented and honest |
+| Replace the `Live demo` line in README with the real URL if hosting happens | user | no |
+| Final read of submission text against the recorded footage | user | **yes** |
+
+Nothing in this plan requires new product code. If hosting is approved, the only change is the README line and the closing card.
