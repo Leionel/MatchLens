@@ -59,7 +59,13 @@ def _fake_change_point(**overrides):
 
 @pytest.fixture()
 def two_candidate_catalog(monkeypatch):
-    """A provider match and a synthetic fixture, the synthetic with more events."""
+    """A provider match and a synthetic fixture, the synthetic with more events.
+
+    Fully hermetic: CI does not carry the licensed provider datasets, so the
+    context and the event loader are faked alongside the catalog listing and
+    the OAAI pipeline. The endpoint must select on metadata and clock bounds
+    only — its correctness must not depend on any dataset being installed.
+    """
     from matchlens.catalog import MatchCatalog
 
     real = MatchCatalog.get_match("sb_3795221")
@@ -68,6 +74,14 @@ def two_candidate_catalog(monkeypatch):
     synthetic = synthetic.model_copy(update={"events_count": 4000, "analysis_ready": True, "dataset_installed": True})
     real = real.model_copy(update={"events_count": 400, "analysis_ready": True, "dataset_installed": True})
     monkeypatch.setattr(MatchCatalog, "list_matches", classmethod(lambda cls: [synthetic, real]))
+
+    class _Ctx:
+        replayable_end = 5400.0
+        home_team_name = "England"
+        away_team_name = "Denmark"
+
+    monkeypatch.setattr(MatchCatalog, "get_match_context", classmethod(lambda cls, mid: _Ctx()))
+    monkeypatch.setattr(MatchCatalog, "load_normalized_events", classmethod(lambda cls, mid: []))
     return real
 
 
