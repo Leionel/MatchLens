@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, Optional
 
@@ -31,7 +32,26 @@ from .schema import ActionType, DataCoverageLevel, MatchContext, NormalizedEvent
 
 MATCHES_DIR = Path(__file__).resolve().parent / "data" / "matches"
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SOURCE_MANIFEST_PATH = REPO_ROOT / "data" / "source_manifest.json"
+
+def data_root() -> Path:
+    """Where the manifest and the imported provider payloads live.
+
+    A container images the code but not the licensed payloads, so both are
+    materialised at runtime onto a persistent volume. ``MATCHLENS_DATA_DIR``
+    points the catalog at that volume; without it the repository's own
+    ``data/`` directory is used, so every local and test workflow is unchanged.
+
+    Resolved per call, not at import, so a test that relocates ``REPO_ROOT``
+    keeps resolving manifest paths inside its own temporary tree.
+    """
+    override = os.environ.get("MATCHLENS_DATA_DIR")
+    if override:
+        return Path(override).resolve()
+    return (REPO_ROOT / "data").resolve()
+
+
+DATA_ROOT = data_root()
+SOURCE_MANIFEST_PATH = DATA_ROOT / "source_manifest.json"
 
 #: How a match's event stream was obtained. The distinction matters because a
 #: hand-authored excerpt that uses the provider's event schema is not a
@@ -313,11 +333,20 @@ class MatchCatalog:
             return None
         if pure.parts and (":" in pure.parts[0] or pure.parts[0] in ("", ".")):
             return None
-        cache_key = (str(REPO_ROOT), raw)
+        # Manifest paths are stored repository-relative ("data/datasets/..."),
+        # so that the same manifest works locally and inside a container whose
+        # volume is mounted elsewhere. A leading "data/" is rebased onto
+        # DATA_ROOT; anything else still resolves against the repository.
+        if pure.parts and pure.parts[0] == "data":
+            root = data_root()
+            relative_parts = pure.parts[1:]
+        else:
+            root = REPO_ROOT.resolve()
+            relative_parts = pure.parts
+        cache_key = (str(root), raw)
         if cache_key in MatchCatalog._resolved_path_cache:
             return MatchCatalog._resolved_path_cache[cache_key]
-        root = REPO_ROOT.resolve()
-        candidate = (root / Path(*pure.parts)).resolve()
+        candidate = (root / Path(*relative_parts)).resolve()
         try:
             candidate.relative_to(root)
         except ValueError:

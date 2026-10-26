@@ -38,11 +38,16 @@ from matchlens.provider_terms import (  # noqa: E402
 )
 from matchlens.schema import DataCoverageLevel  # noqa: E402
 
+# The corpus definition is code-like: it ships with the image. The datasets,
+# the manifest and the import receipts are runtime state, so they live wherever
+# MATCHLENS_DATA_DIR points (a persistent volume in a container). Without the
+# variable, every path is the repository's own, unchanged.
+DATA_DIR = Path(os.environ.get("MATCHLENS_DATA_DIR") or (ROOT / "data")).resolve()
 CORPUS_PATH = ROOT / "data" / "corpus_statsbomb.json"
-RAW_DIR = ROOT / "data" / "raw" / "statsbomb"
-DATASET_DIR = ROOT / "data" / "datasets"
-MANIFEST_PATH = ROOT / "data" / "source_manifest.json"
-RECEIPT_DIR = ROOT / "evidence" / "imports"
+RAW_DIR = Path(os.environ.get("MATCHLENS_SB_RAW_DIR") or DATA_DIR / "raw" / "statsbomb")
+DATASET_DIR = DATA_DIR / "datasets"
+MANIFEST_PATH = DATA_DIR / "source_manifest.json"
+RECEIPT_DIR = Path(os.environ.get("MATCHLENS_IMPORT_RECEIPT_DIR") or (ROOT / "evidence" / "imports"))
 
 # A regulation match is two 45-minute halves; the nominal duration of a match
 # that went to extra time is longer. The expected duration is therefore derived
@@ -59,9 +64,21 @@ def _sha256(path: Path) -> str:
 
 
 def _rel(path: Path) -> str:
-    """Repository-relative POSIX path, stable across operating systems."""
+    """Repository-relative POSIX path, stable across operating systems.
+
+    A file on the runtime data directory (a mounted volume in a container) is
+    reported as ``data/...`` — the same shape a repository-relative path has —
+    so the manifest stays machine-independent and the catalog can rebase it.
+    """
+    resolved = path.resolve()
+    # DATA_DIR first: it is the mount that matters for resolution, and it may
+    # legitimately sit inside the repository during local verification.
     try:
-        return path.resolve().relative_to(ROOT.resolve()).as_posix()
+        return f"data/{resolved.relative_to(DATA_DIR).as_posix()}"
+    except ValueError:
+        pass
+    try:
+        return resolved.relative_to(ROOT.resolve()).as_posix()
     except ValueError:
         return path.as_posix()
 
@@ -350,7 +367,9 @@ def _verify_manifest(*, require_all: bool = False) -> int:
         if rel.startswith("/") or ".." in parts or (parts and ":" in parts[0]):
             failures.append(f"{match_id}: dataset_path escapes the repository: {rel!r}")
             continue
-        path = ROOT / Path(*parts)
+        path = (DATA_DIR if parts and parts[0] == "data" else ROOT) / Path(
+            *parts[1:] if parts and parts[0] == "data" else parts
+        )
         if not path.exists():
             if require_all:
                 failures.append(f"{match_id}: dataset not materialised: {rel}")
