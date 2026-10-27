@@ -265,6 +265,30 @@ def test_maf_agent_mode_failure_degrades_to_isomorphic_plan(client):
         engine.runner.key = None
 
 
+def test_maf_agent_prompt_binds_the_frozen_snapshot_id(client):
+    engine = client.app.state.engine
+    engine.runner.key = "fault-injection-not-a-live-key"
+    prompts = []
+
+    async def capture_prompt(run, role, registry, prompt, **kwargs):
+        prompts.append((role, prompt))
+        raise ValueError("stop_after_prompt_capture")
+
+    engine.runner.stage_with_registry = capture_prompt
+    try:
+        snap, state = _snap_and_state(540)
+        plan = asyncio.run(run_investigation_plan(
+            engine, _body(execution_mode="maf_agent"), snap, state, "test-owner"
+        ))
+
+        assert plan.agent_status == "failed"
+        assert prompts and prompts[0][0] == "Analyst"
+        assert f"Frozen snapshot_id (copy this exact value into get_evidence): {snap.id}." in prompts[0][1]
+        assert engine.ledger.summary()["requests_reserved"] == 0
+    finally:
+        engine.runner.key = None
+
+
 def test_maf_agent_mode_unknown_intent_never_dispatches(client):
     engine = client.app.state.engine
     engine.runner.key = "fault-injection-not-a-live-key"
