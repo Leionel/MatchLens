@@ -131,6 +131,17 @@ export function ChallengeModal({
     };
   }, [isOpen, snapshotId, claimId]);
 
+  // Dialog contract: Escape closes, clicking the backdrop closes. The panel
+  // itself stops the propagation so a stray click inside never dismisses.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -161,7 +172,14 @@ export function ChallengeModal({
   };
 
   return (
-    <div className="challenge-modal-backdrop" role="dialog" aria-modal="true">
+    <div
+      className="challenge-modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div className="challenge-modal-panel">
         <div className="modal-header">
           <div>

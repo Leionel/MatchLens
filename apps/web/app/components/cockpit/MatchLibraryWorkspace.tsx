@@ -451,7 +451,6 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
                         <span className={`r6-rec-badge ${isDemo ? "demo" : ""}`}>
                           {isDemo ? (isZh ? "Demo · 合成" : "Demo · synthetic") : isZh ? "真实数据" : "Real data"}
                         </span>
-                        <span>{match.events_count ?? 0} {isZh ? "事件" : "events"}</span>
                         <span>{match.match_date || "—"}</span>
                       </div>
                       <div className="r6-rec-actions">
@@ -569,6 +568,16 @@ const FeaturedInvestigation: React.FC<FeaturedInvestigationProps> = ({
   const isZh = locale === "zh";
   const match = state.data?.featured;
   const moment = match?.moment;
+  // The API's narrative is English-only; a Chinese reading is composed from
+  // the same recorded values, never from different ones.
+  const whatChanged =
+    match && moment && isZh
+      ? `${moment.team_name} 的记录进攻活动在此刻走强（平滑 OAAI ${moment.oaai_amplitude > 0 ? "+" : ""}${moment.oaai_amplitude.toFixed(2)}；公式归因，非战术因果）。`
+      : match?.what_changed;
+  const whyInvestigate =
+    match && isZh
+      ? `这是该场比赛可回放时钟内最强的活动摆动，背后有 ${match.supporting_events.length} 条已记录事件支持。`
+      : match?.why_investigate;
   const isDemo = Boolean(match && (match.provenance_kind || "synthetic") !== "provider_payload");
   const isCurrent = Boolean(match && match.match_id === currentMatchId);
 
@@ -667,18 +676,36 @@ const FeaturedInvestigation: React.FC<FeaturedInvestigationProps> = ({
           </p>
         </div>
         <div className="r6-featured-story">
-          <p className="r6-featured-what" data-testid="featured-what-changed">{match.what_changed}</p>
-          <p className="r6-featured-why">{match.why_investigate}</p>
+          <p className="r6-featured-what" data-testid="featured-what-changed">{whatChanged}</p>
+          <p className="r6-featured-why">{whyInvestigate}</p>
           {match.supporting_events.length > 0 && (
-            <ul className="r6-featured-events" aria-label={isZh ? "支持事件" : "Supporting events"}>
-              {match.supporting_events.map((event) => (
-                <li key={event.event_id}>
-                  <span className="r6-featured-event-minute">{event.minute}′</span>
-                  <b>{event.actor || (isZh ? "未知球员" : "Unattributed")}</b>
-                  <span>{event.kind}{event.outcome ? ` · ${event.outcome}` : ""}</span>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="r6-featured-events" aria-label={isZh ? "支持事件" : "Supporting events"}>
+                {match.supporting_events.slice(0, 2).map((event) => (
+                  <li key={event.event_id}>
+                    <span className="r6-featured-event-minute">{event.minute}′</span>
+                    <b>{event.actor || (isZh ? "未知球员" : "Unattributed")}</b>
+                    <span>{event.kind}{event.outcome ? ` · ${event.outcome}` : ""}</span>
+                  </li>
+                ))}
+              </ul>
+              {match.supporting_events.length > 2 && (
+                <details className="r6-featured-events-more">
+                  <summary>
+                    {isZh ? `其余 ${match.supporting_events.length - 2} 条支持事件` : `${match.supporting_events.length - 2} more supporting events`}
+                  </summary>
+                  <ul className="r6-featured-events">
+                    {match.supporting_events.slice(2).map((event) => (
+                      <li key={event.event_id}>
+                        <span className="r6-featured-event-minute">{event.minute}′</span>
+                        <b>{event.actor || (isZh ? "未知球员" : "Unattributed")}</b>
+                        <span>{event.kind}{event.outcome ? ` · ${event.outcome}` : ""}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </>
           )}
           <div className="r6-featured-actions">
             <button

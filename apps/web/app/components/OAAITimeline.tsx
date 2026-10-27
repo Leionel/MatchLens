@@ -395,7 +395,7 @@ export const OAAITimeline: React.FC<OAAITimelineProps> = ({
               {t.oaaiTitle}
             </h3>
           </div>
-          <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 4 }}>
+          <p style={{ fontSize: "var(--text-secondary-body)", lineHeight: "var(--lh-normal)", color: "var(--text-secondary)", marginTop: 4, maxWidth: "110ch" }}>
             {t.oaaiSubtitle}
           </p>
         </div>

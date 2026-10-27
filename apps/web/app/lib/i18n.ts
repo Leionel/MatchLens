@@ -49,7 +49,7 @@ export const translations = {
 
     // OAAI
     oaaiTitle: "进攻活动指数 (OAAI)",
-    oaaiSubtitle: "记录事件的推进强度，不代表心理动量。",
+    oaaiSubtitle: "活动指数：记录事件的进攻强度随时间累积，曲线在上半区 = 主队占优、下半区 = 客队占优。它是强度计，不是胜率，也不代表战术因果。",
     causalSmoothing: "实时因果滤波 (Causal)",
     bilateralSmoothing: "赛后双边平滑 (Bilateral)",
     homeAdvantage: "Harbor FC 进攻优势区 (+)",
@@ -272,7 +272,7 @@ export const translations = {
 
     // OAAI
     oaaiTitle: "Observed Attacking Activity Index (OAAI)",
-    oaaiSubtitle: "Recorded attacking intensity, not psychological momentum.",
+    oaaiSubtitle: "An activity index: recorded attacking intensity over time. Above the axis the home side holds the advantage, below it the away side — a meter, not a win probability and not tactical cause.",
     causalSmoothing: "Causal Real-time Filter",
     bilateralSmoothing: "Bilateral Post-match Smoothing",
     homeAdvantage: "Harbor FC Attacking Advantage (+)",

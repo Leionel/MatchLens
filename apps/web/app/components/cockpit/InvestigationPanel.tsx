@@ -5,6 +5,7 @@ import { CockpitState, InvestigationSeed } from "./types";
 import { Locale } from "../../lib/i18n";
 import { AgentCollaboration, CollaborationSummary } from "./AgentCollaboration";
 import { BroadcastOverlay, OverlayProvenance } from "../BroadcastOverlay";
+import { ChallengeModal } from "../ChallengeModal";
 
 interface InvestigationPanelProps {
   state: CockpitState;
@@ -15,6 +16,8 @@ interface InvestigationPanelProps {
   onClaimPromoted?: (claim: any) => void;
   /** Return to the match at the moment this investigation is about. */
   onReturnToMatch?: (at: number) => void;
+  /** Commit a changed cockpit state after a challenge re-evaluated a claim. */
+  onChallengeSubmitted?: (data: any) => void;
 }
 
 type Plan = {
@@ -195,6 +198,7 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
   onSelectSequence,
   onClaimPromoted,
   onReturnToMatch,
+  onChallengeSubmitted,
 }) => {
   const isZh = locale === "zh";
   const [question, setQuestion] = useState("");
@@ -212,6 +216,7 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
   const [plan, setPlan] = useState<Plan | null>(null);
   const [promoting, setPromoting] = useState(false);
   const [promoted, setPromoted] = useState<{ claim_id: string; current_revision_id?: string | null } | null>(null);
+  const [challengeOpen, setChallengeOpen] = useState(false);
   const [cancelState, setCancelState] = useState<CancelState>("idle");
   const [cancelMessage, setCancelMessage] = useState("");
   const cancelStateRef = useRef<CancelState>("idle");
@@ -704,6 +709,21 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
                 plan.findings[0]?.statement ||
                 (isZh ? "本次调查没有形成可发布的结论。" : "This investigation did not form a publishable conclusion.")}
             </h4>
+            {/* One plain sentence saying what this verdict means for the
+                reader. Derived from the verdict and the frozen context only. */}
+            <p className="r6-result-meaning">
+              {plan.gate_preview.status === "approved"
+                ? isZh
+                  ? "该结论已通过发布门禁，可以作为这一时刻的对外解释使用；它只覆盖此处列出的事件与窗口。"
+                  : "This conclusion passed the publication gate and can be quoted for this moment; it covers only the events and window listed here."
+                : plan.gate_preview.status === "qualified" || plan.gate_preview.status === "disputed"
+                  ? isZh
+                    ? "该结论以受限口径成立：先读限制说明，再决定能把它用到哪里。"
+                    : "This conclusion holds only with qualifications; read the limitations before quoting it."
+                  : isZh
+                    ? "证据不足以注册为主张。下面的发现仍然真实，但只能作为线索，不能当作结论引用。"
+                    : "The evidence did not support registering a claim. The findings below are still real, but they are leads, not quotable conclusions."}
+            </p>
             <div className="r6-result-meta">
               <span className="rail-chip neutral">{plan.intent}</span>
               <span className="rail-chip neutral" style={{ color: statusTone[plan.state] || undefined }}>{plan.state}</span>
@@ -712,6 +732,12 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
               </span>
               <span className="r6-result-when">
                 {isZh ? "快照" : "Snapshot"} <code>{plan.snapshot_id.slice(0, 18)}</code> · {plan.as_of}s
+                {plan.score && (
+                  <span data-testid="investigation-score">
+                    {" · "}
+                    {isZh ? "该时刻比分" : "score at this moment"} {plan.score.H}–{plan.score.N}
+                  </span>
+                )}
                 {plan.agent_run_id && (
                   <span data-testid="investigation-run-id"> · Run <code>{plan.agent_run_id}</code></span>
                 )}
@@ -739,15 +765,6 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
             </div>
           )}
 
-          <AgentCollaboration
-            collaboration={plan.collaboration}
-            stateHistory={plan.state_history}
-            toolReceiptCount={plan.tool_receipts.length}
-            agentStatus={plan.agent_status}
-            agentError={plan.agent_error}
-            locale={locale}
-          />
-
           <section className="r6-result-section" aria-labelledby="r6-result-evidence">
             <h5 id="r6-result-evidence">{isZh ? "依据：记录到的动作" : "Evidence: recorded actions"}</h5>
             {plan.findings.length === 0 ? (
@@ -759,9 +776,24 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
                     <span className="r6-finding-level">L{finding.level}</span>
                     <span className="r6-finding-text">{finding.statement}</span>
                     {finding.event_ids.length > 0 && onSelectEvent && (
-                      <button type="button" className="r6-text-action" onClick={() => onSelectEvent(finding.event_ids[0])}>
-                        {isZh ? `查看事件 ${finding.event_ids[0]}` : `Open ${finding.event_ids[0]}`}
-                      </button>
+                      <span className="r6-finding-events" aria-label={isZh ? "来源事件" : "Source events"}>
+                        {finding.event_ids.slice(0, 4).map((eventId) => (
+                          <button
+                            key={eventId}
+                            type="button"
+                            className="r6-finding-event-chip"
+                            onClick={() => onSelectEvent(eventId)}
+                            title={isZh ? "在比赛中定位该事件" : "Locate this event in the match"}
+                          >
+                            {eventId.length > 18 ? `${eventId.slice(0, 15)}…` : eventId}
+                          </button>
+                        ))}
+                        {finding.event_ids.length > 4 && (
+                          <span className="r6-finding-event-more">
+                            {isZh ? `+${finding.event_ids.length - 4}` : `+${finding.event_ids.length - 4}`}
+                          </span>
+                        )}
+                      </span>
                     )}
                   </li>
                 ))}
@@ -777,23 +809,39 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
               </p>
             ) : (
               <ul className="r6-explanation-list">
-                {plan.explanations.map((item) => (
-                  <li key={item.explanation_id} data-testid="investigation-explanation">
-                    <div className="r6-explanation-head">
-                      <span>{item.hypothesis}</span>
-                      <span style={{ color: statusTone[item.status] || "var(--text-secondary)" }}>
-                        {item.status} · L{item.claim_level}
-                      </span>
-                    </div>
-                    <p>{item.verification}</p>
-                    {item.supporting_evidence.length > 0 && (
-                      <p className="r6-explanation-pro">+ {item.supporting_evidence.join(", ")}</p>
-                    )}
-                    {item.counterevidence.length > 0 && (
-                      <p className="r6-explanation-con">− {item.counterevidence.join(", ")}</p>
-                    )}
-                  </li>
-                ))}
+                {plan.explanations.map((item) => {
+                  // Status in plain words: does this alternative survive,
+                  // fail, or stay untested on the current evidence?
+                  const stance =
+                    item.status === "supported"
+                      ? { label: isZh ? "证据支持" : "supported", tone: "var(--text-emerald)" }
+                      : item.status === "rejected"
+                        ? { label: isZh ? "证据反对" : "rejected", tone: "var(--red-11)" }
+                        : item.status === "insufficient_evidence"
+                          ? { label: isZh ? "证据不足 · 未确定" : "undetermined · thin evidence", tone: "var(--text-tertiary)" }
+                          : { label: isZh ? "未确定" : "undetermined", tone: "var(--text-gold)" };
+                  return (
+                    <li key={item.explanation_id} data-testid="investigation-explanation">
+                      <div className="r6-explanation-head">
+                        <span>{item.hypothesis}</span>
+                        <span style={{ color: stance.tone, fontWeight: 700 }}>
+                          {stance.label} · L{item.claim_level}
+                        </span>
+                      </div>
+                      <p>{item.verification}</p>
+                      {item.supporting_evidence.length > 0 && (
+                        <p className="r6-explanation-pro">
+                          <b>{isZh ? "支持" : "For"}:</b> {item.supporting_evidence.join(", ")}
+                        </p>
+                      )}
+                      {item.counterevidence.length > 0 && (
+                        <p className="r6-explanation-con">
+                          <b>{isZh ? "反对" : "Against"}:</b> {item.counterevidence.join(", ")}
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>
@@ -805,11 +853,32 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
                 {isZh ? "确定性引擎未返回额外限制。" : "The deterministic engine returned no extra limits."}
               </p>
             ) : (
-              <ul className="r6-limit-list">
-                {[...plan.not_inferable, ...plan.unresolved].map((text) => (
-                  <li key={text}>{text}</li>
-                ))}
-              </ul>
+                (() => {
+                  // The two or three limits a reader must know stay visible;
+                  // the long tail is one click away, not deleted.
+                  const all = [...plan.not_inferable, ...plan.unresolved];
+                  const primary = all.slice(0, 3);
+                  const rest = all.slice(3);
+                  return (
+                    <>
+                      <ul className="r6-limit-list">
+                        {primary.map((text) => (
+                          <li key={text}>{text}</li>
+                        ))}
+                      </ul>
+                      {rest.length > 0 && (
+                        <details className="r6-limit-more">
+                          <summary>{isZh ? `其余 ${rest.length} 条限制` : `${rest.length} more limitations`}</summary>
+                          <ul className="r6-limit-list">
+                            {rest.map((text) => (
+                              <li key={text}>{text}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+                    </>
+                  );
+                })()
             )}
           </section>
 
@@ -837,6 +906,16 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
                 }}
               >
                 {isZh ? "换个问法继续调查" : "Ask a different question"}
+              </button>
+            )}
+            {plan.gate_preview.status === "approved" && plan.gate_preview.persisted && (
+              <button
+                type="button"
+                className="r6-text-action"
+                data-testid="investigation-challenge"
+                onClick={() => setChallengeOpen(true)}
+              >
+                {isZh ? "质疑这条主张 ⚡" : "Challenge this claim ⚡"}
               </button>
             )}
             {promoted && (
@@ -869,6 +948,19 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
               </p>
             </section>
           )}
+
+          {/* Layer 4 — how the investigation actually ran. The deterministic
+              planner is a real result, not a stand-in for two agents: the
+              collaboration panel says exactly which engine ran, or that no
+              model was called. It sits below the answer, not in front of it. */}
+          <AgentCollaboration
+            collaboration={plan.collaboration}
+            stateHistory={plan.state_history}
+            toolReceiptCount={plan.tool_receipts.length}
+            agentStatus={plan.agent_status}
+            agentError={plan.agent_error}
+            locale={locale}
+          />
 
           {/* Technical receipts stay available, but they are not the answer. */}
           <details className="r6-result-details" data-testid="investigation-technical">
@@ -983,6 +1075,21 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
             )}
           </details>
         </article>
+      )}
+
+      {plan && (
+        <ChallengeModal
+          claimId={promoted?.claim_id || ""}
+          snapshotId={plan.snapshot_id}
+          team={plan.team === "N" ? "N" : "H"}
+          isOpen={challengeOpen}
+          onClose={() => setChallengeOpen(false)}
+          onChallengeSubmitted={(data) => {
+            onChallengeSubmitted?.(data);
+            setChallengeOpen(false);
+          }}
+          locale={locale}
+        />
       )}
     </div>
   );
