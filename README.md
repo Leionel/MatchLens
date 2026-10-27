@@ -166,3 +166,4 @@ apps/web/app/
 ## Licence and provenance
 
 MIT. Synthetic events, fictional identities and all interface assets are created within this project. StatsBomb open data is used under its own licence and is not redistributed here. Microsoft, Premier League and hackathon names belong to their respective owners. Built for the Microsoft × Premier League *Inside the Game* hackathon; runtime orchestration uses Microsoft Agent Framework with DeepSeek as the model provider.
+
