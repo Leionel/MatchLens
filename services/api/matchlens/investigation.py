@@ -156,6 +156,11 @@ class InvestigationPlan(BaseModel):
     dataset_revision: str | None
     coverage: dict[str, Any]
     completeness: dict[str, Any] = Field(default_factory=dict)
+    #: Replay score frozen at this plan's own snapshot. Broadcast previews and
+    #: result headers must render this pair — never the session's live score,
+    #: which keeps moving after the plan was computed.
+    score: dict[str, int] | None = None
+    official_score: dict[str, int | None] | None = None
     selected_metrics: list[str] = Field(default_factory=list)
     oaai_ledger: dict[str, Any] | None = None
     tool_receipts: list[ToolReceipt]
@@ -1020,6 +1025,8 @@ class InvestigationPlanner:
             dataset_revision=dataset_revision,
             coverage=coverage,
             completeness=completeness,
+            score=snapshot.data.get("score") or None,
+            official_score=snapshot.data.get("official_score") or None,
             selected_metrics=selected,
             oaai_ledger=ledger,
             tool_receipts=receipts,
@@ -1318,7 +1325,7 @@ async def run_maf_investigation(
 
             analyst_prompt = (
                 f'Investigate this football question: "{question}"\n'
-                f"Frozen snapshot_id (copy this exact value into get_evidence): {snapshot.id}.\n"
+                "The get_evidence tool is already bound to this frozen snapshot; call it with no arguments first.\n"
                 f"Focus: {focus_type} {focus_id or '(current moment)'} ({focus_label}). "
                 f"Team under analysis: {team}. Classified intent: {intent}. "
                 f"Snapshot as_of {as_of}s; standard comparison window {int(start_s)}s-{int(end_s)}s. "
@@ -1351,7 +1358,7 @@ async def run_maf_investigation(
             run_store.transition(run_id, "VERIFYING", "verifier stage with independent registry")
             verifier_prompt = (
                 "Independently verify the handed-off investigation draft.\n"
-                f"Frozen snapshot_id (copy this exact value into get_evidence): {snapshot.id}.\n"
+                "The get_evidence tool is already bound to this frozen snapshot; call it with no arguments.\n"
                 f"Draft: {json.dumps(maf_run.draft, separators=(',', ':'))}\n"
                 "Call get_evidence and use the registered investigation tools you need - including "
                 "find_counterevidence and query_metric - to check the assertion, scope and refs against "

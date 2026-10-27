@@ -16,7 +16,9 @@ export type OverlayProvenance = "synthetic" | "provider_payload" | "provider_sch
 export interface BroadcastOverlayProps {
   homeTeam: string;
   awayTeam: string;
-  score: { H: number; N: number };
+  /** Replay score frozen at the claim's own snapshot. Null = not available:
+   * the score bug is hidden rather than showing a score from another moment. */
+  score: { H: number; N: number } | null;
   asOf: number;
   headline: string;
   verdict: string;
@@ -89,9 +91,7 @@ export function BroadcastOverlay({
       <div className="r6-overlay-strap">
         <div className="r6-overlay-scorebug">
           <span>{code(homeTeam)}</span>
-          <b>
-            {score.H} – {score.N}
-          </b>
+          <b>{score ? `${score.H} – ${score.N}` : "– : –"}</b>
           <span>{code(awayTeam)}</span>
         </div>
         <div className="r6-overlay-copy">

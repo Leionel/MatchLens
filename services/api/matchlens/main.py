@@ -1260,7 +1260,10 @@ async def state(request: Request):
 @app.post("/api/control")
 async def control(command: Control, request: Request):
     s, eng = session(request), engine(request)
-    eng.rates.check("control:"+s.id, 90)
+    # Replay operations (seek/play/pause) are cheap session-scoped actions a
+    # live viewer issues continuously; the budget is per session, and sessions
+    # are capped server-side, so this stays a DoS non-vector.
+    eng.rates.check("control:"+s.id, 240)
     s.tick()
     if command.action == "focus":
         if not command.chapter:
@@ -1429,7 +1432,11 @@ async def evidence(snapshot_id: str, request: Request):
 @app.get("/api/stream")
 async def stream(request: Request):
     s, eng = session(request), engine(request)
-    eng.rates.check("stream:"+s.id, 20)
+    # SSE connects are charged per session. The budget must absorb a normal
+    # browsing pattern (navigating workspaces reopens the stream) plus the
+    # client's reconnect-with-backoff: a burst of reconnects must drain
+    # instead of wedging the session in a 429 loop.
+    eng.rates.check("stream:"+s.id, 60)
     # One stream per session; a reconnect replaces the previous stream.
     token = secrets.token_hex(8)
     s.stream_token = token
@@ -1921,7 +1928,10 @@ async def featured_investigation(request: Request):
        the amplitude, contributor actions). Nothing here is a model output and
        no claim is registered by this endpoint.
     """
-    public_rate(request, "featured", 30)
+    # The response is memoised per catalog signature, so a browsed hub costs
+    # the server nothing after the first hit; the per-source budget covers a
+    # user (and an E2E suite) paging through workspaces, not a scraper.
+    public_rate(request, "featured", 120)
     from .catalog import MatchCatalog
 
     eng = engine(request)

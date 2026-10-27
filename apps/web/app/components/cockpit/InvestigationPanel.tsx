@@ -47,6 +47,9 @@ type Plan = {
   } | null;
   dataset_revision?: string | null;
   completeness?: { status?: string; confidence?: number };
+  /** Replay score frozen at this plan's snapshot — never the live clock's. */
+  score?: { H: number; N: number } | null;
+  official_score?: { H: number | null; N: number | null } | null;
   selected_metrics: string[];
   oaai_ledger?: {
     at: number;
@@ -195,6 +198,7 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
 }) => {
   const isZh = locale === "zh";
   const [question, setQuestion] = useState("");
+  const questionInputRef = useRef<HTMLInputElement | null>(null);
   const [executionMode, setExecutionMode] = useState<"deterministic_planner" | "maf_agent">("deterministic_planner");
   const [focusType, setFocusType] = useState<
     "moment" | "oaai_point" | "event" | "metric" | "sequence" | "player" | "zone" | "shot_location" | "cross_match_diff"
@@ -531,6 +535,7 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
         <div className="r6-question-row">
           <input
             id="r6-investigation-question"
+            ref={questionInputRef}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={(e) => {
@@ -820,7 +825,17 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
                 {promoting ? (isZh ? "注册中..." : "Registering...") : isZh ? "确认并注册 Claim" : "Confirm and register claim"}
               </button>
             ) : (
-              <button type="button" className="r6-text-action" onClick={() => void run()}>
+              <button
+                type="button"
+                className="r6-text-action"
+                onClick={() => {
+                  // The label promises a different question, so the action
+                  // prepares the input instead of silently re-running the
+                  // same one — the Analyse button is the explicit re-run.
+                  questionInputRef.current?.focus();
+                  questionInputRef.current?.select();
+                }}
+              >
                 {isZh ? "换个问法继续调查" : "Ask a different question"}
               </button>
             )}
@@ -837,7 +852,7 @@ export const InvestigationPanel: React.FC<InvestigationPanelProps> = ({
               <BroadcastOverlay
                 homeTeam={state.match_context?.home_team_name || state.teams?.H || "Home"}
                 awayTeam={state.match_context?.away_team_name || state.teams?.N || "Away"}
-                score={state.score}
+                score={plan.score ?? null}
                 asOf={Number(plan.as_of)}
                 headline={plan.gate_preview.statement || plan.findings[0]?.statement || plan.gate_preview.assertion}
                 verdict={plan.gate_preview.status}

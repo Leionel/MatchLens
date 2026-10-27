@@ -89,7 +89,13 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
   const [matches, setMatches] = useState<LibraryMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [featured, setFeatured] = useState<FeaturedPayload | null>(null);
+  // The featured recommendation has its own four states: loading, ready,
+  // empty (the server answered "nothing to feature") and error (the request
+  // itself failed). Only `ready` renders a featured card; the other two
+  // explain themselves and offer a real way forward instead of waiting forever.
+  const [featuredState, setFeaturedState] = useState<
+    { status: "loading" | "ready" | "empty" | "error"; data: FeaturedPayload | null }
+  >({ status: "loading", data: null });
   const [query, setQuery] = useState("");
   const [competition, setCompetition] = useState("");
   const [season, setSeason] = useState("");
@@ -119,20 +125,33 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
       .finally(() => {
         if (active) setLoading(false);
       });
-    // The featured moment is independent of the catalog list: a slow or failed
-    // recommendation must never block the catalog behind it.
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // The featured moment is independent of the catalog list: a slow or failed
+  // recommendation must never block the catalog behind it.
+  const loadFeatured = React.useCallback(() => {
+    let active = true;
+    setFeaturedState({ status: "loading", data: null });
     fetch("/api/featured")
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => {
+        if (!res.ok) throw new Error(`Featured unavailable (${res.status})`);
+        return res.json();
+      })
       .then((data) => {
-        if (active && data) setFeatured(data);
+        if (active) setFeaturedState({ status: data?.featured ? "ready" : "empty", data });
       })
       .catch(() => {
-        if (active) setFeatured(null);
+        if (active) setFeaturedState({ status: "error", data: null });
       });
     return () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => loadFeatured(), [loadFeatured]);
 
   // The global header search lands here with its query already applied.
   useEffect(() => {
@@ -254,7 +273,9 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
       </header>
 
       <FeaturedInvestigation
-        featured={featured}
+        state={featuredState}
+        fallbackMatchId={recommended[0]?.match_id}
+        onRetry={loadFeatured}
         currentMatchId={currentMatchId}
         locale={locale}
         onExplore={(input) =>
@@ -520,7 +541,9 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
 };
 
 interface FeaturedInvestigationProps {
-  featured: FeaturedPayload | null;
+  state: { status: "loading" | "ready" | "empty" | "error"; data: FeaturedPayload | null };
+  fallbackMatchId?: string;
+  onRetry: () => void;
   currentMatchId?: string;
   locale?: Locale;
   onExplore: (input: { matchId: string; focusId: string; at: number; team: "H" | "N"; question: string }) => void;
@@ -531,31 +554,57 @@ interface FeaturedInvestigationProps {
  * The first screen's one true entry point. The moment comes from
  * `/api/featured` — a deterministic pick over installed matches, not a
  * hardcoded highlight and not a model output — so the CTA always lands on a
- * real, in-clock, investigable moment.
+ * real, in-clock, investigable moment. Every non-ready state names itself and
+ * offers a real action; none of them waits forever.
  */
 const FeaturedInvestigation: React.FC<FeaturedInvestigationProps> = ({
-  featured,
+  state,
+  fallbackMatchId,
+  onRetry,
   currentMatchId,
   locale = "zh",
   onExplore,
   onOpenMatch,
 }) => {
   const isZh = locale === "zh";
-  const moment = featured?.featured?.moment;
-  const match = featured?.featured;
+  const match = state.data?.featured;
+  const moment = match?.moment;
   const isDemo = Boolean(match && (match.provenance_kind || "synthetic") !== "provider_payload");
   const isCurrent = Boolean(match && match.match_id === currentMatchId);
 
-  if (!featured) {
+  if (state.status === "loading") {
     return (
-      <div className="r6-featured r6-featured-loading" aria-hidden="true">
+      <div className="r6-featured r6-featured-loading" aria-live="polite" aria-busy="true">
         <span className="r6-kicker">{isZh ? "精选时刻" : "Featured investigation"}</span>
         <p>{isZh ? "正在从已安装比赛中挑选一个值得调查的时刻…" : "Selecting an investigable moment from the installed matches…"}</p>
       </div>
     );
   }
 
-  if (!match || !moment) {
+  if (state.status === "error") {
+    return (
+      <div className="r6-featured r6-featured-empty" role="alert">
+        <span className="r6-kicker">{isZh ? "精选时刻" : "Featured investigation"}</span>
+        <p>
+          {isZh
+            ? "推荐服务暂时没有响应（可能是请求过于频繁或网络波动）。你可以直接打开一场已就绪的比赛，或稍后重试。"
+            : "The recommendation service did not answer (it may be rate-limited or briefly offline). Open a ready match directly, or retry."}
+        </p>
+        <div className="r6-featured-actions">
+          {fallbackMatchId && (
+            <button type="button" className="r6-primary-action" onClick={() => onOpenMatch(fallbackMatchId)}>
+              {isZh ? "打开已就绪的比赛 →" : "Open a ready match →"}
+            </button>
+          )}
+          <button type="button" className="r6-text-action" onClick={onRetry}>
+            {isZh ? "重试推荐" : "Retry"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!match || !moment || state.status === "empty") {
     return (
       <div className="r6-featured r6-featured-empty">
         <span className="r6-kicker">{isZh ? "精选时刻" : "Featured investigation"}</span>
@@ -563,12 +612,19 @@ const FeaturedInvestigation: React.FC<FeaturedInvestigationProps> = ({
           {isZh
             ? "暂时没有可推荐的已安装时刻；请直接在下方目录中选择一场比赛。"
             : "No installed moment to recommend right now; pick a match from the catalog below."}
-          {featured.fallback_reason && featured.fallback
+          {state.data?.fallback_reason && state.data.fallback
             ? isZh
-              ? `（原因：${featured.fallback_reason}）`
-              : ` (Reason: ${featured.fallback_reason})`
+              ? `（原因：${state.data.fallback_reason}）`
+              : ` (Reason: ${state.data.fallback_reason})`
             : ""}
         </p>
+        {fallbackMatchId && (
+          <div className="r6-featured-actions">
+            <button type="button" className="r6-primary-action" onClick={() => onOpenMatch(fallbackMatchId)}>
+              {isZh ? "打开已就绪的比赛 →" : "Open a ready match →"}
+            </button>
+          </div>
+        )}
       </div>
     );
   }
