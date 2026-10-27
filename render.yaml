@@ -1,7 +1,7 @@
 # MatchLens AI — Render Blueprint (production/judging)
 # One Docker web service with a persistent disk.
-# A free Render instance cannot attach a disk; use the manual free-demo
-# instructions in docs/RENDER_DEPLOY.md if you do not want a paid service.
+# A free Render instance cannot attach a disk; a paid service is required
+# for the persistent-disk setup below.
 services:
   - type: web
     name: matchlens
