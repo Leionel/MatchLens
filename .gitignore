@@ -34,3 +34,6 @@ apps/web/e2e/.auth.json
 
 # Local agent workspace notes
 .workbuddy/
+
+# Internal planning / operations documents — kept out of the public repo.
+.internal/

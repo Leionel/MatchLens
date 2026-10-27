@@ -103,10 +103,10 @@ Stated here because the product states it too, on screen, next to the claim:
 
 | Gate | Command | Result |
 | --- | --- | --- |
-| Backend | `services/api/.venv/Scripts/python.exe -m pytest services/api/tests/ -q` | see [R6_2_RESULTS](docs/R6_2_RESULTS.md) |
+| Backend | `services/api/.venv/Scripts/python.exe -m pytest services/api/tests/ -q` | 378 passed (CI green) |
 | Types | `npm --prefix apps/web run typecheck` | 0 errors |
 | Build | `NODE_OPTIONS= npm --prefix apps/web run build` | 0 errors |
-| Browser | `npx playwright test` (in `apps/web`) | 47 passed / 1 skipped locally, 48 passed in CI |
+| Browser | `npx playwright test` (in `apps/web`) | 50 passed / 1 skipped locally, green in CI |
 | CI | GitHub Actions | [workflow](.github/workflows/ci.yml), latest run green |
 
 The browser suite includes a **demo-path spec** that walks the journey above and writes the screenshots in `evidence/r6.2/`. The images in this README are produced by that test, not staged separately.
@@ -125,7 +125,7 @@ docker run --rm -p 8000:8000 -v matchlens-data:/data/matchlens matchlens
 open http://127.0.0.1:8000
 ```
 
-**Current production:** the Northflank single container at the Live demo URL above (judge traffic: 0.1 vCPU / 256 MB observed — a 512 MB+ upgrade is recommended before heavy judging). **Render is the documented, tested hosting target** for a fresh paid deployment: import this GitHub repository as a Render Blueprint (`render.yaml`): one paid Docker Web Service, a 1 GB disk mounted at `/data/matchlens`, and HTTPS `onrender.com` address. See [RENDER_DEPLOY](docs/RENDER_DEPLOY.md) for the click-by-click steps and the free-preview limitations. The prior [Railway setup](docs/RAILWAY_DEPLOY.md) remains available as a fallback.
+**Current production:** the Northflank single container at the Live demo URL above. **Render is the documented, tested hosting target** for a fresh paid deployment: import this GitHub repository as a Render Blueprint (`render.yaml` in the repo root): one paid Docker Web Service, a 1 GB disk mounted at `/data/matchlens`, and an HTTPS `onrender.com` address — the blueprint and this README's Docker quick-run are self-sufficient. Step-by-step Render/Railway walkthroughs are kept in a private operations folder rather than this public repository.
 
 Provider payloads are licensed and are **not** in the image. On first boot the
 container fetches one complete real match from the provider's public repository,
