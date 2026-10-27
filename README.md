@@ -2,11 +2,13 @@
 
 ### Football intelligence you can challenge.
 
+[**Launch the live demo →**](https://p01--matchlens--zfs7xk57gw42.code.run)
+
 A football explanation is only worth airing if someone can check it. MatchLens turns recorded match events into a claim, has a second agent try to break that claim, sends it through a publication gate, and lets you walk back to the exact events behind it — or challenge it.
 
 ![Match Detail: score, whole-match totals, a separately labelled live window, and an insight that states what it cannot decide](evidence/r6.2/browser-detail-1440.png)
 
-**Live demo:** [p01--matchlens--zfs7xk57gw42.code.run](https://p01--matchlens--zfs7xk57gw42.code.run) — the public single-container deployment (Northflank). It runs the full deterministic journey anonymously: one real match (UEFA Euro 2020, England 2–1 Denmark) plus the synthetic scenarios are installed; model-agent mode is off there, and the UI says so. Run it locally in about three minutes (below) for the complete 80-match corpus; no key, account or payment is needed.
+The public Northflank deployment runs the judge journey anonymously with one real match (UEFA Euro 2020, England 2–1 Denmark) and the synthetic scenarios. The deterministic path needs no key, account or payment. Opt-in Real Agent runs use DeepSeek Flash when the server key and budget runway are available. Run locally in about three minutes (below) for the complete 80-match corpus.
 
 ---
 
@@ -162,3 +164,4 @@ apps/web/app/
 ## Licence and provenance
 
 MIT. Synthetic events, fictional identities and all interface assets are created within this project. StatsBomb open data is used under its own licence and is not redistributed here. Microsoft, Premier League and hackathon names belong to their respective owners. Built for the Microsoft × Premier League *Inside the Game* hackathon; runtime orchestration uses Microsoft Agent Framework with DeepSeek as the model provider.
+
