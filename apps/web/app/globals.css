@@ -1264,11 +1264,13 @@ select {
   box-shadow: 0 0 8px var(--turf-emerald);
 }
 
-/* Cockpit Main Layout */
+/* Cockpit Main Layout. Must stay the same column as .r6-topbar-inner and
+   .r6-subnav-inner (max-width 1560px). Horizontal padding is owned by
+   .r6-main-layout in r6.css — it changes per breakpoint (24/16/12px) exactly
+   in step with the header, so duplicating it here would misalign the shell. */
 .cockpit-main-layout {
-  max-width: 1720px;
+  max-width: 1560px;
   margin: 0 auto;
-  padding: 18px 20px 48px;
   min-height: calc(100vh - 120px);
 }
 
@@ -1692,7 +1694,6 @@ code, .header-clock-display, .rail-meta, .rail-label, .workspace-tab-index {
   .header-slider { flex: 1; width: auto; }
   .evidence-rail { grid-template-columns: 1fr 1fr; gap: 8px; }
   .rail-cell-coverage { grid-column: 1 / -1; }
-  .cockpit-main-layout { padding: 14px 14px 40px; }
 }
 
 @media (max-width: 640px) {

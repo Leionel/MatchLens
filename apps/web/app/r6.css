@@ -432,7 +432,7 @@
   .r6-search { order: 5; flex: 1 1 100%; max-width: none; }
   .r6-current-match { margin-left: 0; flex: 1 1 240px; }
   .r6-subnav { top: 0; position: static; }
-  .r6-subnav-inner { padding: 0 14px; }
+  .r6-subnav-inner { padding: 0 16px; }
   .r6-nav-tab { min-height: 44px; padding: 0 10px; font-size: 13px; }
   .r6-main-layout { padding: 18px 16px 48px; }
 }
