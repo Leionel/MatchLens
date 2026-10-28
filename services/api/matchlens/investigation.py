@@ -1325,7 +1325,7 @@ async def run_maf_investigation(
 
             analyst_prompt = (
                 f'Investigate this football question: "{question}"\n'
-                "The get_evidence tool is already bound to this frozen snapshot; call it with no arguments first.\n"
+                f"Frozen snapshot_id (copy this exact value into get_evidence): {snapshot.id}.\n"
                 f"Focus: {focus_type} {focus_id or '(current moment)'} ({focus_label}). "
                 f"Team under analysis: {team}. Classified intent: {intent}. "
                 f"Snapshot as_of {as_of}s; standard comparison window {int(start_s)}s-{int(end_s)}s. "
@@ -1358,7 +1358,7 @@ async def run_maf_investigation(
             run_store.transition(run_id, "VERIFYING", "verifier stage with independent registry")
             verifier_prompt = (
                 "Independently verify the handed-off investigation draft.\n"
-                "The get_evidence tool is already bound to this frozen snapshot; call it with no arguments.\n"
+                f"Frozen snapshot_id (copy this exact value into get_evidence): {snapshot.id}.\n"
                 f"Draft: {json.dumps(maf_run.draft, separators=(',', ':'))}\n"
                 "Call get_evidence and use the registered investigation tools you need - including "
                 "find_counterevidence and query_metric - to check the assertion, scope and refs against "
