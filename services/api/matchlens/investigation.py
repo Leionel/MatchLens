@@ -156,6 +156,11 @@ class InvestigationPlan(BaseModel):
     dataset_revision: str | None
     coverage: dict[str, Any]
     completeness: dict[str, Any] = Field(default_factory=dict)
+    #: Replay score frozen at this plan's own snapshot. Broadcast previews and
+    #: result headers must render this pair — never the session's live score,
+    #: which keeps moving after the plan was computed.
+    score: dict[str, int] | None = None
+    official_score: dict[str, int | None] | None = None
     selected_metrics: list[str] = Field(default_factory=list)
     oaai_ledger: dict[str, Any] | None = None
     tool_receipts: list[ToolReceipt]
@@ -1020,6 +1025,8 @@ class InvestigationPlanner:
             dataset_revision=dataset_revision,
             coverage=coverage,
             completeness=completeness,
+            score=snapshot.data.get("score") or None,
+            official_score=snapshot.data.get("official_score") or None,
             selected_metrics=selected,
             oaai_ledger=ledger,
             tool_receipts=receipts,

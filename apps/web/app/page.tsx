@@ -47,7 +47,7 @@ async function api<T>(path: string, body?: object): Promise<T> {
     const errors: Record<number, string> = {
       401: "Your session expired. Refresh to start a new match.",
       409: "Please exit focus or select a valid moment to continue.",
-      429: "Analysis limit reached. Please wait a moment before trying again.",
+      429: "The server is catching up on too many requests. It retries automatically — or wait a moment and try again.",
       503: "The demo server is currently busy. Please retry shortly.",
     };
     throw Object.assign(
@@ -203,16 +203,25 @@ export default function MatchLensCockpit() {
   useEffect(() => {
     let closed = false;
     let stream: EventSource | undefined;
+    let streamRetries = 0;
+    let streamTimer: ReturnType<typeof setTimeout> | undefined;
     let poll: ReturnType<typeof setInterval> | undefined;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
     const BACKOFF_MS = [0, 1500, 3000, 5000, 8000];
 
-    const startStream = (initial: CockpitState) => {
-      commit(initial);
+    /** Reconnect the SSE stream with exponential backoff. EventSource's own
+     * immediate retry turns a rate-limited connect into a 429 storm, so the
+     * retry is owned here: each failure closes the socket and waits longer,
+     * while the polling fallback keeps the clock honest in between. */
+    const connectStream = (initial: CockpitState) => {
+      if (closed) return;
+      stream?.close();
       stream = new EventSource("/api/stream");
       stream.onopen = () => {
-        if (!closed) setConnection("Connected");
+        if (closed) return;
+        streamRetries = 0;
+        setConnection("Connected");
         if (poll) {
           clearInterval(poll);
           poll = undefined;
@@ -225,7 +234,8 @@ export default function MatchLensCockpit() {
         }
       });
       stream.onerror = () => {
-        if (!closed) setConnection("Reconnecting");
+        if (closed) return;
+        setConnection("Reconnecting");
         if (!poll) {
           poll = setInterval(() => {
             api<CockpitState>("state")
@@ -250,7 +260,16 @@ export default function MatchLensCockpit() {
               });
           }, 2000);
         }
+        streamRetries += 1;
+        const delay = Math.min(8000, 1000 * 2 ** (streamRetries - 1));
+        stream?.close();
+        streamTimer = setTimeout(() => connectStream(initial), delay);
       };
+    };
+
+    const startStream = (initial: CockpitState) => {
+      commit(initial);
+      connectStream(initial);
     };
 
     const attempt = async (tryIndex: number) => {
@@ -284,6 +303,7 @@ export default function MatchLensCockpit() {
     return () => {
       closed = true;
       if (retryTimer) clearTimeout(retryTimer);
+      if (streamTimer) clearTimeout(streamTimer);
       stream?.close();
       if (poll) clearInterval(poll);
     };

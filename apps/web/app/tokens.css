@@ -165,10 +165,22 @@
   --font-display: "Bahnschrift", "DIN Alternate", "Roboto Condensed", "Arial Narrow", "PingFang SC", sans-serif;
   --font-mono: "IBM Plex Mono", "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
 
-  --text-caption: 12px;
-  --text-body: 14px;
+  /* Type roles (R6.5): one scale for the whole shell — page title >
+     investigation conclusion > section heading > emphasis (evidence that
+     must be read) > body > caption (labels) > meta (pure technical ids).
+     Meta is for ids, hashes and revisions only. Mobile steps the reading
+     roles down one notch via the media query at the end of this file. */
+  --text-meta: 11.5px;
+  --text-caption: 12.5px;
+  --text-secondary-body: 13.5px;
+  --text-body: 14.5px;
+  --text-emphasis: 15.5px;
+  --text-section: 18px;
   --text-title: 18px;
-  --text-page: 24px;
+  --text-conclusion: 21px;
+  --text-page: 30px;
+  --lh-tight: 1.25;
+  --lh-normal: 1.55;
 
   --radius-panel: 10px;
   --radius-inner: 8px;
@@ -325,3 +337,14 @@
 }
 
 :root { --white: #ffffff; }
+
+/* Small screens step the reading roles down one notch; meta/caption stay. */
+@media (max-width: 640px) {
+  :root {
+    --text-page: 25px;
+    --text-conclusion: 19px;
+    --text-section: 17px;
+    --text-emphasis: 15px;
+    --text-body: 14px;
+  }
+}

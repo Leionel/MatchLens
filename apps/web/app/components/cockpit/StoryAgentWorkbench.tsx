@@ -1132,6 +1132,9 @@ export const StoryAgentWorkbench: React.FC<StoryAgentWorkbenchProps> = ({
           seed={investigationSeed}
           onSelectEvent={onSelectEvent}
           onReturnToMatch={onReturnToMatch}
+          onChallengeSubmitted={(data) => {
+            if (data?.state && onCommitState) onCommitState(data.state);
+          }}
           onClaimPromoted={(claim) => {
             setStoryRefresh((n) => n + 1);
             onClaimPromoted?.(claim);

@@ -89,7 +89,13 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
   const [matches, setMatches] = useState<LibraryMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [featured, setFeatured] = useState<FeaturedPayload | null>(null);
+  // The featured recommendation has its own four states: loading, ready,
+  // empty (the server answered "nothing to feature") and error (the request
+  // itself failed). Only `ready` renders a featured card; the other two
+  // explain themselves and offer a real way forward instead of waiting forever.
+  const [featuredState, setFeaturedState] = useState<
+    { status: "loading" | "ready" | "empty" | "error"; data: FeaturedPayload | null }
+  >({ status: "loading", data: null });
   const [query, setQuery] = useState("");
   const [competition, setCompetition] = useState("");
   const [season, setSeason] = useState("");
@@ -119,20 +125,33 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
       .finally(() => {
         if (active) setLoading(false);
       });
-    // The featured moment is independent of the catalog list: a slow or failed
-    // recommendation must never block the catalog behind it.
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // The featured moment is independent of the catalog list: a slow or failed
+  // recommendation must never block the catalog behind it.
+  const loadFeatured = React.useCallback(() => {
+    let active = true;
+    setFeaturedState({ status: "loading", data: null });
     fetch("/api/featured")
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => {
+        if (!res.ok) throw new Error(`Featured unavailable (${res.status})`);
+        return res.json();
+      })
       .then((data) => {
-        if (active && data) setFeatured(data);
+        if (active) setFeaturedState({ status: data?.featured ? "ready" : "empty", data });
       })
       .catch(() => {
-        if (active) setFeatured(null);
+        if (active) setFeaturedState({ status: "error", data: null });
       });
     return () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => loadFeatured(), [loadFeatured]);
 
   // The global header search lands here with its query already applied.
   useEffect(() => {
@@ -254,7 +273,9 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
       </header>
 
       <FeaturedInvestigation
-        featured={featured}
+        state={featuredState}
+        fallbackMatchId={recommended[0]?.match_id}
+        onRetry={loadFeatured}
         currentMatchId={currentMatchId}
         locale={locale}
         onExplore={(input) =>
@@ -430,7 +451,6 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
                         <span className={`r6-rec-badge ${isDemo ? "demo" : ""}`}>
                           {isDemo ? (isZh ? "Demo · 合成" : "Demo · synthetic") : isZh ? "真实数据" : "Real data"}
                         </span>
-                        <span>{match.events_count ?? 0} {isZh ? "事件" : "events"}</span>
                         <span>{match.match_date || "—"}</span>
                       </div>
                       <div className="r6-rec-actions">
@@ -520,7 +540,9 @@ export const MatchLibraryWorkspace: React.FC<MatchLibraryWorkspaceProps> = ({
 };
 
 interface FeaturedInvestigationProps {
-  featured: FeaturedPayload | null;
+  state: { status: "loading" | "ready" | "empty" | "error"; data: FeaturedPayload | null };
+  fallbackMatchId?: string;
+  onRetry: () => void;
   currentMatchId?: string;
   locale?: Locale;
   onExplore: (input: { matchId: string; focusId: string; at: number; team: "H" | "N"; question: string }) => void;
@@ -531,31 +553,67 @@ interface FeaturedInvestigationProps {
  * The first screen's one true entry point. The moment comes from
  * `/api/featured` — a deterministic pick over installed matches, not a
  * hardcoded highlight and not a model output — so the CTA always lands on a
- * real, in-clock, investigable moment.
+ * real, in-clock, investigable moment. Every non-ready state names itself and
+ * offers a real action; none of them waits forever.
  */
 const FeaturedInvestigation: React.FC<FeaturedInvestigationProps> = ({
-  featured,
+  state,
+  fallbackMatchId,
+  onRetry,
   currentMatchId,
   locale = "zh",
   onExplore,
   onOpenMatch,
 }) => {
   const isZh = locale === "zh";
-  const moment = featured?.featured?.moment;
-  const match = featured?.featured;
+  const match = state.data?.featured;
+  const moment = match?.moment;
+  // The API's narrative is English-only; a Chinese reading is composed from
+  // the same recorded values, never from different ones.
+  const whatChanged =
+    match && moment && isZh
+      ? `${moment.team_name} 的记录进攻活动在此刻走强（平滑 OAAI ${moment.oaai_amplitude > 0 ? "+" : ""}${moment.oaai_amplitude.toFixed(2)}；公式归因，非战术因果）。`
+      : match?.what_changed;
+  const whyInvestigate =
+    match && isZh
+      ? `这是该场比赛可回放时钟内最强的活动摆动，背后有 ${match.supporting_events.length} 条已记录事件支持。`
+      : match?.why_investigate;
   const isDemo = Boolean(match && (match.provenance_kind || "synthetic") !== "provider_payload");
   const isCurrent = Boolean(match && match.match_id === currentMatchId);
 
-  if (!featured) {
+  if (state.status === "loading") {
     return (
-      <div className="r6-featured r6-featured-loading" aria-hidden="true">
+      <div className="r6-featured r6-featured-loading" aria-live="polite" aria-busy="true">
         <span className="r6-kicker">{isZh ? "精选时刻" : "Featured investigation"}</span>
         <p>{isZh ? "正在从已安装比赛中挑选一个值得调查的时刻…" : "Selecting an investigable moment from the installed matches…"}</p>
       </div>
     );
   }
 
-  if (!match || !moment) {
+  if (state.status === "error") {
+    return (
+      <div className="r6-featured r6-featured-empty" role="alert">
+        <span className="r6-kicker">{isZh ? "精选时刻" : "Featured investigation"}</span>
+        <p>
+          {isZh
+            ? "推荐服务暂时没有响应（可能是请求过于频繁或网络波动）。你可以直接打开一场已就绪的比赛，或稍后重试。"
+            : "The recommendation service did not answer (it may be rate-limited or briefly offline). Open a ready match directly, or retry."}
+        </p>
+        <div className="r6-featured-actions">
+          {fallbackMatchId && (
+            <button type="button" className="r6-primary-action" onClick={() => onOpenMatch(fallbackMatchId)}>
+              {isZh ? "打开已就绪的比赛 →" : "Open a ready match →"}
+            </button>
+          )}
+          <button type="button" className="r6-text-action" onClick={onRetry}>
+            {isZh ? "重试推荐" : "Retry"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!match || !moment || state.status === "empty") {
     return (
       <div className="r6-featured r6-featured-empty">
         <span className="r6-kicker">{isZh ? "精选时刻" : "Featured investigation"}</span>
@@ -563,12 +621,19 @@ const FeaturedInvestigation: React.FC<FeaturedInvestigationProps> = ({
           {isZh
             ? "暂时没有可推荐的已安装时刻；请直接在下方目录中选择一场比赛。"
             : "No installed moment to recommend right now; pick a match from the catalog below."}
-          {featured.fallback_reason && featured.fallback
+          {state.data?.fallback_reason && state.data.fallback
             ? isZh
-              ? `（原因：${featured.fallback_reason}）`
-              : ` (Reason: ${featured.fallback_reason})`
+              ? `（原因：${state.data.fallback_reason}）`
+              : ` (Reason: ${state.data.fallback_reason})`
             : ""}
         </p>
+        {fallbackMatchId && (
+          <div className="r6-featured-actions">
+            <button type="button" className="r6-primary-action" onClick={() => onOpenMatch(fallbackMatchId)}>
+              {isZh ? "打开已就绪的比赛 →" : "Open a ready match →"}
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -611,18 +676,36 @@ const FeaturedInvestigation: React.FC<FeaturedInvestigationProps> = ({
           </p>
         </div>
         <div className="r6-featured-story">
-          <p className="r6-featured-what" data-testid="featured-what-changed">{match.what_changed}</p>
-          <p className="r6-featured-why">{match.why_investigate}</p>
+          <p className="r6-featured-what" data-testid="featured-what-changed">{whatChanged}</p>
+          <p className="r6-featured-why">{whyInvestigate}</p>
           {match.supporting_events.length > 0 && (
-            <ul className="r6-featured-events" aria-label={isZh ? "支持事件" : "Supporting events"}>
-              {match.supporting_events.map((event) => (
-                <li key={event.event_id}>
-                  <span className="r6-featured-event-minute">{event.minute}′</span>
-                  <b>{event.actor || (isZh ? "未知球员" : "Unattributed")}</b>
-                  <span>{event.kind}{event.outcome ? ` · ${event.outcome}` : ""}</span>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="r6-featured-events" aria-label={isZh ? "支持事件" : "Supporting events"}>
+                {match.supporting_events.slice(0, 2).map((event) => (
+                  <li key={event.event_id}>
+                    <span className="r6-featured-event-minute">{event.minute}′</span>
+                    <b>{event.actor || (isZh ? "未知球员" : "Unattributed")}</b>
+                    <span>{event.kind}{event.outcome ? ` · ${event.outcome}` : ""}</span>
+                  </li>
+                ))}
+              </ul>
+              {match.supporting_events.length > 2 && (
+                <details className="r6-featured-events-more">
+                  <summary>
+                    {isZh ? `其余 ${match.supporting_events.length - 2} 条支持事件` : `${match.supporting_events.length - 2} more supporting events`}
+                  </summary>
+                  <ul className="r6-featured-events">
+                    {match.supporting_events.slice(2).map((event) => (
+                      <li key={event.event_id}>
+                        <span className="r6-featured-event-minute">{event.minute}′</span>
+                        <b>{event.actor || (isZh ? "未知球员" : "Unattributed")}</b>
+                        <span>{event.kind}{event.outcome ? ` · ${event.outcome}` : ""}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </>
           )}
           <div className="r6-featured-actions">
             <button

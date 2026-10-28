@@ -10,6 +10,8 @@ A football explanation is only worth airing if someone can check it. MatchLens t
 
 The public Northflank deployment runs the judge journey anonymously with one real match (UEFA Euro 2020, England 2–1 Denmark) and the synthetic scenarios. The deterministic path needs no key, account or payment. Opt-in Real Agent runs use DeepSeek Flash when the server key and budget runway are available. Run locally in about three minutes (below) for the complete 80-match corpus.
 
+**Demo video:** [MatchLens on YouTube](https://youtu.be/3q3_3A1fU6I) — a recorded walkthrough of the product loop: featured moment → investigation → evidence → gate → challenge.
+
 ---
 
 ## The 30-second version
